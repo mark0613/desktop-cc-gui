@@ -1,8 +1,26 @@
+use std::env;
+
 use serde_json::{json, Value};
 
 pub(crate) const COLLABORATION_POLICY_VERSION: &str = "mossx-collaboration-policy/v1";
 
 const DEFAULT_EFFECTIVE_MODE: &str = "code";
+const COLLABORATION_PROFILE_ENV: &str = "MOSSX_CODEX_COLLABORATION_PROFILE";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CollaborationProfile {
+    OfficialCompatible,
+    StrictLocal,
+}
+
+impl CollaborationProfile {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            CollaborationProfile::OfficialCompatible => "official-compatible",
+            CollaborationProfile::StrictLocal => "strict-local",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RequestUserInputPolicy {
@@ -23,6 +41,7 @@ impl RequestUserInputPolicy {
 pub(crate) struct CodexCollaborationPolicy {
     pub(crate) selected_mode: Option<String>,
     pub(crate) effective_mode: String,
+    pub(crate) profile: CollaborationProfile,
     pub(crate) fallback_reason: Option<String>,
     pub(crate) policy_version: &'static str,
     pub(crate) request_user_input_policy: RequestUserInputPolicy,
@@ -60,10 +79,33 @@ pub(crate) fn extract_selected_mode(payload: Option<&Value>) -> Option<String> {
     }
 }
 
+pub(crate) fn resolve_collaboration_profile_from_raw(
+    raw: Option<&str>,
+) -> CollaborationProfile {
+    match raw
+        .map(|value| value.trim().to_lowercase())
+        .as_deref()
+    {
+        Some("strict-local") | Some("strict_local") | Some("strictlocal") | Some("strict") => {
+            CollaborationProfile::StrictLocal
+        }
+        _ => CollaborationProfile::OfficialCompatible,
+    }
+}
+
+pub(crate) fn resolve_collaboration_profile() -> CollaborationProfile {
+    resolve_collaboration_profile_from_raw(env::var(COLLABORATION_PROFILE_ENV).ok().as_deref())
+}
+
+pub(crate) fn strict_local_collaboration_profile_enabled() -> bool {
+    resolve_collaboration_profile() == CollaborationProfile::StrictLocal
+}
+
 pub(crate) fn resolve_policy(
     payload: Option<&Value>,
     persisted_mode: Option<&str>,
 ) -> CodexCollaborationPolicy {
+    let profile = resolve_collaboration_profile();
     let selected_mode = extract_selected_mode(payload);
     let normalized_selected = normalize_mode(selected_mode.as_deref());
     let normalized_persisted = normalize_mode(persisted_mode);
@@ -88,28 +130,37 @@ pub(crate) fn resolve_policy(
         ),
     };
 
-    let request_user_input_policy = if effective_mode == "code" {
-        RequestUserInputPolicy::Block
-    } else {
-        RequestUserInputPolicy::Allow
+    let request_user_input_policy = match (profile, effective_mode.as_str()) {
+        (CollaborationProfile::StrictLocal, "code") => RequestUserInputPolicy::Block,
+        _ => RequestUserInputPolicy::Allow,
     };
 
     CodexCollaborationPolicy {
         selected_mode,
         effective_mode: effective_mode.clone(),
+        profile,
         fallback_reason,
         policy_version: COLLABORATION_POLICY_VERSION,
         request_user_input_policy,
-        directives: build_policy_directives(&effective_mode),
+        directives: build_policy_directives(profile, &effective_mode),
     }
 }
 
-pub(crate) fn build_policy_directives(effective_mode: &str) -> Vec<String> {
+pub(crate) fn build_policy_directives(
+    profile: CollaborationProfile,
+    effective_mode: &str,
+) -> Vec<String> {
     if effective_mode == "code" {
-        vec![
-            "Execution policy (default mode): keep execution autonomous. Do not ask the user follow-up questions and avoid requestUserInput / askuserquestion interactions. If details are missing, make minimal reasonable assumptions, proceed, and report assumptions briefly."
-                .to_string(),
-        ]
+        match profile {
+            CollaborationProfile::OfficialCompatible => vec![
+                "Execution policy (default mode): execute tasks autonomously by default, but requestUserInput / askuserquestion is allowed when critical information is missing."
+                    .to_string(),
+            ],
+            CollaborationProfile::StrictLocal => vec![
+                "Execution policy (default mode): keep execution autonomous. Do not ask the user follow-up questions and avoid requestUserInput / askuserquestion interactions. If details are missing, make minimal reasonable assumptions, proceed, and report assumptions briefly."
+                    .to_string(),
+            ],
+        }
     } else {
         vec![
             "Execution policy (plan mode): work in planning-only style. You MAY inspect files and run read-only checks, but MUST NOT apply file edits or execute repository-mutating operations."
@@ -175,6 +226,7 @@ pub(crate) fn apply_policy_to_collaboration_mode(
         json!({
             "selected_mode": policy.selected_mode.clone().unwrap_or_else(|| "missing".to_string()),
             "effective_mode": policy.effective_mode,
+            "collaboration_profile": policy.profile.as_str(),
             "policy_version": policy.policy_version,
             "fallback_reason": policy.fallback_reason,
             "request_user_input_policy": policy.request_user_input_policy.as_str(),
@@ -220,9 +272,28 @@ pub(crate) fn apply_policy_to_collaboration_mode(
 mod tests {
     use super::{
         apply_policy_to_collaboration_mode, build_policy_directives, normalize_mode,
-        resolve_policy, RequestUserInputPolicy, COLLABORATION_POLICY_VERSION,
+        resolve_collaboration_profile_from_raw, resolve_policy, CollaborationProfile,
+        RequestUserInputPolicy, COLLABORATION_POLICY_VERSION,
     };
     use serde_json::json;
+
+    fn with_profile_env<T>(
+        raw_profile: Option<&str>,
+        run: impl FnOnce() -> T,
+    ) -> T {
+        let key = "MOSSX_CODEX_COLLABORATION_PROFILE";
+        let previous = std::env::var(key).ok();
+        match raw_profile {
+            Some(value) => std::env::set_var(key, value),
+            None => std::env::remove_var(key),
+        }
+        let result = run();
+        match previous {
+            Some(value) => std::env::set_var(key, value),
+            None => std::env::remove_var(key),
+        }
+        result
+    }
 
     #[test]
     fn normalize_mode_accepts_plan_and_code() {
@@ -236,21 +307,21 @@ mod tests {
     #[test]
     fn resolve_policy_prefers_explicit_mode() {
         let payload = json!({ "mode": "code" });
-        let policy = resolve_policy(Some(&payload), Some("plan"));
+        let policy = with_profile_env(None, || resolve_policy(Some(&payload), Some("plan")));
         assert_eq!(policy.selected_mode, Some("code".to_string()));
         assert_eq!(policy.effective_mode, "code");
         assert_eq!(policy.fallback_reason, None);
         assert_eq!(policy.policy_version, COLLABORATION_POLICY_VERSION);
         assert_eq!(
             policy.request_user_input_policy,
-            RequestUserInputPolicy::Block
+            RequestUserInputPolicy::Allow
         );
     }
 
     #[test]
     fn resolve_policy_falls_back_to_thread_mode_for_invalid_selection() {
         let payload = json!({ "mode": "invalid" });
-        let policy = resolve_policy(Some(&payload), Some("code"));
+        let policy = with_profile_env(None, || resolve_policy(Some(&payload), Some("code")));
         assert_eq!(policy.selected_mode, Some("invalid".to_string()));
         assert_eq!(policy.effective_mode, "code");
         assert_eq!(
@@ -267,7 +338,8 @@ mod tests {
                 "developer_instructions": "Keep answers concise."
             }
         });
-        let policy = resolve_policy(Some(&json!({ "mode": "code" })), None);
+        let policy =
+            with_profile_env(None, || resolve_policy(Some(&json!({ "mode": "code" })), None));
         let enriched = apply_policy_to_collaboration_mode(Some(payload), &policy);
         assert_eq!(enriched["mode"], "default");
         assert_eq!(enriched["selectedMode"], "code");
@@ -276,7 +348,11 @@ mod tests {
         assert_eq!(enriched["fallbackReason"], serde_json::Value::Null);
         assert_eq!(
             enriched["settings"]["_mossx_runtime"]["request_user_input_policy"],
-            "block"
+            "allow"
+        );
+        assert_eq!(
+            enriched["settings"]["_mossx_runtime"]["collaboration_profile"],
+            "official-compatible"
         );
         let merged_instructions = enriched["settings"]["developer_instructions"]
             .as_str()
@@ -287,7 +363,7 @@ mod tests {
 
     #[test]
     fn plan_mode_directives_require_blocker_question_flow() {
-        let directives = build_policy_directives("plan");
+        let directives = build_policy_directives(CollaborationProfile::OfficialCompatible, "plan");
         let merged = directives.join("\n");
         assert!(merged.contains("Execution policy (plan mode):"));
         assert!(merged.contains("MUST immediately stop further work"));
@@ -298,7 +374,7 @@ mod tests {
 
     #[test]
     fn resolve_policy_defaults_to_code_when_mode_missing() {
-        let policy = resolve_policy(None, None);
+        let policy = with_profile_env(None, || resolve_policy(None, None));
         assert_eq!(policy.effective_mode, "code");
         assert_eq!(
             policy.fallback_reason.as_deref(),
@@ -306,7 +382,39 @@ mod tests {
         );
         assert_eq!(
             policy.request_user_input_policy,
+            RequestUserInputPolicy::Allow
+        );
+    }
+
+    #[test]
+    fn strict_local_profile_blocks_request_user_input_in_code_mode() {
+        let policy = with_profile_env(Some("strict-local"), || {
+            resolve_policy(None, Some("code"))
+        });
+        assert_eq!(policy.profile, CollaborationProfile::StrictLocal);
+        assert_eq!(
+            policy.request_user_input_policy,
             RequestUserInputPolicy::Block
+        );
+    }
+
+    #[test]
+    fn profile_parser_defaults_to_official_compatible() {
+        assert_eq!(
+            resolve_collaboration_profile_from_raw(None),
+            CollaborationProfile::OfficialCompatible
+        );
+        assert_eq!(
+            resolve_collaboration_profile_from_raw(Some("unknown")),
+            CollaborationProfile::OfficialCompatible
+        );
+        assert_eq!(
+            resolve_collaboration_profile_from_raw(Some("strict-local")),
+            CollaborationProfile::StrictLocal
+        );
+        assert_eq!(
+            resolve_collaboration_profile_from_raw(Some("strict_local")),
+            CollaborationProfile::StrictLocal
         );
     }
 }

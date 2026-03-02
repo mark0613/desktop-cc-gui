@@ -15,6 +15,7 @@ use tokio::time::timeout;
 
 use crate::backend::events::{AppServerEvent, EventSink};
 use crate::codex::args::{apply_codex_args, parse_codex_args};
+use crate::codex::collaboration_policy::strict_local_collaboration_profile_enabled;
 use crate::codex::thread_mode_state::ThreadModeState;
 use crate::types::WorkspaceEntry;
 
@@ -73,8 +74,12 @@ fn should_block_request_user_input(
     method: &str,
     effective_mode: Option<&str>,
     enforcement_enabled: bool,
+    strict_local_profile: bool,
 ) -> bool {
-    enforcement_enabled && method == "item/tool/requestUserInput" && effective_mode == Some("code")
+    enforcement_enabled
+        && strict_local_profile
+        && method == "item/tool/requestUserInput"
+        && effective_mode == Some("code")
 }
 
 fn build_mode_blocked_event(
@@ -925,10 +930,12 @@ impl WorkspaceSession {
 
         let thread_id = extract_thread_id(value)?;
         let effective_mode = self.get_thread_effective_mode(&thread_id).await;
+        let strict_local_profile = strict_local_collaboration_profile_enabled();
         let block = should_block_request_user_input(
             method,
             effective_mode.as_deref(),
             self.mode_enforcement_enabled(),
+            strict_local_profile,
         );
         if !block {
             log::debug!(
@@ -968,7 +975,7 @@ impl WorkspaceSession {
     }
 
     async fn intercept_plan_repo_mutation_if_needed(&self, value: &Value) -> Option<Value> {
-        if !self.mode_enforcement_enabled() {
+        if !self.mode_enforcement_enabled() || !strict_local_collaboration_profile_enabled() {
             return None;
         }
         let thread_id = extract_thread_id(value)?;
@@ -995,6 +1002,9 @@ impl WorkspaceSession {
     }
 
     async fn track_plan_turn_state(&self, value: &Value) {
+        if !strict_local_collaboration_profile_enabled() {
+            return;
+        }
         let Some(thread_id) = extract_thread_id(value) else {
             return;
         };
@@ -1082,6 +1092,9 @@ impl WorkspaceSession {
     }
 
     async fn maybe_emit_plan_blocker_user_input(&self, value: &Value) -> Option<Value> {
+        if !strict_local_collaboration_profile_enabled() {
+            return None;
+        }
         let thread_id = extract_thread_id(value)?;
         let effective_mode = self.get_thread_effective_mode(&thread_id).await;
         if effective_mode.as_deref() != Some("plan") {
@@ -1201,6 +1214,9 @@ impl WorkspaceSession {
     }
 
     async fn should_suppress_after_synthetic_plan_block(&self, value: &Value) -> bool {
+        if !strict_local_collaboration_profile_enabled() {
+            return false;
+        }
         let Some(thread_id) = extract_thread_id(value) else {
             return false;
         };
@@ -1233,6 +1249,9 @@ impl WorkspaceSession {
     }
 
     async fn maybe_emit_plan_apply_user_input(&self, value: &Value) -> Option<Value> {
+        if !strict_local_collaboration_profile_enabled() {
+            return None;
+        }
         let method = extract_event_method(value)?;
         if method != "turn/completed" {
             return None;
@@ -2075,21 +2094,31 @@ mod tests {
             "item/tool/requestUserInput",
             Some("code"),
             true,
+            true,
         ));
         assert!(!should_block_request_user_input(
             "item/tool/requestUserInput",
             Some("plan"),
+            true,
             true,
         ));
         assert!(!should_block_request_user_input(
             "item/tool/requestUserInput",
             Some("code"),
             false,
+            true,
         ));
         assert!(!should_block_request_user_input(
             "item/updated",
             Some("code"),
             true,
+            true,
+        ));
+        assert!(!should_block_request_user_input(
+            "item/tool/requestUserInput",
+            Some("code"),
+            true,
+            false,
         ));
     }
 

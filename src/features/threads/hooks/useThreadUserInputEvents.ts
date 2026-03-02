@@ -10,6 +10,14 @@ type UseThreadUserInputEventsOptions = {
 export function useThreadUserInputEvents({ dispatch }: UseThreadUserInputEventsOptions) {
   return useCallback(
     (request: RequestUserInputRequest) => {
+      if (request.params.completed === true) {
+        dispatch({
+          type: "removeUserInputRequest",
+          requestId: request.request_id,
+          workspaceId: request.workspace_id,
+        });
+        return;
+      }
       dispatch({ type: "addUserInputRequest", request });
     },
     [dispatch],

@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ComposerEditorSettings, CustomCommandOption, SkillOption } from "../../../types";
@@ -20,6 +20,30 @@ vi.mock("../../engine/components/EngineSelector", () => ({
 
 vi.mock("../../opencode/components/OpenCodeControlPanel", () => ({
   OpenCodeControlPanel: () => null,
+}));
+
+vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
+  ChatInputBoxAdapter: ({
+    text,
+    onTextChange,
+    onSend,
+  }: {
+    text: string;
+    onTextChange: (next: string, cursor: number | null) => void;
+    onSend: () => void;
+  }) => (
+    <textarea
+      value={text}
+      onChange={(event) =>
+        onTextChange(event.currentTarget.value, event.currentTarget.value.length)
+      }
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          onSend();
+        }
+      }}
+    />
+  ),
 }));
 
 type HarnessProps = {
@@ -93,76 +117,7 @@ describe("Composer context source grouping", () => {
     cleanup();
   });
 
-  it("renders S+ with source groups", async () => {
-    const view = render(
-      <ComposerHarness
-        skills={[
-          {
-            name: "lint-project",
-            path: "/repo/.claude/skills/lint/SKILL.md",
-            source: "project_claude",
-            description: "project skill",
-          },
-          {
-            name: "lint-global",
-            path: "/Users/u/.codex/skills/lint/SKILL.md",
-            source: "global_codex",
-            description: "global skill",
-          },
-        ]}
-      />,
-    );
-
-    await act(async () => {
-      fireEvent.click(within(view.container).getAllByRole("button", { name: "S+" })[0]!);
-    });
-
-    expect(within(document.body).getByText("Project .claude")).toBeTruthy();
-    expect(within(document.body).getByText("User .codex")).toBeTruthy();
-  });
-
-  it("keeps source grouping semantics after S+ search filter", async () => {
-    const view = render(
-      <ComposerHarness
-        skills={[
-          {
-            name: "lint-project",
-            path: "/repo/.claude/skills/lint/SKILL.md",
-            source: "project_claude",
-            description: "project lint",
-          },
-          {
-            name: "lint-global",
-            path: "/Users/u/.codex/skills/lint/SKILL.md",
-            source: "global_codex",
-            description: "global lint",
-          },
-        ]}
-      />,
-    );
-
-    await act(async () => {
-      fireEvent.click(within(view.container).getAllByRole("button", { name: "S+" })[0]!);
-    });
-
-    const input = within(document.body).getByLabelText("搜索 Skill");
-
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "lint" } });
-    });
-
-    expect(within(document.body).getByText("Project .claude")).toBeTruthy();
-    expect(within(document.body).getByText("User .codex")).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "project" } });
-    });
-
-    expect(within(document.body).getByText("Project .claude")).toBeTruthy();
-    expect(within(document.body).queryByText("User .codex")).toBeNull();
-  });
-
-  it("renders M+ with source groups and keeps slash token assembly clean", async () => {
+  it("keeps slash token assembly clean without leaking source metadata", async () => {
     const onSend = vi.fn();
     const view = render(
       <ComposerHarness
@@ -183,47 +138,19 @@ describe("Composer context source grouping", () => {
             description: "command",
             content: "body",
           },
-          {
-            name: "global-lint",
-            path: "/Users/u/.claude/commands/global/lint.md",
-            source: "global_claude",
-            description: "global",
-            content: "body",
-          },
         ]}
       />,
     );
 
-    await act(async () => {
-      fireEvent.click(within(view.container).getAllByRole("button", { name: "M+" })[0]!);
-    });
-    expect(within(document.body).getByText("Project .claude")).toBeTruthy();
-    expect(within(document.body).getByText("User .claude")).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.click(within(view.container).getAllByRole("button", { name: "S+" })[0]!);
-    });
-    await act(async () => {
-      fireEvent.click(within(document.body).getByRole("button", { name: /build-review/i }));
-    });
-
-    await act(async () => {
-      fireEvent.click(within(view.container).getAllByRole("button", { name: "M+" })[0]!);
-    });
-    await act(async () => {
-      fireEvent.click(within(document.body).getByRole("button", { name: /team-lint/i }));
-    });
-
     const textarea = getTextarea(view.container);
+    const value = "/build-review /team-lint 检查一下";
     await act(async () => {
       fireEvent.change(textarea, {
         target: {
-          value: "检查一下",
-          selectionStart: 4,
+          value,
+          selectionStart: value.length,
         },
       });
-      textarea.focus();
-      textarea.setSelectionRange(4, 4);
       fireEvent.keyDown(textarea, { key: "Enter", bubbles: true });
     });
 

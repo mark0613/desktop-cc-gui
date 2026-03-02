@@ -434,6 +434,7 @@ export function useAppServerEvents(
         const fallbackThreadId = handlers.getActiveCodexThreadId?.(workspace_id) ?? "";
         const resolvedThreadId =
           extractThreadIdFromParams(params) || fallbackThreadId;
+        const completed = Boolean(params.completed);
         const turn = (params.turn as Record<string, unknown> | undefined) ?? {};
         const questionsRaw = Array.isArray(params.questions) ? params.questions : [];
         const questions = questionsRaw
@@ -469,6 +470,7 @@ export function useAppServerEvents(
             turn_id: String(params.turnId ?? params.turn_id ?? turn.id ?? ""),
             item_id: String(params.itemId ?? params.item_id ?? turn.itemId ?? turn.item_id ?? ""),
             questions,
+            ...(completed ? { completed: true } : {}),
           },
         });
         return;

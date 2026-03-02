@@ -270,6 +270,7 @@ export type RequestUserInputParams = {
   turn_id: string;
   item_id: string;
   questions: RequestUserInputQuestion[];
+  completed?: boolean;
 };
 
 export type RequestUserInputRequest = {

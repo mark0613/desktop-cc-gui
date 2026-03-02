@@ -163,6 +163,8 @@ import type {
   RequestUserInputRequest,
   RequestUserInputResponse,
   SelectedAgentOption,
+  TurnPlan,
+  TurnPlanStepStatus,
   WorkspaceInfo,
 } from "./types";
 import { getClientStoreSync, writeClientStoreValue } from "./services/clientStorage";
@@ -242,6 +244,72 @@ function normalizeLockLiveSnippet(text: string, maxLength = LOCK_LIVE_PREVIEW_MA
     return compact;
   }
   return `${compact.slice(0, Math.max(0, maxLength - 1))}...`;
+}
+
+function normalizeTimelinePlanStepStatus(raw: string): TurnPlanStepStatus {
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "completed" || normalized === "done" || normalized === "success") {
+    return "completed";
+  }
+  if (
+    normalized === "in_progress" ||
+    normalized === "in-progress" ||
+    normalized === "inprogress" ||
+    normalized === "running"
+  ) {
+    return "inProgress";
+  }
+  return "pending";
+}
+
+function extractPlanFromTimelineItems(items: ConversationItem[]): TurnPlan | null {
+  const latestPlanItem = [...items]
+    .reverse()
+    .find(
+      (item) =>
+        item.kind === "tool" &&
+        (item.toolType === "proposed-plan" || item.toolType === "plan-implementation"),
+    );
+  if (!latestPlanItem || latestPlanItem.kind !== "tool") {
+    return null;
+  }
+  const output = (latestPlanItem.output ?? "").trim();
+  const lines = output
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const steps = lines
+    .map((line) => {
+      const withStatus = line.match(/^- \[([^\]]+)\]\s*(.+)$/);
+      if (withStatus) {
+        return {
+          step: withStatus[2].trim(),
+          status: normalizeTimelinePlanStepStatus(withStatus[1]),
+        };
+      }
+      const bullet = line.match(/^- (.+)$/);
+      if (bullet) {
+        return {
+          step: bullet[1].trim(),
+          status: "pending" as TurnPlanStepStatus,
+        };
+      }
+      return null;
+    })
+    .filter((entry): entry is { step: string; status: TurnPlanStepStatus } => Boolean(entry));
+  const detail = (latestPlanItem.detail ?? "").trim();
+  const turnId = detail.startsWith("implement-plan:")
+    ? detail.slice("implement-plan:".length).trim() || latestPlanItem.id
+    : latestPlanItem.id;
+  const explanation = steps.length > 0 ? null : output || null;
+  if (!explanation && steps.length === 0) {
+    return null;
+  }
+  return {
+    turnId,
+    explanation,
+    steps,
+  };
 }
 
 function resolveLockLivePreview(
@@ -1875,9 +1943,13 @@ function MainApp() {
   const activeTokenUsage = activeThreadId
     ? tokenUsageByThread[activeThreadId] ?? null
     : null;
+  const timelinePlan = useMemo(
+    () => extractPlanFromTimelineItems(activeItems),
+    [activeItems],
+  );
   const activePlan = activeThreadId
-    ? planByThread[activeThreadId] ?? null
-    : null;
+    ? timelinePlan ?? planByThread[activeThreadId] ?? null
+    : timelinePlan;
   useEffect(() => {
     activeThreadIdForModeRef.current = activeThreadId;
   }, [activeThreadId]);
@@ -1897,8 +1969,11 @@ function MainApp() {
       }
       return;
     }
+    const hasExplicitSelection =
+      selectedCollaborationModeId === "plan" ||
+      selectedCollaborationModeId === "code";
     const threadChanged = lastCodexModeSyncThreadRef.current !== activeThreadId;
-    if (!threadChanged) {
+    if (!threadChanged || hasExplicitSelection) {
       return;
     }
     lastCodexModeSyncThreadRef.current = activeThreadId;

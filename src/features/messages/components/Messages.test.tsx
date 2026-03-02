@@ -842,7 +842,7 @@ describe("Messages", () => {
   });
 
   it("collapses earlier items and reveals them on demand", () => {
-    const items: ConversationItem[] = Array.from({ length: 17 }, (_, index) => ({
+    const items: ConversationItem[] = Array.from({ length: 32 }, (_, index) => ({
       id: `history-item-${index + 1}`,
       kind: "message",
       role: index % 2 === 0 ? "user" : "assistant",
@@ -877,13 +877,13 @@ describe("Messages", () => {
   });
 
   it("resets collapsed state when conversation head changes", () => {
-    const firstBatch: ConversationItem[] = Array.from({ length: 17 }, (_, index) => ({
+    const firstBatch: ConversationItem[] = Array.from({ length: 32 }, (_, index) => ({
       id: `session-a-${index + 1}`,
       kind: "message",
       role: index % 2 === 0 ? "user" : "assistant",
       text: `session A message ${index + 1}`,
     }));
-    const secondBatch: ConversationItem[] = Array.from({ length: 17 }, (_, index) => ({
+    const secondBatch: ConversationItem[] = Array.from({ length: 32 }, (_, index) => ({
       id: `session-b-${index + 1}`,
       kind: "message",
       role: index % 2 === 0 ? "user" : "assistant",

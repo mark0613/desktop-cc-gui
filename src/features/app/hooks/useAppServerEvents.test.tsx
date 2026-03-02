@@ -554,6 +554,55 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("marks requestUserInput as completed when payload indicates completion", async () => {
+    const handlers: Handlers = {
+      onRequestUserInput: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-completed",
+        message: {
+          method: "item/tool/requestUserInput",
+          id: "req-completed-1",
+          params: {
+            threadId: "thread-completed",
+            turnId: "turn-completed",
+            itemId: "item-completed",
+            completed: true,
+            questions: [{ id: "q1", header: "", question: "Done?" }],
+          },
+        },
+      });
+    });
+
+    expect(handlers.onRequestUserInput).toHaveBeenCalledWith({
+      workspace_id: "ws-completed",
+      request_id: "req-completed-1",
+      params: {
+        thread_id: "thread-completed",
+        turn_id: "turn-completed",
+        item_id: "item-completed",
+        completed: true,
+        questions: [
+          {
+            id: "q1",
+            header: "",
+            question: "Done?",
+            isOther: false,
+            isSecret: false,
+            options: undefined,
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("ignores delta events missing required fields", async () => {
     const handlers: Handlers = {
       onAgentMessageDelta: vi.fn(),

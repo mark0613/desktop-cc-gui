@@ -26,6 +26,30 @@ vi.mock("../../opencode/components/OpenCodeControlPanel", () => ({
   OpenCodeControlPanel: () => null,
 }));
 
+vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
+  ChatInputBoxAdapter: ({
+    text,
+    onTextChange,
+    onSend,
+  }: {
+    text: string;
+    onTextChange: (next: string, cursor: number | null) => void;
+    onSend: () => void;
+  }) => (
+    <textarea
+      value={text}
+      onChange={(event) =>
+        onTextChange(event.currentTarget.value, event.currentTarget.value.length)
+      }
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          onSend();
+        }
+      }}
+    />
+  ),
+}));
+
 function ComposerHarness({ onSend }: { onSend: (text: string) => void }) {
   const [draftText, setDraftText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);

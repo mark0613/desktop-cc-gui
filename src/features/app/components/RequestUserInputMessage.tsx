@@ -142,27 +142,56 @@ export function RequestUserInputMessage({
       if (!draft) {
         return current;
       }
+      const noteText = (draft.notes[questionId] ?? "").trim();
+      if (noteText.length > 0) {
+        return {
+          ...current,
+          [requestKey]: {
+            ...draft,
+            selections: {
+              ...draft.selections,
+              [questionId]: null,
+            },
+          },
+        };
+      }
+      const currentSelected = draft.selections[questionId];
       return {
         ...current,
         [requestKey]: {
           ...draft,
-          selections: { ...draft.selections, [questionId]: optionIndex },
+          selections: {
+            ...draft.selections,
+            [questionId]: currentSelected === optionIndex ? null : optionIndex,
+          },
         },
       };
     });
   };
 
-  const handleNotesChange = (questionId: string, value: string) => {
+  const handleNotesChange = (
+    questionId: string,
+    value: string,
+    clearSelectionForCustomInput = false,
+  ) => {
     setDraftByRequest((current) => {
       const draft = current[requestKey];
       if (!draft) {
         return current;
       }
+      const shouldClearSelection = clearSelectionForCustomInput && value.trim().length > 0;
+      const nextSelections = shouldClearSelection
+        ? {
+            ...draft.selections,
+            [questionId]: null,
+          }
+        : draft.selections;
       return {
         ...current,
         [requestKey]: {
           ...draft,
           notes: { ...draft.notes, [questionId]: value },
+          selections: nextSelections,
         },
       };
     });
@@ -226,6 +255,7 @@ export function RequestUserInputMessage({
               const questionId = question.id || `question-${index}`;
               const selectedIndex = selections[questionId];
               const options = question.options ?? [];
+              const hasCustomInput = (notes[questionId] ?? "").trim().length > 0;
               const notePlaceholder = question.isOther
                 ? t("approval.typeAnswerOptional")
                 : options.length
@@ -243,12 +273,14 @@ export function RequestUserInputMessage({
                   </div>
                   {options.length ? (
                     <div className="request-user-input-options">
-                      {options.map((option, optionIndex) => (
+                      {options.map((option, optionIndex) => {
+                        const isSelected = !hasCustomInput && selectedIndex === optionIndex;
+                        return (
                         <button
                           key={`${questionId}-${optionIndex}`}
                           type="button"
                           className={`request-user-input-option${
-                            selectedIndex === optionIndex ? " is-selected" : ""
+                            isSelected ? " is-selected" : ""
                           }`}
                           onClick={() => handleSelect(questionId, optionIndex)}
                         >
@@ -261,7 +293,8 @@ export function RequestUserInputMessage({
                             </div>
                           ) : null}
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : null}
                   {question.isSecret ? (
@@ -291,7 +324,7 @@ export function RequestUserInputMessage({
                       placeholder={notePlaceholder}
                       value={notes[questionId] ?? ""}
                       onChange={(event) =>
-                        handleNotesChange(questionId, event.target.value)
+                        handleNotesChange(questionId, event.target.value, options.length > 0)
                       }
                       rows={2}
                     />
