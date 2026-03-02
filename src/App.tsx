@@ -83,8 +83,8 @@ import { useOpenPaths } from "./features/workspaces/hooks/useOpenPaths";
 import { useRenameWorktreePrompt } from "./features/workspaces/hooks/useRenameWorktreePrompt";
 import { useLayoutController } from "./features/app/hooks/useLayoutController";
 import { useWindowLabel } from "./features/layout/hooks/useWindowLabel";
-import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isWindowsPlatform } from "./utils/platform";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
@@ -2371,24 +2371,7 @@ function MainApp() {
 
   useWindowDrag("titlebar");
 
-  const isWindowsDesktop = useMemo(() => {
-    try {
-      if (!isTauri() || typeof navigator === "undefined") {
-        return false;
-      }
-      const platform =
-        (
-          navigator as Navigator & {
-            userAgentData?: { platform?: string };
-          }
-        ).userAgentData?.platform ??
-        navigator.platform ??
-        "";
-      return platform.toLowerCase().includes("win");
-    } catch {
-      return false;
-    }
-  }, []);
+  const isWindowsDesktop = useMemo(() => isWindowsPlatform(), []);
 
   useEffect(() => {
     try {

@@ -30,7 +30,6 @@
   height: var(--main-topbar-height);
   min-height: var(--main-topbar-height);
   flex-shrink: 0;
-  /* margin: 0 calc(-1 * var(--sidebar-padding)); */
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-topbar);
   box-sizing: border-box;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isWindowsPlatform } from "../../../utils/platform";
 import PanelLeftClose from "lucide-react/dist/esm/icons/panel-left-close";
 import PanelLeftOpen from "lucide-react/dist/esm/icons/panel-left-open";
 import PanelRightClose from "lucide-react/dist/esm/icons/panel-right-close";
@@ -67,55 +67,30 @@ export function RightPanelCollapseButton({
   );
 }
 
-export function TitlebarExpandControls(_props: SidebarToggleProps) {
+function WindowControls() {
   const { t } = useTranslation();
-  const isWindowsDesktop = useMemo(() => {
-    try {
-      if (!isTauri() || typeof navigator === "undefined") {
-        return false;
-      }
-      const platform =
-        (
-          navigator as Navigator & {
-            userAgentData?: { platform?: string };
-          }
-        ).userAgentData?.platform ??
-        navigator.platform ??
-        "";
-      return platform.toLowerCase().includes("win");
-    } catch {
-      return false;
-    }
-  }, []);
   const [isMaximized, setIsMaximized] = useState(false);
 
-  const syncWindowMaximizedState = useCallback(async () => {
-    if (!isWindowsDesktop) {
-      return;
-    }
+  const syncMaximizedState = useCallback(async () => {
     try {
       const maximized = await getCurrentWindow().isMaximized();
       setIsMaximized(maximized);
-    } catch (error) {
-      console.error("Failed to read window maximized state:", error);
+    } catch {
+      // Window API may be unavailable in test environments.
     }
-  }, [isWindowsDesktop]);
+  }, []);
 
   useEffect(() => {
-    if (!isWindowsDesktop) {
-      return;
-    }
-
     let disposed = false;
     let unlistenResize: (() => void) | null = null;
 
-    void syncWindowMaximizedState();
+    void syncMaximizedState();
 
     try {
-      const window = getCurrentWindow();
-      void window
+      const win = getCurrentWindow();
+      void win
         .onResized(() => {
-          void syncWindowMaximizedState();
+          void syncMaximizedState();
         })
         .then((unlisten) => {
           if (disposed) {
@@ -124,112 +99,107 @@ export function TitlebarExpandControls(_props: SidebarToggleProps) {
           }
           unlistenResize = unlisten;
         })
-        .catch((error) => {
-          console.error("Failed to bind window resize listener:", error);
+        .catch(() => {
+          // Resize listener binding can fail in restricted contexts.
         });
-    } catch (error) {
-      console.error("Failed to access current window:", error);
+    } catch {
+      // Window access can fail in non-Tauri environments.
     }
 
     return () => {
       disposed = true;
-      if (unlistenResize) {
-        unlistenResize();
-      }
+      unlistenResize?.();
     };
-  }, [isWindowsDesktop, syncWindowMaximizedState]);
+  }, [syncMaximizedState]);
 
-  const handleMinimizeWindow = useCallback(() => {
-    if (!isWindowsDesktop) {
-      return;
-    }
+  const handleMinimize = useCallback(() => {
     try {
       void getCurrentWindow().minimize();
-    } catch (error) {
-      console.error("Failed to minimize window:", error);
+    } catch {
+      // Ignore in non-Tauri environments.
     }
-  }, [isWindowsDesktop]);
+  }, []);
 
-  const handleToggleMaximizeWindow = useCallback(async () => {
-    if (!isWindowsDesktop) {
-      return;
-    }
+  const handleToggleMaximize = useCallback(async () => {
     try {
-      const window = getCurrentWindow();
-      await window.toggleMaximize();
-      const maximized = await window.isMaximized();
+      const win = getCurrentWindow();
+      await win.toggleMaximize();
+      const maximized = await win.isMaximized();
       setIsMaximized(maximized);
-    } catch (error) {
-      console.error("Failed to toggle maximize window:", error);
+    } catch {
+      // Ignore in non-Tauri environments.
     }
-  }, [isWindowsDesktop]);
+  }, []);
 
-  const handleCloseWindow = useCallback(() => {
-    if (!isWindowsDesktop) {
-      return;
-    }
+  const handleClose = useCallback(() => {
     try {
       void getCurrentWindow().close();
-    } catch (error) {
-      console.error("Failed to close window:", error);
+    } catch {
+      // Ignore in non-Tauri environments.
     }
-  }, [isWindowsDesktop]);
+  }, []);
+
+  const maximizeLabel = isMaximized ? t("common.restore") : t("menu.maximize");
+
+  return (
+    <div className="titlebar-toggle titlebar-toggle-right titlebar-window-controls">
+      <button
+        type="button"
+        className="titlebar-window-button"
+        onClick={handleMinimize}
+        data-tauri-drag-region="false"
+        aria-label={t("menu.minimize")}
+        title={t("menu.minimize")}
+      >
+        <span
+          className="codicon codicon-chrome-minimize titlebar-window-glyph"
+          aria-hidden
+        />
+      </button>
+      <button
+        type="button"
+        className="titlebar-window-button"
+        onClick={() => {
+          void handleToggleMaximize();
+        }}
+        data-tauri-drag-region="false"
+        aria-label={maximizeLabel}
+        title={maximizeLabel}
+      >
+        <span
+          className={`codicon ${
+            isMaximized ? "codicon-chrome-restore" : "codicon-chrome-maximize"
+          } titlebar-window-glyph`}
+          aria-hidden
+        />
+      </button>
+      <button
+        type="button"
+        className="titlebar-window-button titlebar-window-button-close"
+        onClick={handleClose}
+        data-tauri-drag-region="false"
+        aria-label={t("menu.closeWindow")}
+        title={t("menu.closeWindow")}
+      >
+        <span
+          className="codicon codicon-chrome-close titlebar-window-glyph"
+          aria-hidden
+        />
+      </button>
+    </div>
+  );
+}
+
+export function TitlebarExpandControls(_props: SidebarToggleProps) {
+  const isWindowsDesktop = useMemo(() => isWindowsPlatform(), []);
 
   if (!isWindowsDesktop) {
     return null;
   }
 
-  const maximizeLabel = isMaximized ? t("common.restore") : t("menu.maximize");
-
   return (
     <div className="titlebar-controls">
-      {isWindowsDesktop && (
-        <div className="titlebar-toggle titlebar-toggle-right titlebar-window-controls">
-          <button
-            type="button"
-            className="titlebar-window-button"
-            onClick={handleMinimizeWindow}
-            data-tauri-drag-region="false"
-            aria-label={t("menu.minimize")}
-            title={t("menu.minimize")}
-          >
-            <span
-              className="codicon codicon-chrome-minimize titlebar-window-glyph"
-              aria-hidden
-            />
-          </button>
-          <button
-            type="button"
-            className="titlebar-window-button"
-            onClick={() => {
-              void handleToggleMaximizeWindow();
-            }}
-            data-tauri-drag-region="false"
-            aria-label={maximizeLabel}
-            title={maximizeLabel}
-          >
-            <span
-              className={`codicon ${
-                isMaximized ? "codicon-chrome-restore" : "codicon-chrome-maximize"
-              } titlebar-window-glyph`}
-              aria-hidden
-            />
-          </button>
-          <button
-            type="button"
-            className="titlebar-window-button titlebar-window-button-close"
-            onClick={handleCloseWindow}
-            data-tauri-drag-region="false"
-            aria-label={t("menu.closeWindow")}
-            title={t("menu.closeWindow")}
-          >
-            <span
-              className="codicon codicon-chrome-close titlebar-window-glyph"
-              aria-hidden
-            />
-          </button>
-        </div>
-      )}
+      <WindowControls />
     </div>
   );
 }

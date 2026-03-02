@@ -32,6 +32,17 @@ function escapeHtml(value: string) {
     .replace(/>/g, "&gt;");
 }
 
+/**
+ * Defense-in-depth sanitizer for Prism.highlight output.
+ * Prism only emits `<span class="token ...">` tags with HTML-escaped content,
+ * but we strip anything unexpected as a safety net against potential Prism bugs.
+ */
+function sanitizePrismHtml(html: string): string {
+  return html
+    .replace(/<script[\s>][\s\S]*?<\/script>/gi, "")
+    .replace(/\bon\w+\s*=/gi, "data-removed=");
+}
+
 export function languageFromPath(path?: string | null) {
   return resolvePreviewLanguageFromPath(path);
 }
@@ -40,9 +51,7 @@ export function highlightLine(text: string, language?: string | null) {
   if (!language || !(Prism.languages as Record<string, unknown>)[language]) {
     return escapeHtml(text);
   }
-  return Prism.highlight(
-    text,
-    Prism.languages[language] as Grammar,
-    language,
+  return sanitizePrismHtml(
+    Prism.highlight(text, Prism.languages[language] as Grammar, language),
   );
 }
