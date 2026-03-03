@@ -16,16 +16,31 @@ function createBeforeInputEvent(inputType: string): Event {
   return event;
 }
 
+function createComposingBeforeInputEvent(inputType: string): Event {
+  const event = createBeforeInputEvent(inputType);
+  Object.defineProperty(event, 'isComposing', {
+    value: true,
+    configurable: true,
+  });
+  return event;
+}
+
 function Harness({
   sendShortcut,
   onSubmit,
+  isComposing = false,
+  compositionEndedMsAgo,
 }: {
   sendShortcut: 'enter' | 'cmdEnter';
   onSubmit: () => void;
+  isComposing?: boolean;
+  compositionEndedMsAgo?: number;
 }) {
   const editableRef = useRef<HTMLDivElement | null>(null);
-  const isComposingRef = useRef(false);
-  const lastCompositionEndTimeRef = useRef(0);
+  const isComposingRef = useRef(isComposing);
+  const lastCompositionEndTimeRef = useRef(
+    compositionEndedMsAgo === undefined ? 0 : Date.now() - compositionEndedMsAgo
+  );
   const completionSelectedRef = useRef(false);
   const submittedOnEnterRef = useRef(false);
   const closedCompletion = { isOpen: false };
@@ -82,5 +97,35 @@ describe('useNativeEventCapture', () => {
     editable.dispatchEvent(createBeforeInputEvent('insertParagraph'));
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not submit beforeinput fallback during active IME composition', () => {
+    const onSubmit = vi.fn();
+    render(<Harness sendShortcut="enter" onSubmit={onSubmit} isComposing />);
+    const editable = screen.getByTestId('editable');
+
+    editable.dispatchEvent(createBeforeInputEvent('insertParagraph'));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('does not submit beforeinput fallback immediately after composition end', () => {
+    const onSubmit = vi.fn();
+    render(<Harness sendShortcut="enter" onSubmit={onSubmit} compositionEndedMsAgo={20} />);
+    const editable = screen.getByTestId('editable');
+
+    editable.dispatchEvent(createBeforeInputEvent('insertParagraph'));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('does not submit beforeinput fallback when InputEvent reports composing', () => {
+    const onSubmit = vi.fn();
+    render(<Harness sendShortcut="enter" onSubmit={onSubmit} />);
+    const editable = screen.getByTestId('editable');
+
+    editable.dispatchEvent(createComposingBeforeInputEvent('insertParagraph'));
+
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

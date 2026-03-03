@@ -31,6 +31,7 @@ import BriefcaseBusiness from "lucide-react/dist/esm/icons/briefcase-business";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import ChevronsDownUp from "lucide-react/dist/esm/icons/chevrons-down-up";
 import Copy from "lucide-react/dist/esm/icons/copy";
+import FileText from "lucide-react/dist/esm/icons/file-text";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
 import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
@@ -115,6 +116,7 @@ type SidebarProps = {
   onAppModeChange: (mode: AppMode) => void;
   onOpenMemory: () => void;
   onOpenProjectMemory: () => void;
+  onOpenReleaseNotes: () => void;
   onOpenSpecHub: () => void;
   onOpenWorkspaceHome: () => void;
   onOpenGlobalSearch: () => void;
@@ -178,6 +180,7 @@ export function Sidebar({
   onAppModeChange,
   onOpenMemory,
   onOpenProjectMemory,
+  onOpenReleaseNotes,
   onOpenSpecHub,
   onOpenWorkspaceHome: _onOpenWorkspaceHome,
   onOpenGlobalSearch,
@@ -967,6 +970,18 @@ export function Sidebar({
                   >
                     <GitBranch size={14} aria-hidden />
                     <span>{t("git.logMode")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="sidebar-settings-dropdown-item"
+                    onClick={() => {
+                      setIsSettingsMenuOpen(false);
+                      onOpenReleaseNotes();
+                    }}
+                  >
+                    <FileText size={14} aria-hidden />
+                    <span>{t("sidebar.releaseNotes")}</span>
                   </button>
                   <button
                     type="button"

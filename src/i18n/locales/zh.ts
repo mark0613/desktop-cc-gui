@@ -158,6 +158,7 @@ const zh = {
     quickAutomation: "面板模式",
     quickSearch: "搜索",
     quickSkills: "技能",
+    releaseNotes: "版本记录",
     threadsSection: "项目",
   },
 
@@ -367,6 +368,7 @@ const zh = {
     sidebarOpenIn: "打开方式",
     sidebarGit: "Git",
     sidebarOther: "其他设置",
+    sidebarReleaseNotes: "版本记录",
     sidebarVendors: "供应商管理",
     sidebarCodex: "Codex",
     sidebarExperimental: "实验性功能",
@@ -392,6 +394,8 @@ const zh = {
 
     // 其他设置
     otherDescription: "历史记录补全、模型映射等其他配置。",
+    releaseNotesDescription: "查看每个版本的新功能与修复内容。",
+    openReleaseNotes: "打开版本记录",
 
     // 占位页面
     placeholder: {
@@ -1533,6 +1537,16 @@ const zh = {
     restarting: "正在重启…",
     failed: "更新失败。",
     downloaded: "已下载",
+    releaseNotesTitle: "版本记录",
+    releaseNotesLoading: "正在加载版本记录…",
+    releaseNotesLoadFailed: "加载版本记录失败。",
+    releaseNotesEmpty: "暂无版本记录。",
+    releaseNotesOpenInGitHub: "在 GitHub 查看",
+    releaseNotesPrev: "上一条",
+    releaseNotesNext: "下一条",
+    releaseNotesPage: "{{current}} / {{total}}",
+    releaseNotesEnglish: "English:",
+    releaseNotesChinese: "中文：",
   },
 
   // 错误

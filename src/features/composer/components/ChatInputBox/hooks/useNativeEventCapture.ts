@@ -180,6 +180,14 @@ export function useNativeEventCapture({
 
       if (latest.sendShortcut === 'cmdEnter') return;
 
+      // IME may emit insertParagraph when confirming candidates with Enter.
+      // In that case, never hijack this event for submit fallback.
+      const isInputComposing = (ev as InputEvent).isComposing === true;
+      const isRecentlyComposing = Date.now() - latest.lastCompositionEndTimeRef.current < 100;
+      if (latest.isComposingRef.current || isInputComposing || isRecentlyComposing) {
+        return;
+      }
+
       ev.preventDefault();
       if (latest.completionSelectedRef.current) {
         latest.completionSelectedRef.current = false;

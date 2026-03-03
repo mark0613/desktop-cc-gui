@@ -27,6 +27,7 @@ vi.mock("react-i18next", () => ({
         "common.terminal": "Terminal",
         "common.toggleTerminalPanel": "Toggle terminal panel",
         "git.logMode": "Git",
+        "sidebar.releaseNotes": "Release Notes",
         "sidebar.comingSoon": "Coming soon",
         "sidebar.comingSoonMessage": "This feature is coming soon",
         "sidebar.threadsSection": "Threads",
@@ -104,6 +105,7 @@ const baseProps = {
   onAppModeChange: vi.fn(),
   onOpenMemory: vi.fn(),
   onOpenProjectMemory: vi.fn(),
+  onOpenReleaseNotes: vi.fn(),
   onOpenGlobalSearch: vi.fn(),
   globalSearchShortcut: "cmd+o",
   onOpenSpecHub: vi.fn(),
@@ -191,6 +193,7 @@ describe("Sidebar", () => {
     expect(menu.getByRole("menuitem", { name: "Long-term Memory" })).toBeTruthy();
     expect(menu.getByRole("menuitem", { name: "Spec Hub" })).toBeTruthy();
     expect(menu.getByRole("menuitem", { name: "Project Memory" })).toBeTruthy();
+    expect(menu.getByRole("menuitem", { name: "Release Notes" })).toBeTruthy();
     expect(menu.queryByRole("menuitem", { name: "Terminal" })).toBeNull();
     expect(menu.getByRole("menuitem", { name: "Git" })).toBeTruthy();
     expect(menu.queryByRole("menuitem", { name: "Open home" })).toBeNull();

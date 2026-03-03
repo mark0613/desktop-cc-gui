@@ -159,6 +159,7 @@ const en = {
     quickAutomation: "Panel",
     quickSearch: "Search",
     quickSkills: "Skills",
+    releaseNotes: "Release Notes",
     threadsSection: "Threads",
   },
 
@@ -368,6 +369,7 @@ const en = {
     sidebarOpenIn: "Open in",
     sidebarGit: "Git",
     sidebarOther: "Other",
+    sidebarReleaseNotes: "Release Notes",
     sidebarVendors: "Vendors",
     sidebarCodex: "Codex",
     sidebarExperimental: "Experimental",
@@ -393,6 +395,8 @@ const en = {
 
     // Other settings
     otherDescription: "History completion, model mapping, and other configurations.",
+    releaseNotesDescription: "Review feature updates and fixes from every release.",
+    openReleaseNotes: "Open release notes",
 
     // Placeholder pages
     placeholder: {
@@ -1563,6 +1567,16 @@ const en = {
     restarting: "Restarting…",
     failed: "Update failed.",
     downloaded: "downloaded",
+    releaseNotesTitle: "Release Notes",
+    releaseNotesLoading: "Loading release notes…",
+    releaseNotesLoadFailed: "Failed to load release notes.",
+    releaseNotesEmpty: "No release notes yet.",
+    releaseNotesOpenInGitHub: "View on GitHub",
+    releaseNotesPrev: "Previous",
+    releaseNotesNext: "Next",
+    releaseNotesPage: "{{current}} / {{total}}",
+    releaseNotesEnglish: "English:",
+    releaseNotesChinese: "中文：",
   },
 
   // Errors

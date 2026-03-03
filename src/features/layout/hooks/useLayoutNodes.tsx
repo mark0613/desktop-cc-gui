@@ -198,6 +198,7 @@ type LayoutNodesOptions = {
   onAppModeChange: (mode: AppMode) => void;
   onOpenMemory: () => void;
   onOpenProjectMemory: () => void;
+  onOpenReleaseNotes: () => void;
   onOpenGlobalSearch: () => void;
   globalSearchShortcut: string | null;
   onOpenSpecHub: () => void;
@@ -717,6 +718,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onAppModeChange={options.onAppModeChange}
       onOpenMemory={options.onOpenMemory}
       onOpenProjectMemory={options.onOpenProjectMemory}
+      onOpenReleaseNotes={options.onOpenReleaseNotes}
       onOpenGlobalSearch={options.onOpenGlobalSearch}
       globalSearchShortcut={options.globalSearchShortcut}
       onOpenSpecHub={options.onOpenSpecHub}

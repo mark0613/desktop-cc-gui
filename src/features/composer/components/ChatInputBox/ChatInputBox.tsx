@@ -601,7 +601,10 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     const handleCompositionStart = useCallback(() => {
       rawHandleCompositionStart();
       sharedComposingRef.current = true;
-    }, [rawHandleCompositionStart]);
+      // Cancel pending space-triggered file tag render to avoid DOM rewrites
+      // during active IME composition (can break candidate confirmation).
+      debouncedRenderFileTags.cancel();
+    }, [rawHandleCompositionStart, debouncedRenderFileTags]);
 
     const handleCompositionEnd = useCallback(() => {
       rawHandleCompositionEnd();
@@ -626,12 +629,21 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
      */
     const handleKeyDownForTagRendering = useCallback(
       (e: KeyboardEvent) => {
-        // If space key pressed, use debounce for delayed file tag rendering
-        if (e.key === ' ') {
-          debouncedRenderFileTags();
+        if (e.key !== ' ') return;
+
+        // IME uses Space/Enter for candidate selection. Rendering file tags here
+        // (which may rewrite innerHTML) can interrupt composition and leave raw pinyin.
+        const isIMEComposing =
+          sharedComposingRef.current || e.isComposing || e.keyCode === 229;
+        if (isIMEComposing) {
+          debouncedRenderFileTags.cancel();
+          return;
         }
+
+        // If space key pressed outside IME composition, use debounce for delayed rendering.
+        debouncedRenderFileTags();
       },
-      [debouncedRenderFileTags]
+      [debouncedRenderFileTags, sharedComposingRef]
     );
 
     const handleSubmit = useSubmitHandler({
@@ -906,6 +918,13 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
                     if (sendShortcut === 'cmdEnter') {
                       return;
                     }
+
+                    // IME confirm may also emit insertParagraph; do not hijack it.
+                    const isRecentlyComposing = Date.now() - lastCompositionEndTimeRef.current < 100;
+                    if (isComposingRef.current || isRecentlyComposing) {
+                      return;
+                    }
+
                     e.preventDefault();
                     // If item was just selected in completion menu with enter, don't send message
                     if (completionSelectedRef.current) {

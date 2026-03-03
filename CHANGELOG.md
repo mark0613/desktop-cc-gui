@@ -1,0 +1,665 @@
+# Changelog
+
+---
+
+##### **2026年3月3日（v0.2.2）**
+
+English:
+
+✨ Features
+- Enhance message display and add user bubble color customization
+- Add `@@` manual memory completion in ChatInputBox with dropdown preview panel, title/summary/tags display, and detached draft support for no-active-thread scenarios
+- Add real-time usage entry and plan mode toggle for Codex engine in composer
+- Align Codex plan mode protocol with requestUserInput lifecycle
+
+🐛 Fixes
+- Fix Codex engine inconsistency after Plan -> Code mode switch within session
+- Fix file tree `+` button insertion: use native `@absolutePath` mention format instead of icon+path text
+- Fix thread mode sync and stale user input event handling on thread switch
+- Address code review issues from PR #153
+
+中文：
+
+✨ Features
+- 增强消息显示效果并新增用户气泡颜色自定义
+- 在 ChatInputBox 中新增 `@@` 手动记忆补全：下拉预览面板（标题/摘要/标签/重要度/更新时间）、无活跃线程时的草稿支持
+- Codex 模式新增实时用量入口与计划模式切换
+- 对齐 Codex 计划模式协议与 requestUserInput 生命周期
+
+🐛 Fixes
+- 修复 Codex 引擎在会话内 Plan -> Code 切换后的表现不一致问题
+- 修复文件树 `+` 按钮插入行为：改为原生 `@absolutePath` mention 形式，避免行级点击干扰
+- 修复线程切换时模式同步与过期 user input 事件处理
+- 修复 PR #153 代码审查中发现的问题
+
+---
+
+##### **2026年3月2日（v0.2.1）**
+
+English:
+
+✨ Features
+- Optimize Windows frameless window interaction, layout behavior and message code highlighting
+- Refactor settings panel into modular section components for better maintainability
+
+🐛 Fixes
+- Correct topbar z-index stacking and sidebar placeholder scope
+
+🔧 Improvements
+- Rewrite README with detailed feature overview and development guide
+
+中文：
+
+✨ Features
+- 优化 Windows 无边框窗口交互、布局行为与消息代码高亮
+- 重构设置面板为模块化 Section 组件，提升可维护性
+
+🐛 Fixes
+- 修复顶栏 z-index 层叠与侧栏占位区域范围问题
+
+🔧 Improvements
+- 重写 README，补充详细的功能概览和开发指南
+
+---
+
+##### **2026年3月2日（v0.2.0）**
+
+English:
+
+✨ Features
+- Enable Auto Mode by default and support paste image direct submission in composer
+- Add Code Intel definition/reference navigation for file view
+- Add new ChatInputBox component system and refactor Composer architecture
+- Add Agent management system and AskUserQuestion interactive dialog
+- Support horizontal/vertical dual layout switch for editor view with enhanced split-pane drag
+- Display added/modified line markers in editor synced with Git status colors
+- Split editor and chat panels, refine file tab experience
+- Redesign sidebar navigation and improve scrollbar behavior
+- Complete chat canvas architecture refactoring with consistency gates
+- Add collaboration mode enforcement policy and thread-level state sync
+- Raise thread list capacity limit and remove message truncation
+- Add workspace welcome page with sidebar entry coordination, complete .agents scanning
+- Refine UI layout, improve message rendering performance, and add send shortcut settings
+- Complete multi-language rendering coverage for right-side file view
+
+🐛 Fixes
+- Fix GitHub Actions build out-of-memory issue
+- Fix test environment async residual errors after teardown
+- Fix GitHistory branch rename test CI timing flake
+- Fix lint regex errors and sync message component changes
+- Fix chat file reference interaction and optimize file open and status display
+- Add global error boundary, optimize panel drag experience and build config
+
+🔧 Improvements
+- Refactor ChatInputBox layout and visual style
+- Refactor thinking block component to minimal design with centered message layout
+- Remove WorkspaceHome module and improve thread list tooltip
+- Change sidebar skills entry to "coming soon" and optimize workspace tree styles
+
+中文：
+
+✨ Features
+- 默认启用 Auto Mode 并支持粘贴图片直接提交
+- 接入 Code Intel 定义/引用导航能力
+- 新增 ChatInputBox 输入框组件系统并重构 Composer 架构
+- 新增 Agent 管理系统和 AskUserQuestion 交互对话框
+- 编辑视图支持上下/左右双布局切换并增强分栏拖拽
+- 编辑器显示新增/修改行标记并同步 Git 状态颜色
+- 拆分编辑器与聊天面板，优化文件标签页体验
+- 重新设计侧栏导航并改善滚动条行为
+- 完成对话幕布架构重构并补齐一致性门禁
+- 增加协作模式强制策略与线程级状态同步
+- 提升线程列表容量限制并移除消息截断
+- 工作区欢迎页与侧栏入口联动优化，补齐 .agents 扫描
+- 优化 UI 布局，提升消息渲染性能，新增发送快捷键设置
+- 补齐右侧文件视图多语言渲染覆盖
+
+🐛 Fixes
+- 修复 GitHub Actions 构建内存溢出问题
+- 修复测试环境销毁后的异步残留报错
+- 修复 GitHistory 重命名分支测试的 CI 时序抖动
+- 修复 lint 正则错误并同步消息组件改动
+- 修复聊天文件引用交互并优化文件打开与状态展示
+- 添加全局错误边界、优化面板拖拽体验和构建配置
+
+🔧 Improvements
+- 重构 ChatInputBox 布局与视觉风格
+- 重构思考块组件为极简设计并居中消息布局
+- 移除 WorkspaceHome 模块并改进线程列表提示框
+- 侧栏技能入口改为敬请期待并优化工作区树形样式
+
+---
+
+##### **2026年2月27日（v0.1.9）**
+
+English:
+
+✨ Features
+- Complete bottom function area and selector style interaction optimization
+- Use official model icons for Claude/Gemini/Codex engines
+- Complete Spec Hub entry and gate alignment capability upgrade
+- Complete Spec Hub execution feedback orchestration and OpenSpec hardening
+- Support project-level Skills/Commands discovery with source-grouped display (S+/M+)
+- Support `@@` manual memory association and enhance thread message stability
+- Complete memory capability landing with context injection, batch & tag abilities, light theme unification
+- Optimize project memory list UI visual effects
+- Complete memory Kind auto-classification fix and archive implementation plan
+- Finalize note/conversation flow and context-injection planning
+
+🐛 Fixes
+- Restore git diff split alignment, independent horizontal scroll, and readability
+- Keep verify/archive executable when Spec Hub preflight blocks archive
+- Vendor xmlchars to avoid npm registry 403
+- Unblock npm 403 and fix Rust compile error
+- Resolve post-cherry-pick typecheck issues in memory module
+
+🔧 Improvements
+- Rename MossX to in build scripts and CI workflow, then rename back to MossX across codebase
+- Stabilize Spec Hub i18n text and language switch validation tests
+- Stabilize SettingsView shortcut teardown tests
+
+中文：
+
+✨ Features
+- 完成底部功能区与选择器样式交互整体优化
+- 引擎图标使用 Claude/Gemini/Codex 官方模型图标
+- 完成 Spec Hub 入口与门禁对齐能力升级
+- 完成 Spec Hub 执行反馈编排与 OpenSpec 加固
+- 支持项目级 Skills/Commands 发现并按来源分组展示 S+/M+
+- 支持 `@@` 手动关联记忆并增强线程消息稳定性
+- 完成记忆能力落地：上下文注入、批量与标签能力、浅色样式统一
+- 优化项目记忆列表 UI 视觉效果
+- 完成 Kind 自动分类修复并归档实施计划
+- 完成笔记/对话流程与上下文注入规划
+
+🐛 Fixes
+- 修复 Git Diff 分栏对齐、独立水平滚动和可读性
+- 修复 Spec Hub 预检阻止归档时验证/归档仍可执行
+- 内置 xmlchars 依赖以避免 npm registry 403 错误
+- 修复 npm 403 和 Rust 编译错误
+- 修复记忆模块 cherry-pick 后的类型检查问题
+
+🔧 Improvements
+- 统一品牌名称：在构建脚本和 CI 中重命名为 MossX
+- 完善 Spec Hub 文案国际化与语言切换校验测试
+- 稳定 SettingsView 快捷键销毁测试
+
+---
+
+##### **2026年2月22日（v0.1.8）**
+
+English:
+
+✨ Features
+- Enhance Create PR preview and popup interaction experience
+- Implement full Create PR workflow with branch deletion recovery mechanism, refactor PR popup compare interaction and visual
+- Implement worktree publish recovery and git command stability improvements
+- Complete pull/sync/fetch/refresh two-step confirmation with parameterized execution
+- Optimize history panel and diff preview interaction
+- Enhance push popup preview and reset flow in commit history
+- Add explicit baseline selection for worktree and enhance branch context menu
+- Unify Git history panel interaction with workspace validation and error prompts
+- Complete log panel refactoring with branch creation interaction
+- Unify sidebar icon style and fix settings page switch and PR flow layout
+
+🐛 Fixes
+- Fix branch rename button unresponsive and unify top action button active state
+- Fix worktree publish failure recovery and enhance Git command stability
+- Remove misleading diff action by removing unused open-file button
+- Restore branch context menu and remove always-visible checkout button from list
+- Dock change-anchor controls as modal footer bar
+- Unify Git panel log tab label to "Git"
+- Fix session hard delete and improve kanban popup and trigger state interaction
+- Clean up codexLeadMarkers regex invalid escapes
+
+🔧 Improvements
+- Reduce noise and consolidate Hook dependency warnings (no behavior change)
+
+中文：
+
+✨ Features
+- 增强创建 PR 预览与弹窗交互体验
+- 落地 Create PR 全流程与分支删除恢复机制，重构 PR 弹窗 compare 交互与视觉
+- 落地工作树发布失败恢复与 Git 命令稳定性提升
+- 完成 pull/sync/fetch/refresh 二段确认与参数化执行
+- 优化历史面板与差异预览交互
+- 提交历史增强 Push 弹窗预览与 Reset 流程
+- 工作树显式基线选择与分支右键菜单能力完善
+- 统一 Git 历史面板交互并补齐工作区校验与错误提示
+- 完成日志面板重构与分支创建交互
+- 统一侧栏图标风格并修复设置页切换与 PR 流程布局
+
+🐛 Fixes
+- 修复分支重命名按钮无响应并统一顶部操作按钮激活态
+- 修复工作树发布失败可恢复并增强 Git 命令稳定性
+- 移除误导性 diff 操作按钮（未使用的打开文件按钮）
+- 恢复分支右键菜单并移除列表常驻 checkout 按钮
+- 将变更锚点控件停靠为模态框底栏
+- 统一 Git 面板日志页签文案为 Git
+- 修复会话硬删除并完善看板弹窗与触发态交互
+- 清理 codexLeadMarkers 正则无效转义
+
+🔧 Improvements
+- 去噪优化并收敛 Hook 依赖告警（无行为变更）
+
+---
+
+##### **2026年2月18日（v0.1.7）**
+
+English:
+
+✨ Features
+- Complete workspace sidebar visual coordination makeover (t1-4)
+- Implement optimize-codex-chat-canvas proposal core capabilities
+- Unify management UI to reduce clutter and improve scalability
+- Lay groundwork for consistent settings UX and theming
+- Enhance tree-based single-file diff with full-text anchor navigation
+- Alert on session completion when app is unfocused
+- Add task editing and macOS compatibility improvements for kanban
+- Complete OpenCode panel capabilities with session recovery and test coverage
+- Complete OpenCode phase 2 capabilities with stability fixes and chat experience optimization
+- Support engine dropdown and icon style optimization for new sessions on workspace home
+- Complete file multi-tab and input area visibility experience optimization
+- Add lock screen overlay and session completion reminder
+
+🐛 Fixes
+- Fix session lifecycle: converge delete semantics and align OpenCode entry with canvas consistency
+- Unblock settings and composer regressions
+- Stabilize reasoning stream event handling for Codex
+- Prevent stale async state from leaking memory across sessions
+- Ensure consistent active styling across themes for vendors
+- Prevent stale Claude IDs from reusing wrong engine thread
+- Reduce workflow friction from noisy streams and title failures
+- Fix kanban link display and session batch delete confirmation flow
+- Fix OpenCode heartbeat prompt, engine detection and panel interaction
+- Use dynamic discovery for OpenSSL library references in build
+- Stabilize sidebar thread layout to reduce clipping/jitter
+
+🔧 Improvements
+- Drop dim mode to simplify theme support and UX
+- Reduce hidden UI state to keep context always visible
+- Simplify completion alerts to avoid split notification UX
+
+中文：
+
+✨ Features
+- 完成 t1-4 工作区侧栏视觉协调改造
+- 落地 optimize-codex-chat-canvas 提案核心能力
+- 统一管理 UI，减少界面杂乱并提升可扩展性
+- 为一致的设置 UX 和主题系统奠定基础
+- 树形单文件差异与全文锚点导航增强
+- 应用失焦时会话完成弹出提醒
+- 看板新增任务编辑与 macOS 兼容性改进
+- 完善 OpenCode 面板能力并补齐会话恢复与测试覆盖
+- 完成 OpenCode 二期能力与稳定性修复并优化聊天体验
+- 新建会话支持引擎下拉与图标样式优化
+- 完成文件多标签与输入区可见性体验优化
+- 新增锁屏遮罩与会话完成提醒
+
+🐛 Fixes
+- 修复会话生命周期：收敛删除语义并打通 OpenCode 入口与幕布一致性
+- 修复设置和 Composer 回退问题
+- 稳定 Codex 推理流事件处理
+- 防止过期异步状态跨会话内存泄漏
+- 确保各主题下供应商激活样式一致
+- 防止过期 Claude ID 复用错误引擎线程
+- 减少嘈杂流和标题失败造成的工作流阻力
+- 修复看板关联显示与会话批量删除确认流程
+- 修复 OpenCode 心跳提示、引擎检测与面板交互
+- 构建时使用动态发现 OpenSSL 库引用
+- 稳定侧栏线程布局以减少裁剪/抖动
+
+🔧 Improvements
+- 移除 Dim 模式以简化主题支持和 UX
+- 减少隐藏 UI 状态以保持上下文始终可见
+- 简化完成提醒以避免分裂通知 UX
+
+---
+
+##### **2026年2月11日（v0.1.6）**
+
+English:
+
+✨ Features
+- Add unified search panel with category filtering
+- Optimize kanban strip density and ordering in composer
+
+🐛 Fixes
+- Stabilize kanban links across workspace ID changes
+- Stabilize context menus with portal and compact layout in composer
+
+中文：
+
+✨ Features
+- 新增统一搜索面板与分区筛选
+- 优化 Composer 中看板条目密度和排序
+
+🐛 Fixes
+- 修复工作区 ID 变更时看板链接稳定性
+- 使用 Portal 和紧凑布局稳定右键菜单
+
+---
+
+##### **2026年2月10日（v0.1.5）**
+
+English:
+
+✨ Features
+- Remove Sentry telemetry, add About page and kanban git panel
+
+中文：
+
+✨ Features
+- 移除 Sentry 遥测，新增关于页面和看板 Git 面板
+
+---
+
+##### **2026年2月10日（v0.1.4）**
+
+English:
+
+✨ Features
+- Reduce context switching with in-app long-term memory view
+- Improve UX with thread tooltips, task draft persistence, and interrupt handling
+- Support multi-source skill discovery with priority merge
+
+🐛 Fixes
+- Prevent memory navigation hijacks and reduce setup confusion
+- Improve DMG detach reliability in create-dmg script
+
+中文：
+
+✨ Features
+- 新增应用内长期记忆视图，减少上下文切换
+- 改进线程工具提示、任务草稿持久化和中断处理
+- 支持多来源 Skill 发现与优先级合并
+
+🐛 Fixes
+- 防止记忆导航劫持并减少设置困惑
+- 提升 create-dmg 脚本中 DMG 弹出可靠性
+
+---
+
+##### **2026年2月9日（v0.1.2）**
+
+English:
+
+✨ Features
+- Prefer local discovery for faster offline skill listing
+- Keep CLI settings and model names in sync for Claude
+- Support Claude inherit and composer click-outside close
+- Let users switch AI providers and reliably stop sessions
+
+🐛 Fixes
+- Update Haiku model and add Opus 1M variant
+
+🔧 Improvements
+- Upgrade release runner to ubuntu-24.04 for newer tooling
+
+中文：
+
+✨ Features
+- 优先本地发现以加速离线 Skill 列表
+- 保持 Claude CLI 设置与模型名称同步
+- 支持 Claude 继承与 Composer 点击外部关闭
+- 支持用户切换 AI 供应商并可靠停止会话
+
+🐛 Fixes
+- 更新 Haiku 模型并添加 Opus 1M 变体
+
+🔧 Improvements
+- 升级发布 Runner 到 ubuntu-24.04 以使用更新的工具链
+
+---
+
+##### **2026年2月9日（v0.1.1）**
+
+English:
+
+✨ Features
+- Merge skill commons panel and kanban context mode in composer
+
+🐛 Fixes
+- Add retry logic for DMG detach in CI environment
+
+中文：
+
+✨ Features
+- 合并 Composer 中的 Skill 公共面板与看板上下文模式
+
+🐛 Fixes
+- CI 环境中 DMG 弹出添加重试逻辑
+
+---
+
+##### **2026年2月9日（v0.1.0）**
+
+English:
+
+✨ Features
+- Reduce typing friction and improve task progress cues
+- Improve kanban task discussions with richer markdown
+
+🐛 Fixes
+- Prevent macOS DMG builds failing on Finder scripting in CI
+
+中文：
+
+✨ Features
+- 减少输入摩擦并改善任务进度提示
+- 改进看板任务讨论，支持更丰富的 Markdown
+
+🐛 Fixes
+- 修复 CI 中 macOS DMG 构建因 Finder 脚本失败的问题
+
+---
+
+##### **2026年2月8日（v0.0.9）**
+
+English:
+
+✨ Features
+- Reduce file-management friction and i18n drift in workspaces
+- Redesign workspace landing with guided starts and conversation entry
+- Polish worktree/session sections and collapse interactions in sidebar
+- Improve kanban linking UX and routed send behavior
+
+🐛 Fixes
+- Reduce confusing UI states when tooling context is missing
+- Reduce install friction and UI jank across core workflows
+
+中文：
+
+✨ Features
+- 减少工作区文件管理摩擦和国际化偏差
+- 重新设计工作区着陆页，引导启动和对话入口
+- 优化侧栏工作树/会话区域和折叠交互
+- 改进看板链接 UX 和路由发送行为
+
+🐛 Fixes
+- 减少工具上下文缺失时的困惑 UI 状态
+- 减少核心流程中的安装摩擦和 UI 卡顿
+
+---
+
+##### **2026年2月7日（v0.0.8）**
+
+English:
+
+✨ Features
+- Improve readability with diagrams, git hints and opaque UI
+
+中文：
+
+✨ Features
+- 通过图表、Git 提示和不透明 UI 改善可读性
+
+---
+
+##### **2026年2月7日（v0.0.7）**
+
+English:
+
+✨ Features
+- Reduce context switching with in-app editing and panelized kanban
+- Reduce context-switch errors and improve task triage in kanban
+- Stabilize UX with file-backed state and richer kanban flows
+- Add kanban mode to manage AI tasks without chat clutter
+
+中文：
+
+✨ Features
+- 通过应用内编辑和面板化看板减少上下文切换
+- 减少看板上下文切换错误并改进任务分类
+- 通过文件持久化状态和更丰富的看板流程稳定 UX
+- 新增看板模式，无需聊天即可管理 AI 任务
+
+---
+
+##### **2026年2月7日（v0.0.6）**
+
+English:
+
+✨ Features
+- Make agent activity easier to scan in chat messages
+- Enable archive for Claude Code CLI threads with local data deletion
+
+🐛 Fixes
+- Reduce homepage whitespace to improve first-screen clarity
+- Keep recent conversations visible for Claude threads
+- Extract tool action description for inline summary display
+
+🔧 Improvements
+- Remove tool-group headers and improve tool summary labels
+- Switch tool rendering from block cards to inline style
+
+中文：
+
+✨ Features
+- 使聊天消息中的 Agent 活动更易浏览
+- 支持 Claude Code CLI 线程归档与本地数据删除
+
+🐛 Fixes
+- 减少首页空白以改善首屏清晰度
+- 保持 Claude 线程的最近对话可见
+- 提取工具操作描述用于内联摘要显示
+
+🔧 Improvements
+- 移除工具组头部并改进工具摘要标签
+- 将工具渲染从卡片块切换为内联样式
+
+---
+
+##### **2026年2月7日（v0.0.5）**
+
+English:
+
+✨ Features
+- Surface task status near composer to reduce context switching
+- Enable localized dictation and empty state text
+- Support localized UX and per-turn engine isolation
+- Persist auto-generated thread titles for reuse
+- Surface more thread and Claude history by default
+- Support new agent workflow across models and UI
+
+🐛 Fixes
+- Prevent dropped tool events and reduce UI friction across locales
+- Refresh pinned thread list on pin state changes
+- Prevent stale tool states and unify CLI-missing errors
+- Avoid auto-rename conflicts during parallel Claude runs
+- Streamline thread UX and tool status consistency
+
+中文：
+
+✨ Features
+- 在 Composer 附近展示任务状态以减少上下文切换
+- 支持本地化语音输入和空状态文案
+- 支持本地化 UX 和每轮引擎隔离
+- 持久化自动生成的线程标题以供复用
+- 默认展示更多线程和 Claude 历史记录
+- 支持跨模型和 UI 的新 Agent 工作流
+
+🐛 Fixes
+- 防止工具事件丢失并减少跨语言环境的 UI 摩擦
+- Pin 状态变更时刷新置顶线程列表
+- 防止工具状态过期并统一 CLI 缺失错误
+- 避免并行 Claude 运行时的自动重命名冲突
+- 精简线程 UX 和工具状态一致性
+
+---
+
+##### **2026年2月6日（v0.0.4）**
+
+English:
+
+✨ Features
+- Optimize UI spacing and thread display threshold
+- Change workspace delete dialog wording to "remove" for i18n
+
+中文：
+
+✨ Features
+- 优化 UI 间距和线程显示阈值
+- 国际化：将工作区删除对话框措辞改为"移除"
+
+---
+
+##### **2026年2月5日（v0.0.3）**
+
+English:
+
+✨ Features
+- Implement menu localization with i18n support
+- Expose Claude command library for slash command usage
+
+🐛 Fixes
+- Align Windows release artifacts with Tauri 2 outputs
+
+🔧 Improvements
+- Improve Windows CMake detection and refactor Claude engine
+
+中文：
+
+✨ Features
+- 实现菜单国际化支持
+- 开放 Claude 命令库用于斜杠命令
+
+🐛 Fixes
+- 对齐 Windows 发布产物与 Tauri 2 输出
+
+🔧 Improvements
+- 改进 Windows CMake 检测并重构 Claude 引擎
+
+---
+
+##### **2026年2月5日（v0.0.2）**
+
+English:
+
+✨ Features
+- Improve tool-call UX and harden signing key handling
+- Prioritize desktop UX and restore auto-updates
+
+中文：
+
+✨ Features
+- 改进工具调用 UX 并加固签名密钥处理
+- 优先桌面 UX 并恢复自动更新
+
+---
+
+##### **2026年2月4日（v0.0.1）**
+
+English:
+
+✨ Features
+- Initial release of MossX desktop application
+- Tauri 2 + React 19 + TypeScript architecture
+- Claude Code CLI integration with session management
+
+中文：
+
+✨ Features
+- MossX 桌面应用初始发布
+- Tauri 2 + React 19 + TypeScript 架构
+- Claude Code CLI 集成与会话管理

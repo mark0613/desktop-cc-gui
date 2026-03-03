@@ -22,6 +22,7 @@ import "./styles/approval-toasts.css";
 import "./styles/error-toasts.css";
 import "./styles/request-user-input.css";
 import "./styles/update-toasts.css";
+import "./styles/release-notes.css";
 import "./styles/composer.css";
 import "./styles/review-inline.css";
 import "./styles/diff.css";
@@ -91,6 +92,7 @@ import {
 } from "./features/layout/components/SidebarToggleControls";
 import { useAppSettingsController } from "./features/app/hooks/useAppSettingsController";
 import { useUpdaterController } from "./features/app/hooks/useUpdaterController";
+import { useReleaseNotes } from "./features/update/hooks/useReleaseNotes";
 import { useErrorToasts } from "./features/notifications/hooks/useErrorToasts";
 import { useComposerShortcuts } from "./features/composer/hooks/useComposerShortcuts";
 import { useComposerMenuActions } from "./features/composer/hooks/useComposerMenuActions";
@@ -175,6 +177,7 @@ import { useCodeCssVars } from "./features/app/hooks/useCodeCssVars";
 import { useAccountSwitching } from "./features/app/hooks/useAccountSwitching";
 import { useMenuLocalization } from "./features/app/hooks/useMenuLocalization";
 import { sendSystemNotification, setNotificationActionHandler } from "./services/systemNotification";
+import { ReleaseNotesModal } from "./features/update/components/ReleaseNotesModal";
 
 const AboutView = lazy(() =>
   import("./features/about/components/AboutView").then((module) => ({
@@ -611,6 +614,20 @@ function MainApp() {
     onDebug: addDebugEntry,
     successSoundUrl,
     errorSoundUrl,
+  });
+  const {
+    isOpen: releaseNotesOpen,
+    entries: releaseNotesEntries,
+    activeIndex: releaseNotesActiveIndex,
+    loading: releaseNotesLoading,
+    error: releaseNotesError,
+    openReleaseNotes,
+    closeReleaseNotes,
+    goToPrevious: showPreviousReleaseNotes,
+    goToNext: showNextReleaseNotes,
+    retryLoad: retryReleaseNotesLoad,
+  } = useReleaseNotes({
+    onDebug: addDebugEntry,
   });
 
   const { errorToasts, dismissErrorToast } = useErrorToasts();
@@ -4474,6 +4491,9 @@ function MainApp() {
         setActiveTab("git");
       }
     },
+    onOpenReleaseNotes: () => {
+      void openReleaseNotes();
+    },
     onOpenGlobalSearch: handleOpenSearchPalette,
     globalSearchShortcut: appSettings.toggleGlobalSearchShortcut,
     onOpenWorkspaceHome: handleOpenWorkspaceHome,
@@ -4746,6 +4766,17 @@ function MainApp() {
         }}
         onContentFilterToggle={handleToggleSearchContentFilter}
         onClose={closeSearchPalette}
+      />
+      <ReleaseNotesModal
+        isOpen={releaseNotesOpen}
+        entries={releaseNotesEntries}
+        activeIndex={releaseNotesActiveIndex}
+        loading={releaseNotesLoading}
+        error={releaseNotesError}
+        onClose={closeReleaseNotes}
+        onPrev={showPreviousReleaseNotes}
+        onNext={showNextReleaseNotes}
+        onRetry={retryReleaseNotesLoad}
       />
       <AppModals
         renamePrompt={renamePrompt}
