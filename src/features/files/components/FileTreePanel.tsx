@@ -17,6 +17,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import ChevronsUpDown from "lucide-react/dist/esm/icons/chevrons-up-down";
+import Construction from "lucide-react/dist/esm/icons/construction";
 import Search from "lucide-react/dist/esm/icons/search";
 import FileIcon from "../../../components/FileIcon";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
@@ -158,6 +159,8 @@ export function FileTreePanel({
   openAppIconById,
   selectedOpenAppId,
   onSelectOpenAppId,
+  onToggleRuntimeConsole,
+  isRuntimeConsoleVisible = false,
   gitStatusFiles,
   gitignoredFiles,
   onRefreshFiles,
@@ -824,6 +827,17 @@ export function FileTreePanel({
               ? t("files.loadingFiles")
               : t("files.noFiles")}
         </div>
+          {onToggleRuntimeConsole ? (
+            <button
+              type="button"
+              className={`ghost icon-button file-tree-toggle${isRuntimeConsoleVisible ? " is-active" : ""}`}
+              onClick={onToggleRuntimeConsole}
+              aria-label={t("files.openRunConsole")}
+              title={t("files.openRunConsole")}
+            >
+              <Construction aria-hidden />
+            </button>
+          ) : null}
           {hasFolders ? (
             <button
               type="button"

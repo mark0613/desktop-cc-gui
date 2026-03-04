@@ -1776,8 +1776,8 @@ function MainApp() {
     if (!terminalOpen || !runtimeRunState.runtimeConsoleVisible) {
       return;
     }
-    runtimeRunState.onCloseRuntimeConsole();
-  }, [runtimeRunState, terminalOpen]);
+    closeTerminalPanel();
+  }, [closeTerminalPanel, runtimeRunState.runtimeConsoleVisible, terminalOpen]);
 
   const launchScriptsState = useWorkspaceLaunchScripts({
     activeWorkspace,
@@ -4619,6 +4619,7 @@ function MainApp() {
       truncated={runtimeRunState.runtimeConsoleTruncated}
       autoScroll={runtimeRunState.runtimeAutoScroll}
       wrapLines={runtimeRunState.runtimeWrapLines}
+      commandPresetOptions={runtimeRunState.runtimeCommandPresetOptions}
       commandPresetId={runtimeRunState.runtimeCommandPresetId}
       commandInput={runtimeRunState.runtimeCommandInput}
       onRun={runtimeRunState.onRunProject}

@@ -1479,20 +1479,36 @@ export type RuntimeLogSessionSnapshot = {
   terminalId: string;
   status: RuntimeLogSessionStatus;
   commandPreview: string | null;
+  profileId?: string | null;
+  detectedStack?: string | null;
   startedAtMs: number | null;
   stoppedAtMs: number | null;
   exitCode: number | null;
   error: string | null;
 };
 
+export type RuntimeProfileDescriptor = {
+  id: string;
+  defaultCommand: string;
+  detectedStack: string;
+};
+
+export async function runtimeLogDetectProfiles(
+  workspaceId: string,
+): Promise<RuntimeProfileDescriptor[]> {
+  return invoke("runtime_log_detect_profiles", { workspaceId });
+}
+
 export async function runtimeLogStart(
   workspaceId: string,
   options?: {
+    profileId?: string | null;
     commandOverride?: string | null;
   },
 ): Promise<RuntimeLogSessionSnapshot> {
   return invoke("runtime_log_start", {
     workspaceId,
+    profileId: options?.profileId ?? null,
     commandOverride: options?.commandOverride ?? null,
   });
 }

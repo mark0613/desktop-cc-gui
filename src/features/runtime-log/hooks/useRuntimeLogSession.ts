@@ -8,10 +8,12 @@ import {
 import {
   closeTerminalSession,
   openTerminalSession,
+  runtimeLogDetectProfiles,
   runtimeLogGetSession,
   runtimeLogMarkExit,
   runtimeLogStart,
   runtimeLogStop,
+  type RuntimeProfileDescriptor,
   type RuntimeLogSessionSnapshot,
   type RuntimeLogSessionStatus,
   writeTerminalSession,
@@ -29,28 +31,13 @@ const IS_WINDOWS_RUNTIME = isWindowsPlatform();
 export type RuntimeConsoleStatus = "idle" | "starting" | "running" | "stopped" | "error";
 export type RuntimeCommandPresetId =
   | "auto"
-  | "maven-wrapper"
-  | "maven-system"
-  | "gradle-wrapper"
-  | "gradle-system"
+  | "java-maven"
+  | "java-gradle"
+  | "node-dev"
+  | "node-start"
+  | "python-main"
+  | "go-run"
   | "custom";
-
-const RUNTIME_COMMAND_PRESETS: ReadonlyArray<{
-  id: Exclude<RuntimeCommandPresetId, "custom">;
-  command: string;
-}> = [
-  { id: "auto", command: "" },
-  {
-    id: "maven-wrapper",
-    command: IS_WINDOWS_RUNTIME ? "mvnw.cmd spring-boot:run" : "./mvnw spring-boot:run",
-  },
-  { id: "maven-system", command: "mvn spring-boot:run" },
-  {
-    id: "gradle-wrapper",
-    command: IS_WINDOWS_RUNTIME ? "gradlew.bat bootRun" : "./gradlew bootRun",
-  },
-  { id: "gradle-system", command: "gradle bootRun" },
-];
 
 type UseRuntimeLogSessionOptions = {
   activeWorkspace: WorkspaceInfo | null;
@@ -86,6 +73,7 @@ export type RuntimeLogSessionState = {
   runtimeConsoleVisible: boolean;
   runtimeConsoleStatus: RuntimeConsoleStatus;
   runtimeConsoleCommandPreview: string | null;
+  runtimeCommandPresetOptions: RuntimeCommandPresetId[];
   runtimeCommandPresetId: RuntimeCommandPresetId;
   runtimeCommandInput: string;
   runtimeConsoleLog: string;
@@ -108,18 +96,38 @@ const DEFAULT_SESSION: RuntimeWorkspaceSession = {
   wrapLines: true,
 };
 
-function resolveCommandPresetId(command: string): RuntimeCommandPresetId {
+function normalizeProfilePresetId(rawId: string | null | undefined): RuntimeCommandPresetId | null {
+  switch (rawId) {
+    case "java-maven":
+    case "java-gradle":
+    case "node-dev":
+    case "node-start":
+    case "python-main":
+    case "go-run":
+      return rawId;
+    default:
+      return null;
+  }
+}
+
+function resolveCommandPresetId(
+  command: string,
+  detectedProfiles: RuntimeProfileDescriptor[],
+  profileId?: string | null,
+): RuntimeCommandPresetId {
+  const matchedProfileId = normalizeProfilePresetId(profileId);
+  if (matchedProfileId) {
+    return matchedProfileId;
+  }
   const normalized = command.trim();
   if (!normalized) {
     return "auto";
   }
-  const matchedPreset = RUNTIME_COMMAND_PRESETS.find((preset) => {
-    if (preset.id === "auto") {
-      return false;
-    }
-    return preset.command === normalized;
-  });
-  return matchedPreset ? matchedPreset.id : "custom";
+  const matchedProfile = detectedProfiles.find(
+    (profile) => profile.defaultCommand.trim() === normalized,
+  );
+  const matchedDetectedId = normalizeProfilePresetId(matchedProfile?.id);
+  return matchedDetectedId ?? "custom";
 }
 
 function appendRuntimeLog(
@@ -158,6 +166,7 @@ function mapRuntimeStatus(status: RuntimeLogSessionStatus): RuntimeConsoleStatus
 function applyRuntimeSnapshot(
   current: RuntimeWorkspaceSession,
   snapshot: RuntimeLogSessionSnapshot,
+  detectedProfiles: RuntimeProfileDescriptor[],
 ): RuntimeWorkspaceSession {
   const mappedStatus = mapRuntimeStatus(snapshot.status);
   const nextCommandInput =
@@ -170,7 +179,11 @@ function applyRuntimeSnapshot(
     status: mappedStatus,
     commandPreview: snapshot.commandPreview,
     commandInput: nextCommandInput,
-    commandPresetId: resolveCommandPresetId(nextCommandInput),
+    commandPresetId: resolveCommandPresetId(
+      nextCommandInput,
+      detectedProfiles,
+      snapshot.profileId,
+    ),
     exitCode: snapshot.exitCode ?? current.exitCode,
     error: snapshot.error ?? null,
   };
@@ -333,7 +346,15 @@ export function useRuntimeLogSession({
   const [sessionByWorkspace, setSessionByWorkspace] = useState<
     Record<string, RuntimeWorkspaceSession>
   >({});
+  const [detectedProfilesByWorkspace, setDetectedProfilesByWorkspace] = useState<
+    Record<string, RuntimeProfileDescriptor[]>
+  >({});
   const exitBufferByWorkspaceRef = useRef<Record<string, string>>({});
+  const detectedProfilesByWorkspaceRef = useRef<Record<string, RuntimeProfileDescriptor[]>>({});
+
+  useEffect(() => {
+    detectedProfilesByWorkspaceRef.current = detectedProfilesByWorkspace;
+  }, [detectedProfilesByWorkspace]);
 
   const updateWorkspaceSession = useCallback(
     (workspaceId: string, updater: (current: RuntimeWorkspaceSession) => RuntimeWorkspaceSession) => {
@@ -343,6 +364,10 @@ export function useRuntimeLogSession({
         return { ...prev, [workspaceId]: next };
       });
     },
+    [],
+  );
+  const getDetectedProfiles = useCallback(
+    (workspaceId: string) => detectedProfilesByWorkspaceRef.current[workspaceId] ?? [],
     [],
   );
 
@@ -418,12 +443,12 @@ export function useRuntimeLogSession({
   useEffect(() => {
     const unsubscribeStatus = subscribeRuntimeLogStatus((event) => {
       updateWorkspaceSession(event.workspaceId, (current) =>
-        applyRuntimeSnapshot(current, event),
+        applyRuntimeSnapshot(current, event, getDetectedProfiles(event.workspaceId)),
       );
     });
     const unsubscribeExited = subscribeRuntimeLogExited((event) => {
       updateWorkspaceSession(event.workspaceId, (current) =>
-        applyRuntimeSnapshot(current, event),
+        applyRuntimeSnapshot(current, event, getDetectedProfiles(event.workspaceId)),
       );
     });
 
@@ -431,7 +456,40 @@ export function useRuntimeLogSession({
       unsubscribeStatus();
       unsubscribeExited();
     };
-  }, [updateWorkspaceSession]);
+  }, [getDetectedProfiles, updateWorkspaceSession]);
+
+  useEffect(() => {
+    if (!activeWorkspaceId) {
+      return;
+    }
+    let cancelled = false;
+    runtimeLogDetectProfiles(activeWorkspaceId)
+      .then((profiles) => {
+        if (cancelled) {
+          return;
+        }
+        setDetectedProfilesByWorkspace((prev) => ({
+          ...prev,
+          [activeWorkspaceId]: profiles,
+        }));
+        updateWorkspaceSession(activeWorkspaceId, (current) => ({
+          ...current,
+          commandPresetId: resolveCommandPresetId(current.commandInput, profiles),
+        }));
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setDetectedProfilesByWorkspace((prev) => ({
+          ...prev,
+          [activeWorkspaceId]: [],
+        }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceId, updateWorkspaceSession]);
 
   useEffect(() => {
     if (!activeWorkspaceId) {
@@ -444,7 +502,11 @@ export function useRuntimeLogSession({
           return;
         }
         updateWorkspaceSession(activeWorkspaceId, (current) =>
-          applyRuntimeSnapshot(current, snapshot),
+          applyRuntimeSnapshot(
+            current,
+            snapshot,
+            detectedProfilesByWorkspaceRef.current[activeWorkspaceId] ?? [],
+          ),
         );
       })
       .catch(() => {
@@ -454,6 +516,11 @@ export function useRuntimeLogSession({
       cancelled = true;
     };
   }, [activeWorkspaceId, updateWorkspaceSession]);
+
+  const activeDetectedProfiles = useMemo(
+    () => (activeWorkspaceId ? detectedProfilesByWorkspace[activeWorkspaceId] ?? [] : []),
+    [activeWorkspaceId, detectedProfilesByWorkspace],
+  );
 
   const onSelectRuntimeCommandPreset = useCallback(
     (presetId: RuntimeCommandPresetId) => {
@@ -467,18 +534,25 @@ export function useRuntimeLogSession({
             commandPresetId: "custom",
           };
         }
-        const preset = RUNTIME_COMMAND_PRESETS.find((item) => item.id === presetId);
-        if (!preset) {
+        if (presetId === "auto") {
+          return {
+            ...current,
+            commandPresetId: "auto",
+            commandInput: "",
+          };
+        }
+        const selectedProfile = activeDetectedProfiles.find((profile) => profile.id === presetId);
+        if (!selectedProfile) {
           return current;
         }
         return {
           ...current,
-          commandPresetId: preset.id,
-          commandInput: preset.command,
+          commandPresetId: presetId,
+          commandInput: selectedProfile.defaultCommand,
         };
       });
     },
-    [activeWorkspaceId, updateWorkspaceSession],
+    [activeDetectedProfiles, activeWorkspaceId, updateWorkspaceSession],
   );
 
   const onChangeRuntimeCommandInput = useCallback(
@@ -489,10 +563,10 @@ export function useRuntimeLogSession({
       updateWorkspaceSession(activeWorkspaceId, (current) => ({
         ...current,
         commandInput: value,
-        commandPresetId: resolveCommandPresetId(value),
+        commandPresetId: resolveCommandPresetId(value, activeDetectedProfiles),
       }));
     },
-    [activeWorkspaceId, updateWorkspaceSession],
+    [activeDetectedProfiles, activeWorkspaceId, updateWorkspaceSession],
   );
 
   const activeSession = useMemo<RuntimeWorkspaceSession>(() => {
@@ -502,12 +576,34 @@ export function useRuntimeLogSession({
     return sessionByWorkspace[activeWorkspaceId] ?? DEFAULT_SESSION;
   }, [activeWorkspaceId, sessionByWorkspace]);
 
+  const runtimeCommandPresetOptions = useMemo<RuntimeCommandPresetId[]>(() => {
+    const detectedIds = activeDetectedProfiles
+      .map((profile) => normalizeProfilePresetId(profile.id))
+      .filter((value): value is Exclude<RuntimeCommandPresetId, "auto" | "custom"> => value !== null);
+    return ["auto", ...Array.from(new Set(detectedIds)), "custom"];
+  }, [activeDetectedProfiles]);
+
   const onRunProject = useCallback(async () => {
     const workspaceId = activeWorkspace?.id;
     if (!workspaceId) {
       return;
     }
-    const commandOverride = activeSession.commandInput.trim() || null;
+    const normalizedInput = activeSession.commandInput.trim();
+    const selectedProfile =
+      activeDetectedProfiles.find(
+        (profile) => normalizeProfilePresetId(profile.id) === activeSession.commandPresetId,
+      ) ?? null;
+    const selectedDefaultCommand = selectedProfile?.defaultCommand.trim() ?? "";
+    const shouldUseDetectedProfile =
+      Boolean(selectedProfile) &&
+      activeSession.commandPresetId !== "auto" &&
+      activeSession.commandPresetId !== "custom" &&
+      (normalizedInput.length === 0 || normalizedInput === selectedDefaultCommand);
+    const profileId = shouldUseDetectedProfile ? selectedProfile?.id ?? null : null;
+    const commandOverride =
+      normalizedInput.length > 0 && !shouldUseDetectedProfile
+        ? normalizedInput
+        : null;
     exitBufferByWorkspaceRef.current[workspaceId] = "";
     updateWorkspaceSession(workspaceId, (current) => ({
       ...current,
@@ -525,10 +621,11 @@ export function useRuntimeLogSession({
     );
     try {
       const snapshot = await runtimeLogStart(workspaceId, {
+        profileId,
         commandOverride,
       });
       updateWorkspaceSession(workspaceId, (current) => ({
-        ...applyRuntimeSnapshot(current, snapshot),
+        ...applyRuntimeSnapshot(current, snapshot, activeDetectedProfiles),
         visible: true,
         status: "running",
       }));
@@ -580,7 +677,14 @@ export function useRuntimeLogSession({
         `[CodeMoss Run] Failed to start runtime: ${message}\n`,
       );
     }
-  }, [activeSession.commandInput, activeWorkspace?.id, appendWorkspaceLog, updateWorkspaceSession]);
+  }, [
+    activeDetectedProfiles,
+    activeSession.commandInput,
+    activeSession.commandPresetId,
+    activeWorkspace?.id,
+    appendWorkspaceLog,
+    updateWorkspaceSession,
+  ]);
 
   const onOpenRuntimeConsole = useCallback(() => {
     if (!activeWorkspaceId) {
@@ -600,7 +704,7 @@ export function useRuntimeLogSession({
     try {
       const snapshot = await runtimeLogStop(workspaceId);
       updateWorkspaceSession(workspaceId, (current) => ({
-        ...applyRuntimeSnapshot(current, snapshot),
+        ...applyRuntimeSnapshot(current, snapshot, getDetectedProfiles(workspaceId)),
         status: "stopped",
       }));
       appendWorkspaceLog(workspaceId, "[CodeMoss Run] Stopped.\n");
@@ -641,7 +745,7 @@ export function useRuntimeLogSession({
         `[CodeMoss Run] Stop failed: ${message}\n`,
       );
     }
-  }, [activeWorkspace?.id, appendWorkspaceLog, updateWorkspaceSession]);
+  }, [activeWorkspace?.id, appendWorkspaceLog, getDetectedProfiles, updateWorkspaceSession]);
 
   const onClearRuntimeLogs = useCallback(() => {
     if (!activeWorkspaceId) {
@@ -711,6 +815,7 @@ export function useRuntimeLogSession({
     runtimeConsoleVisible: activeSession.visible,
     runtimeConsoleStatus: activeSession.status,
     runtimeConsoleCommandPreview: activeSession.commandPreview,
+    runtimeCommandPresetOptions,
     runtimeCommandPresetId: activeSession.commandPresetId,
     runtimeCommandInput: activeSession.commandInput,
     runtimeConsoleLog: activeSession.log,

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenAppTarget } from "../../../types";
 import { FileTreePanel } from "./FileTreePanel";
 
@@ -45,7 +45,40 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   confirm: vi.fn(async () => true),
 }));
 
+afterEach(() => {
+  cleanup();
+});
+
 describe("FileTreePanel run action isolation", () => {
+  it("filters files by search input", () => {
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={["src/index.ts", "README.md"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={() => undefined}
+        onInsertText={() => undefined}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitStatusFiles={[]}
+        gitignoredFiles={new Set<string>()}
+      />,
+    );
+
+    expect(screen.getByText("README.md")).toBeTruthy();
+    const filterInput = screen.getByRole("searchbox", {
+      name: "files.filterPlaceholder",
+    });
+    fireEvent.change(filterInput, { target: { value: "src/" } });
+    expect(screen.queryByText("README.md")).toBeNull();
+    expect(screen.getByText("src")).toBeTruthy();
+  });
+
   it("does not render run icon button in file tree search bar", () => {
     const openTargets: OpenAppTarget[] = [];
 
@@ -71,7 +104,8 @@ describe("FileTreePanel run action isolation", () => {
     expect(screen.queryByRole("button", { name: "files.openRunConsole" })).toBeNull();
   });
 
-  it("does not render run icon button even when run handler is provided", () => {
+  it("renders run icon button and triggers toggle when handler is provided", () => {
+    const onToggleRuntimeConsole = vi.fn();
     render(
       <FileTreePanel
         workspaceId="workspace-1"
@@ -86,13 +120,72 @@ describe("FileTreePanel run action isolation", () => {
         openAppIconById={{}}
         selectedOpenAppId=""
         onSelectOpenAppId={() => undefined}
-        onToggleRuntimeConsole={() => undefined}
+        onToggleRuntimeConsole={onToggleRuntimeConsole}
         gitStatusFiles={[]}
         gitignoredFiles={new Set<string>()}
       />,
     );
 
-    expect(screen.queryByRole("button", { name: "files.openRunConsole" })).toBeNull();
+    const runButton = screen.getByRole("button", { name: "files.openRunConsole" });
+    fireEvent.click(runButton);
+    expect(onToggleRuntimeConsole).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps file open interactions available after clicking run toggle", () => {
+    const onToggleRuntimeConsole = vi.fn();
+    const onOpenFile = vi.fn();
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={["src/index.ts", "README.md"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={onOpenFile}
+        onInsertText={() => undefined}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        onToggleRuntimeConsole={onToggleRuntimeConsole}
+        gitStatusFiles={[]}
+        gitignoredFiles={new Set<string>()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "files.openRunConsole" }));
+    fireEvent.click(screen.getByRole("button", { name: "README.md" }));
+
+    expect(onToggleRuntimeConsole).toHaveBeenCalledTimes(1);
+    expect(onOpenFile).toHaveBeenCalledWith("README.md");
+  });
+
+  it("clicking folder row toggles children without opening file", () => {
+    const onOpenFile = vi.fn();
+    render(
+      <FileTreePanel
+        workspaceId="workspace-1"
+        workspacePath="/tmp/workspace"
+        files={["src/index.ts"]}
+        isLoading={false}
+        filePanelMode="files"
+        onFilePanelModeChange={() => undefined}
+        onOpenFile={onOpenFile}
+        onInsertText={() => undefined}
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={() => undefined}
+        gitStatusFiles={[]}
+        gitignoredFiles={new Set<string>()}
+      />,
+    );
+
+    expect(screen.queryByText("index.ts")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /src/ }));
+    expect(screen.getByText("index.ts")).toBeTruthy();
+    expect(onOpenFile).not.toHaveBeenCalled();
   });
 
   it("mentions file using Windows-style absolute path when workspace path uses backslashes", () => {
@@ -122,7 +215,7 @@ describe("FileTreePanel run action isolation", () => {
     fireEvent.click(mentionButton as HTMLButtonElement);
 
     expect(onInsertText).toHaveBeenCalledWith(
-      "📄 index.ts `C:\\workspace\\demo\\index.ts`  ",
+      "@C:\\workspace\\demo\\index.ts ",
     );
   });
 });

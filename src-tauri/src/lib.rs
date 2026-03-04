@@ -341,6 +341,7 @@ pub fn run() {
             terminal::terminal_write,
             terminal::terminal_resize,
             terminal::terminal_close,
+            runtime_log::runtime_log_detect_profiles,
             runtime_log::runtime_log_start,
             runtime_log::runtime_log_stop,
             runtime_log::runtime_log_get_session,

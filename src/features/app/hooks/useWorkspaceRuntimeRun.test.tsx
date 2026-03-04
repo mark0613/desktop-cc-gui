@@ -10,6 +10,7 @@ import {
 import {
   closeTerminalSession,
   openTerminalSession,
+  runtimeLogDetectProfiles,
   runtimeLogMarkExit,
   runtimeLogGetSession,
   runtimeLogStart,
@@ -23,6 +24,7 @@ vi.mock("../../../services/tauri", () => ({
   openTerminalSession: vi.fn(),
   writeTerminalSession: vi.fn(),
   closeTerminalSession: vi.fn(),
+  runtimeLogDetectProfiles: vi.fn(),
   runtimeLogStart: vi.fn(),
   runtimeLogStop: vi.fn(),
   runtimeLogGetSession: vi.fn(),
@@ -63,6 +65,18 @@ beforeEach(() => {
   vi.mocked(openTerminalSession).mockResolvedValue({ id: "runtime-console" });
   vi.mocked(writeTerminalSession).mockResolvedValue(undefined);
   vi.mocked(closeTerminalSession).mockResolvedValue(undefined);
+  vi.mocked(runtimeLogDetectProfiles).mockResolvedValue([
+    {
+      id: "java-maven",
+      defaultCommand: "mvn spring-boot:run",
+      detectedStack: "java",
+    },
+    {
+      id: "node-dev",
+      defaultCommand: "pnpm run dev",
+      detectedStack: "node",
+    },
+  ]);
   vi.mocked(runtimeLogStart).mockResolvedValue({
     workspaceId: "workspace-1",
     terminalId: "runtime-console",
@@ -105,7 +119,7 @@ beforeEach(() => {
 });
 
 describe("useWorkspaceRuntimeRun", () => {
-  it("opens runtime console without starting runtime session", () => {
+  it("opens runtime console without starting runtime session", async () => {
     const { result } = renderHook(() =>
       useWorkspaceRuntimeRun({
         activeWorkspace: baseWorkspace,
@@ -118,6 +132,14 @@ describe("useWorkspaceRuntimeRun", () => {
       result.current.onOpenRuntimeConsole();
     });
 
+    await waitFor(() => {
+      expect(result.current.runtimeCommandPresetOptions).toEqual([
+        "auto",
+        "java-maven",
+        "node-dev",
+        "custom",
+      ]);
+    });
     expect(result.current.runtimeConsoleVisible).toBe(true);
     expect(result.current.runtimeConsoleStatus).toBe("idle");
     expect(result.current.runtimeCommandPresetId).toBe("auto");
@@ -139,22 +161,27 @@ describe("useWorkspaceRuntimeRun", () => {
     expect(result.current.runtimeConsoleVisible).toBe(true);
     expect(result.current.runtimeConsoleStatus).toBe("running");
     expect(runtimeLogStart).toHaveBeenCalledWith("workspace-1", {
+      profileId: null,
       commandOverride: null,
     });
   });
 
-  it("passes selected command preset as command override", async () => {
+  it("passes selected runtime profile id when preset command is unchanged", async () => {
     const { result } = renderHook(() =>
       useWorkspaceRuntimeRun({
         activeWorkspace: baseWorkspace,
       }),
     );
 
-    act(() => {
-      result.current.onSelectRuntimeCommandPreset("maven-system");
+    await waitFor(() => {
+      expect(result.current.runtimeCommandPresetOptions).toContain("java-maven");
     });
 
-    expect(result.current.runtimeCommandPresetId).toBe("maven-system");
+    act(() => {
+      result.current.onSelectRuntimeCommandPreset("java-maven");
+    });
+
+    expect(result.current.runtimeCommandPresetId).toBe("java-maven");
     expect(result.current.runtimeCommandInput).toBe("mvn spring-boot:run");
 
     await act(async () => {
@@ -162,7 +189,8 @@ describe("useWorkspaceRuntimeRun", () => {
     });
 
     expect(runtimeLogStart).toHaveBeenCalledWith("workspace-1", {
-      commandOverride: "mvn spring-boot:run",
+      profileId: "java-maven",
+      commandOverride: null,
     });
   });
 
@@ -186,6 +214,7 @@ describe("useWorkspaceRuntimeRun", () => {
     });
 
     expect(runtimeLogStart).toHaveBeenCalledWith("workspace-1", {
+      profileId: null,
       commandOverride: "mvn spring-boot:run -Dspring-boot.run.profiles=dev",
     });
   });

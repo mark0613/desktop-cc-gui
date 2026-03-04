@@ -16,11 +16,11 @@ import {
   SelectSeparator,
   SelectTrigger,
 } from "../../../components/ui/select";
-import { isWindowsPlatform } from "../../../utils/platform";
 import type {
   RuntimeCommandPresetId,
   RuntimeConsoleStatus,
 } from "../hooks/useRuntimeLogSession";
+import { isWindowsPlatform } from "../../../utils/platform";
 
 export type RuntimeLogPanelProps = {
   isVisible: boolean;
@@ -32,6 +32,7 @@ export type RuntimeLogPanelProps = {
   truncated?: boolean;
   autoScroll?: boolean;
   wrapLines?: boolean;
+  commandPresetOptions?: RuntimeCommandPresetId[];
   commandPresetId?: RuntimeCommandPresetId;
   commandInput?: string;
   onRun?: () => Promise<void> | void;
@@ -56,10 +57,11 @@ const RUNTIME_PANEL_MAX_HEIGHT = 640;
 const RUNTIME_PANEL_DEFAULT_HEIGHT = 240;
 const RUNTIME_PANEL_HEIGHT_STORAGE_KEY = "mossx.runtimeConsole.height";
 const RUNTIME_PANEL_THEME_STORAGE_KEY = "mossx.runtimeConsole.ideaTheme";
+const IS_WINDOWS_RUNTIME = isWindowsPlatform();
 
 type RuntimeLineTone = "default" | "system" | "info" | "warn" | "error" | "debug";
 type RuntimeConsoleIdeaTheme = "classic" | "new-ui";
-type RuntimeCommandTool = "maven" | "gradle" | "unknown";
+type RuntimeCommandTool = "maven" | "gradle" | "node" | "python" | "go" | "unknown";
 
 const COMMAND_OPTION_CUSTOM = "__custom__";
 const MAVEN_PHASE_OPTIONS = [
@@ -91,8 +93,37 @@ const GRADLE_TASK_OPTIONS = [
   "bootRun",
   "publish",
 ];
-const DEFAULT_MAVEN_WRAPPER_PROGRAM = isWindowsPlatform() ? "mvnw.cmd" : "./mvnw";
-const DEFAULT_GRADLE_WRAPPER_PROGRAM = isWindowsPlatform() ? "gradlew.bat" : "./gradlew";
+const NODE_SCRIPT_OPTIONS_DEV_FIRST = [
+  "dev",
+  "tauri dev",
+  "start",
+  "build",
+  "tauri build",
+  "preview",
+  "test",
+];
+const NODE_SCRIPT_OPTIONS_START_FIRST = [
+  "start",
+  "dev",
+  "tauri dev",
+  "build",
+  "tauri build",
+  "preview",
+  "test",
+];
+const PYTHON_COMMAND_OPTIONS = [
+  "python3 main.py",
+  "python3 app.py",
+  "python3 manage.py runserver",
+  "py -3 main.py",
+  "py -3 app.py",
+  "py -3 manage.py runserver",
+  "main.py",
+  "app.py",
+  "manage.py runserver",
+  "-m uvicorn main:app --reload",
+];
+const GO_RUN_TARGET_OPTIONS = [".", "./cmd/server", "./cmd/api", "./cmd/main"];
 
 function hasProgramPrefix(commandInput: string, program: string) {
   const normalized = commandInput.trim().toLowerCase();
@@ -100,15 +131,57 @@ function hasProgramPrefix(commandInput: string, program: string) {
   return normalized === target || normalized.startsWith(`${target} `);
 }
 
+function resolveNodeCommandProgram(commandInput: string): string | null {
+  if (hasProgramPrefix(commandInput, "pnpm run")) {
+    return "pnpm run";
+  }
+  if (hasProgramPrefix(commandInput, "npm run")) {
+    return "npm run";
+  }
+  if (hasProgramPrefix(commandInput, "yarn run")) {
+    return "yarn run";
+  }
+  if (hasProgramPrefix(commandInput, "yarn")) {
+    return "yarn";
+  }
+  if (hasProgramPrefix(commandInput, "bun run")) {
+    return "bun run";
+  }
+  return null;
+}
+
 function resolveCommandTool(
   presetId: RuntimeCommandPresetId,
   commandInput: string,
 ): RuntimeCommandTool {
-  if (presetId === "maven-wrapper" || presetId === "maven-system") {
+  if (presetId === "java-maven") {
     return "maven";
   }
-  if (presetId === "gradle-wrapper" || presetId === "gradle-system") {
+  if (presetId === "java-gradle") {
     return "gradle";
+  }
+  if (presetId === "node-dev" || presetId === "node-start") {
+    return "node";
+  }
+  if (presetId === "python-main") {
+    return "python";
+  }
+  if (presetId === "go-run") {
+    return "go";
+  }
+  if (resolveNodeCommandProgram(commandInput)) {
+    return "node";
+  }
+  if (
+    hasProgramPrefix(commandInput, "py -3") ||
+    hasProgramPrefix(commandInput, "py") ||
+    hasProgramPrefix(commandInput, "python3") ||
+    hasProgramPrefix(commandInput, "python")
+  ) {
+    return "python";
+  }
+  if (hasProgramPrefix(commandInput, "go run")) {
+    return "go";
   }
   if (
     hasProgramPrefix(commandInput, "./mvnw") ||
@@ -132,18 +205,31 @@ function resolveCommandProgram(
   tool: RuntimeCommandTool,
   commandInput: string,
 ): string | null {
-  if (presetId === "maven-wrapper") {
+  if (presetId === "java-maven") {
     if (hasProgramPrefix(commandInput, "mvnw.cmd")) return "mvnw.cmd";
     if (hasProgramPrefix(commandInput, "./mvnw")) return "./mvnw";
-    return DEFAULT_MAVEN_WRAPPER_PROGRAM;
+    if (hasProgramPrefix(commandInput, "mvn")) return "mvn";
+    return "mvn";
   }
-  if (presetId === "maven-system") return "mvn";
-  if (presetId === "gradle-wrapper") {
+  if (presetId === "java-gradle") {
     if (hasProgramPrefix(commandInput, "gradlew.bat")) return "gradlew.bat";
     if (hasProgramPrefix(commandInput, "./gradlew")) return "./gradlew";
-    return DEFAULT_GRADLE_WRAPPER_PROGRAM;
+    if (hasProgramPrefix(commandInput, "gradle")) return "gradle";
+    return "gradle";
   }
-  if (presetId === "gradle-system") return "gradle";
+  if (presetId === "node-dev" || presetId === "node-start") {
+    return resolveNodeCommandProgram(commandInput) ?? "npm run";
+  }
+  if (presetId === "python-main") {
+    if (hasProgramPrefix(commandInput, "py -3")) return "py -3";
+    if (hasProgramPrefix(commandInput, "py")) return "py";
+    if (hasProgramPrefix(commandInput, "python3")) return "python3";
+    if (hasProgramPrefix(commandInput, "python")) return "python";
+    return IS_WINDOWS_RUNTIME ? "py -3" : "python3";
+  }
+  if (presetId === "go-run") {
+    return "go run";
+  }
   if (tool === "maven") {
     if (hasProgramPrefix(commandInput, "mvnw.cmd")) return "mvnw.cmd";
     if (hasProgramPrefix(commandInput, "./mvnw")) return "./mvnw";
@@ -154,6 +240,20 @@ function resolveCommandProgram(
     if (hasProgramPrefix(commandInput, "gradlew.bat")) return "gradlew.bat";
     if (hasProgramPrefix(commandInput, "./gradlew")) return "./gradlew";
     if (hasProgramPrefix(commandInput, "gradle")) return "gradle";
+    return null;
+  }
+  if (tool === "node") {
+    return resolveNodeCommandProgram(commandInput);
+  }
+  if (tool === "python") {
+    if (hasProgramPrefix(commandInput, "py -3")) return "py -3";
+    if (hasProgramPrefix(commandInput, "py")) return "py";
+    if (hasProgramPrefix(commandInput, "python3")) return "python3";
+    if (hasProgramPrefix(commandInput, "python")) return "python";
+    return null;
+  }
+  if (tool === "go") {
+    if (hasProgramPrefix(commandInput, "go run")) return "go run";
     return null;
   }
   return null;
@@ -309,6 +409,7 @@ export function RuntimeLogPanel({
   truncated = false,
   autoScroll = true,
   wrapLines = true,
+  commandPresetOptions = ["auto", "custom"],
   commandPresetId = "auto",
   commandInput = "",
   onRun,
@@ -346,18 +447,31 @@ export function RuntimeLogPanel({
   const clearLabel = t("files.clearLogs");
   const autoScrollLabel = autoScroll ? t("files.autoScrollOn") : t("files.autoScrollOff");
   const wrapLinesLabel = wrapLines ? t("files.wrapLogsOff") : t("files.wrapLogsOn");
-  const commandPresetOptions: ReadonlyArray<{ id: RuntimeCommandPresetId; label: string }> = [
-    { id: "auto", label: t("files.runCommandPresetAuto") },
-    { id: "maven-wrapper", label: t("files.runCommandPresetMavenWrapper") },
-    { id: "maven-system", label: t("files.runCommandPresetMavenSystem") },
-    { id: "gradle-wrapper", label: t("files.runCommandPresetGradleWrapper") },
-    { id: "gradle-system", label: t("files.runCommandPresetGradleSystem") },
-    { id: "custom", label: t("files.runCommandPresetCustom") },
-  ];
+  const commandPresetItems: ReadonlyArray<{ id: RuntimeCommandPresetId; label: string }> =
+    commandPresetOptions.map((id) => {
+      switch (id) {
+        case "auto":
+          return { id, label: t("files.runCommandPresetAuto") };
+        case "java-maven":
+          return { id, label: t("files.runCommandPresetJavaMaven") };
+        case "java-gradle":
+          return { id, label: t("files.runCommandPresetJavaGradle") };
+        case "node-dev":
+          return { id, label: t("files.runCommandPresetNodeDev") };
+        case "node-start":
+          return { id, label: t("files.runCommandPresetNodeStart") };
+        case "python-main":
+          return { id, label: t("files.runCommandPresetPythonMain") };
+        case "go-run":
+          return { id, label: t("files.runCommandPresetGoRun") };
+        case "custom":
+          return { id, label: t("files.runCommandPresetCustom") };
+      }
+    });
   const selectedPresetLabel = useMemo(
     () =>
-      commandPresetOptions.find((option) => option.id === commandPresetId)?.label ?? commandPresetId,
-    [commandPresetId, commandPresetOptions],
+      commandPresetItems.find((option) => option.id === commandPresetId)?.label ?? commandPresetId,
+    [commandPresetId, commandPresetItems],
   );
   const commandTool = useMemo(
     () => resolveCommandTool(commandPresetId, commandInput),
@@ -374,8 +488,19 @@ export function RuntimeLogPanel({
     if (commandTool === "gradle") {
       return GRADLE_TASK_OPTIONS;
     }
+    if (commandTool === "node") {
+      return commandPresetId === "node-start"
+        ? NODE_SCRIPT_OPTIONS_START_FIRST
+        : NODE_SCRIPT_OPTIONS_DEV_FIRST;
+    }
+    if (commandTool === "python") {
+      return PYTHON_COMMAND_OPTIONS;
+    }
+    if (commandTool === "go") {
+      return GO_RUN_TARGET_OPTIONS;
+    }
     return [];
-  }, [commandTool]);
+  }, [commandPresetId, commandTool]);
   const commandTail = useMemo(
     () => extractCommandTail(commandProgram, commandInput),
     [commandProgram, commandInput],
@@ -589,7 +714,7 @@ export function RuntimeLogPanel({
                   alignItemWithTrigger={false}
                   className="runtime-console-select-list"
                 >
-                    {commandPresetOptions.map((option) => (
+                    {commandPresetItems.map((option) => (
                       <SelectItem key={option.id} value={option.id}>
                         {option.label}
                       </SelectItem>
@@ -663,8 +788,35 @@ export function RuntimeLogPanel({
                           </SelectItem>
                         ))}
                       </SelectGroup>
+                    ) : commandTool === "node" ? (
+                      <SelectGroup>
+                        <SelectGroupLabel>{t("files.runCommandGoalGroupNodeScripts")}</SelectGroupLabel>
+                        {commandGoalOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ) : commandTool === "python" ? (
+                      <SelectGroup>
+                        <SelectGroupLabel>{t("files.runCommandGoalGroupPythonExamples")}</SelectGroupLabel>
+                        {commandGoalOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ) : commandTool === "go" ? (
+                      <SelectGroup>
+                        <SelectGroupLabel>{t("files.runCommandGoalGroupGoExamples")}</SelectGroupLabel>
+                        {commandGoalOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ) : null}
-                    {commandTool === "maven" || commandTool === "gradle" ? (
+                    {commandGoalOptions.length > 0 ? (
                       <SelectSeparator />
                     ) : null}
                     <SelectItem value={COMMAND_OPTION_CUSTOM}>
