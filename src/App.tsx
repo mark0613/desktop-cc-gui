@@ -1601,6 +1601,12 @@ function MainApp() {
     },
     [listThreadsForWorkspaceTracked, workspacesById],
   );
+  const handleEnsureWorkspaceThreadsForSettings = useCallback(
+    (workspaceId: string) => {
+      ensureWorkspaceThreadListLoaded(workspaceId, { preserveState: true });
+    },
+    [ensureWorkspaceThreadListLoaded],
+  );
   const {
     activeAccount,
     accountSwitching,
@@ -3515,6 +3521,37 @@ function MainApp() {
     },
     [activeWorkspace, alertError, clearDraftForThread, removeImagesForThread, removeThread, t],
   );
+  const handleDeleteWorkspaceConversationsInSettings = useCallback(
+    async (workspaceId: string, threadIds: string[]) => {
+      if (!workspaceId || threadIds.length === 0) {
+        return {
+          succeededThreadIds: [],
+          failed: [],
+        };
+      }
+      const succeededThreadIds: string[] = [];
+      const failed: Array<{ threadId: string; code: string; message: string }> = [];
+      for (const threadId of threadIds) {
+        const result = await removeThread(workspaceId, threadId);
+        if (result.success) {
+          succeededThreadIds.push(threadId);
+          clearDraftForThread(threadId);
+          removeImagesForThread(threadId);
+          continue;
+        }
+        failed.push({
+          threadId,
+          code: result.code ?? "UNKNOWN",
+          message: result.message ?? t("workspace.deleteConversationFailed"),
+        });
+      }
+      return {
+        succeededThreadIds,
+        failed,
+      };
+    },
+    [clearDraftForThread, removeImagesForThread, removeThread, t],
+  );
 
   // --- Kanban conversation handlers ---
   const handleOpenTaskConversation = useCallback(
@@ -4812,6 +4849,7 @@ function MainApp() {
               <SettingsView
                 workspaceGroups={workspaceGroups}
                 groupedWorkspaces={groupedWorkspaces}
+                allWorkspaces={workspaces}
                 ungroupedLabel={ungroupedLabel}
                 onMoveWorkspace={handleMoveWorkspace}
                 onDeleteWorkspace={(workspaceId) => {
@@ -4838,6 +4876,10 @@ function MainApp() {
                 onUpdateWorkspaceSettings={async (id, settings) => {
                   await updateWorkspaceSettings(id, settings);
                 }}
+                workspaceThreadsById={threadsByWorkspace}
+                workspaceThreadListLoadingById={threadListLoadingByWorkspace}
+                onEnsureWorkspaceThreads={handleEnsureWorkspaceThreadsForSettings}
+                onDeleteWorkspaceThreads={handleDeleteWorkspaceConversationsInSettings}
                 scaleShortcutTitle={scaleShortcutTitle}
                 scaleShortcutText={scaleShortcutText}
                 onTestNotificationSound={handleTestNotificationSound}
