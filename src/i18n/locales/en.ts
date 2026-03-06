@@ -2109,6 +2109,8 @@ const en = {
     baseBranchPlaceholder: "Please select",
     baseBranchPlaceholderError: "Please choose a base branch from the dropdown first.",
     baseBranchLoading: "Loading base branches...",
+    baseBranchNoOptions: "No base branches available",
+    baseBranchRootGroup: "Root group",
     baseBranchInvalid: "Base branch is invalid or unavailable.",
     basePreview: "Base preview",
     basePreviewUnavailable: "No base branch selected",

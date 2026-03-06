@@ -2073,6 +2073,8 @@ const zh = {
     baseBranchPlaceholder: "请选择",
     baseBranchPlaceholderError: "请先从下拉列表选择一个基线分支。",
     baseBranchLoading: "正在加载基线分支...",
+    baseBranchNoOptions: "暂无可选基线分支",
+    baseBranchRootGroup: "根分组",
     baseBranchInvalid: "基线分支无效或不可用。",
     basePreview: "基线预览",
     basePreviewUnavailable: "尚未选择基线分支",

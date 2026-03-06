@@ -1039,6 +1039,70 @@ describe("GitHistoryPanel interactions", () => {
     });
   });
 
+  it("groups existing remote target branches in pull dialog dropdown", async () => {
+    vi.mocked(tauriService.listGitBranches).mockResolvedValueOnce({
+      branches: [],
+      localBranches: [
+        {
+          name: "codex/simple-memory-0.1.7",
+          isCurrent: true,
+          isRemote: false,
+          remote: null,
+          lastCommit: 1739300000,
+          ahead: 0,
+          behind: 0,
+        },
+      ],
+      remoteBranches: [
+        {
+          name: "origin/main",
+          isCurrent: false,
+          isRemote: true,
+          remote: "origin",
+          lastCommit: 1739300000,
+          ahead: 0,
+          behind: 0,
+        },
+        {
+          name: "origin/codex/feat-memory",
+          isCurrent: false,
+          isRemote: true,
+          remote: "origin",
+          lastCommit: 1739300000,
+          ahead: 0,
+          behind: 0,
+        },
+        {
+          name: "origin/chore/bump-version",
+          isCurrent: false,
+          isRemote: true,
+          remote: "origin",
+          lastCommit: 1739300000,
+          ahead: 0,
+          behind: 0,
+        },
+      ],
+      currentBranch: "codex/simple-memory-0.1.7",
+    });
+
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat: one")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByText("git.pull")[0]);
+    fireEvent.click(screen.getByLabelText("git.historyPullDialogTargetBranchLabel toggle"));
+
+    await waitFor(() => {
+      const menu = document.querySelector(".git-history-push-target-menu");
+      expect(menu?.textContent ?? "").toContain("git.historyPushDialogGroupRoot");
+      expect(menu?.textContent ?? "").toContain("codex");
+      expect(menu?.textContent ?? "").toContain("chore");
+      expect(menu?.textContent ?? "").toContain("feat-memory");
+    });
+  });
+
   it("disables push confirm when preview has no outgoing commits", async () => {
     vi.mocked(tauriService.getGitPushPreview).mockImplementation(async () => ({
       sourceBranch: "main",
