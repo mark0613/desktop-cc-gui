@@ -1006,6 +1006,68 @@ function normalizeStringList(value: unknown) {
   return single ? [single] : [];
 }
 
+function stringifyUnknown(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+function extractWebSearchQuery(item: Record<string, unknown>): string {
+  const directCandidates = [
+    item.query,
+    item.q,
+    item.searchQuery,
+    item.search_query,
+    item.prompt,
+    item.text,
+  ];
+  for (const candidate of directCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  const queryPayload = item.search_query ?? item.searchQuery;
+  if (Array.isArray(queryPayload)) {
+    const queries = queryPayload
+      .map((entry) => {
+        if (typeof entry === "string") {
+          return entry.trim();
+        }
+        if (!entry || typeof entry !== "object") {
+          return "";
+        }
+        const record = entry as Record<string, unknown>;
+        return asString(record.q ?? record.query ?? record.url ?? "").trim();
+      })
+      .filter(Boolean);
+    if (queries.length > 0) {
+      return queries.join(" | ");
+    }
+  }
+
+  if (queryPayload && typeof queryPayload === "object") {
+    const record = queryPayload as Record<string, unknown>;
+    const nested = asString(record.q ?? record.query ?? record.url ?? "").trim();
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return "";
+}
+
 function normalizeFileChangeKind(rawKind: unknown): string | undefined {
   const normalized = asString(rawKind).trim().toLowerCase();
   if (!normalized) {
@@ -1744,14 +1806,25 @@ export function buildConversationItem(
     };
   }
   if (type === "webSearch") {
+    const query = extractWebSearchQuery(item);
+    const detail = query ? JSON.stringify({ query }) : asString(item.query ?? "");
+    const output = stringifyUnknown(
+      item.result ??
+        item.output ??
+        item.response ??
+        item.results ??
+        item.text ??
+        item.error ??
+        "",
+    );
     return {
       id,
       kind: "tool",
       toolType: type,
       title: "Web search",
-      detail: asString(item.query ?? ""),
-      status: "",
-      output: "",
+      detail,
+      status: asString(item.status ?? ""),
+      output,
     };
   }
   if (type === "imageView") {

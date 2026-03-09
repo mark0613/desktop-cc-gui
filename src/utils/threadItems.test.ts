@@ -948,6 +948,28 @@ go lang`,
     }
   });
 
+  it("builds webSearch items with query detail and output payload", () => {
+    const item = buildConversationItem({
+      type: "webSearch",
+      id: "web-search-1",
+      status: "completed",
+      search_query: [{ q: "openclaw github" }, { q: "openclaw security advisory" }],
+      result: {
+        items: [
+          { title: "OpenClaw GitHub", url: "https://github.com/openclaw/openclaw" },
+        ],
+      },
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.toolType).toBe("webSearch");
+      expect(item.status).toBe("completed");
+      expect(item.detail).toContain("openclaw github");
+      expect(item.output).toContain("OpenClaw GitHub");
+      expect(item.output).toContain("https://github.com/openclaw/openclaw");
+    }
+  });
+
   it("prefers readable assistant message when remote snapshot is longer but duplicated", () => {
     const clean = "你好！我是你的 AI 联合架构师。有什么可以帮你的吗？";
     const remote: ConversationItem = {
