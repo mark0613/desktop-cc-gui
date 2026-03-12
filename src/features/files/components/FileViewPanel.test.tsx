@@ -568,6 +568,87 @@ describe("FileViewPanel markdown modes", () => {
     expect(screen.queryByRole("tab", { name: "Code" })).toBeNull();
     expect(screen.queryByRole("tab", { name: "Render" })).toBeNull();
   });
+
+  it("opens log-like files on the existing text preview path", async () => {
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      content: "[INFO] started\n[ERROR] failed",
+      truncated: false,
+    });
+
+    const { container, rerender } = render(
+      <FileViewPanel
+        workspaceId="ws-log-1"
+        workspacePath="/repo"
+        filePath="logs/app.log"
+        initialMode="preview"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector(".fvp-code-preview")).toBeTruthy();
+    });
+    expect(screen.queryByText(/unsupportedFormat/i)).toBeNull();
+    expect(screen.queryByTestId("file-markdown-preview")).toBeNull();
+
+    rerender(
+      <FileViewPanel
+        workspaceId="ws-log-1"
+        workspacePath="/repo"
+        filePath="logs/worker.trace"
+        initialMode="preview"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector(".fvp-code-preview")).toBeTruthy();
+    });
+
+    rerender(
+      <FileViewPanel
+        workspaceId="ws-log-1"
+        workspacePath="/repo"
+        filePath="logs/stderr.err"
+        initialMode="preview"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector(".fvp-code-preview")).toBeTruthy();
+    });
+
+    rerender(
+      <FileViewPanel
+        workspaceId="ws-log-1"
+        workspacePath="/repo"
+        filePath="logs/server.out"
+        initialMode="preview"
+        openTargets={[]}
+        openAppIconById={{}}
+        selectedOpenAppId=""
+        onSelectOpenAppId={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector(".fvp-code-preview")).toBeTruthy();
+    });
+  });
 });
 
 describe("FileViewPanel editor theme selection", () => {
