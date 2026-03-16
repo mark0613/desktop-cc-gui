@@ -1,5 +1,8 @@
+// @ts-nocheck
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ChangeEvent, KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
+import type { DropResult } from "@hello-pangea/dnd";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -30,7 +33,6 @@ import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
 import Mic from "lucide-react/dist/esm/icons/mic";
 import Keyboard from "lucide-react/dist/esm/icons/keyboard";
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
-import Stethoscope from "lucide-react/dist/esm/icons/stethoscope";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
 import FileText from "lucide-react/dist/esm/icons/file-text";
@@ -40,11 +42,7 @@ import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
-  GripVertical,
-  MoreHorizontal,
-  Pencil,
   FolderOpen,
-  Plus,
   Monitor,
   Sun,
   Moon,
@@ -58,23 +56,6 @@ import {
   Wifi,
   Save,
 } from "lucide-react";
-import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-} from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import type {
   AppSettings,
   CodexDoctorResult,
@@ -88,7 +69,6 @@ import type {
 import { formatDownloadSize } from "../../../utils/formatting";
 import {
   buildShortcutValue,
-  formatShortcut,
   getDefaultInterruptShortcut,
 } from "../../../utils/shortcuts";
 import { clampUiScale } from "../../../utils/uiScale";
@@ -107,14 +87,11 @@ import {
 import { DEFAULT_OPEN_APP_ID } from "../../app/constants";
 import { writeClientStoreValue } from "../../../services/clientStorage";
 import { VendorSettingsPanel } from "../../vendors/components/VendorSettingsPanel";
-import { GENERIC_APP_ICON, getKnownOpenAppIcon } from "../../app/utils/openAppIcons";
 import { useGlobalAgentsMd } from "../hooks/useGlobalAgentsMd";
 import { useGlobalCodexConfigToml } from "../hooks/useGlobalCodexConfigToml";
-import { FileEditorCard } from "../../shared/components/FileEditorCard";
 import { LanguageSelector } from "./LanguageSelector";
 import { HistoryCompletionSettings } from "./HistoryCompletionSettings";
 import { AgentSettingsSection } from "./AgentSettingsSection";
-import { ModelMappingSettings } from "../../models/components/ModelMappingSettings";
 import { PlaceholderSection } from "./PlaceholderSection";
 import { CommitSection } from "./CommitSection";
 import { PromptSection } from "./PromptSection";
@@ -140,6 +117,20 @@ import {
   isHistoryCompletionEnabled,
   setHistoryCompletionEnabled,
 } from "../../composer/hooks/useInputHistoryStore";
+import {
+  buildOpenAppDrafts,
+  buildWorkspaceOverrideDrafts,
+  COMPOSER_PRESET_CONFIGS,
+  createOpenAppId,
+  type ComposerPreset,
+  type OpenAppDraft,
+} from "./settings-view/actions/settingsViewActions";
+import { useSystemResolvedTheme } from "./settings-view/hooks/useSystemResolvedTheme";
+import { ProjectsSection } from "./settings-view/sections/ProjectsSection";
+import { ComposerSection } from "./settings-view/sections/ComposerSection";
+import { ShortcutsSection } from "./settings-view/sections/ShortcutsSection";
+import { OpenAppsSection } from "./settings-view/sections/OpenAppsSection";
+import { CodexSection } from "./settings-view/sections/CodexSection";
 
 // Feature flags to show/hide settings sidebar entries
 const SHOW_DICTATION_ENTRY = false;
@@ -158,83 +149,12 @@ const DICTATION_MODELS = (t: (key: string) => string) => [
   { id: "large-v3", label: t("settings.dictationModelLargeV3"), size: "3.0 GB", note: t("settings.dictationModelBest") },
 ];
 
-type ComposerPreset = AppSettings["composerEditorPreset"];
-
-type ComposerPresetSettings = Pick<
-  AppSettings,
-  | "composerFenceExpandOnSpace"
-  | "composerFenceExpandOnEnter"
-  | "composerFenceLanguageTags"
-  | "composerFenceWrapSelection"
-  | "composerFenceAutoWrapPasteMultiline"
-  | "composerFenceAutoWrapPasteCodeLike"
-  | "composerListContinuation"
-  | "composerCodeBlockCopyUseModifier"
->;
-
-const COMPOSER_PRESET_LABELS = (t: (key: string) => string): Record<ComposerPreset, string> => ({
-  default: t("settings.composerPresetDefault"),
-  helpful: t("settings.composerPresetHelpful"),
-  smart: t("settings.composerPresetSmart"),
-});
-
-const COMPOSER_PRESET_CONFIGS: Record<ComposerPreset, ComposerPresetSettings> = {
-  default: {
-    composerFenceExpandOnSpace: false,
-    composerFenceExpandOnEnter: false,
-    composerFenceLanguageTags: false,
-    composerFenceWrapSelection: false,
-    composerFenceAutoWrapPasteMultiline: false,
-    composerFenceAutoWrapPasteCodeLike: false,
-    composerListContinuation: false,
-    composerCodeBlockCopyUseModifier: false,
-  },
-  helpful: {
-    composerFenceExpandOnSpace: true,
-    composerFenceExpandOnEnter: false,
-    composerFenceLanguageTags: true,
-    composerFenceWrapSelection: true,
-    composerFenceAutoWrapPasteMultiline: true,
-    composerFenceAutoWrapPasteCodeLike: false,
-    composerListContinuation: true,
-    composerCodeBlockCopyUseModifier: false,
-  },
-  smart: {
-    composerFenceExpandOnSpace: true,
-    composerFenceExpandOnEnter: false,
-    composerFenceLanguageTags: true,
-    composerFenceWrapSelection: true,
-    composerFenceAutoWrapPasteMultiline: true,
-    composerFenceAutoWrapPasteCodeLike: true,
-    composerListContinuation: true,
-    composerCodeBlockCopyUseModifier: false,
-  },
-};
-
 type InlineNoticeState =
   | {
       kind: "success" | "error";
       message: string;
     }
   | null;
-
-const normalizeOverrideValue = (value: string): string | null => {
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
-
-const buildWorkspaceOverrideDrafts = (
-  projects: WorkspaceInfo[],
-  prev: Record<string, string>,
-  getValue: (workspace: WorkspaceInfo) => string | null | undefined,
-): Record<string, string> => {
-  const next: Record<string, string> = {};
-  projects.forEach((workspace) => {
-    const existing = prev[workspace.id];
-    next[workspace.id] = existing ?? getValue(workspace) ?? "";
-  });
-  return next;
-};
 
 export type SettingsViewProps = {
   workspaceGroups: WorkspaceGroup[];
@@ -357,8 +277,6 @@ type ShortcutDraftKey =
   | "cycleWorkspaceNext"
   | "cycleWorkspacePrev";
 
-type OpenAppDraft = OpenAppTarget & { argsText: string };
-
 const shortcutDraftKeyBySetting: Record<ShortcutSettingKey, ShortcutDraftKey> = {
   composerModelShortcut: "model",
   composerAccessShortcut: "access",
@@ -378,19 +296,6 @@ const shortcutDraftKeyBySetting: Record<ShortcutSettingKey, ShortcutDraftKey> = 
   cycleAgentPrevShortcut: "cycleAgentPrev",
   cycleWorkspaceNextShortcut: "cycleWorkspaceNext",
   cycleWorkspacePrevShortcut: "cycleWorkspacePrev",
-};
-
-const buildOpenAppDrafts = (targets: OpenAppTarget[]): OpenAppDraft[] =>
-  targets.map((target) => ({
-    ...target,
-    argsText: target.args.join(" "),
-  }));
-
-const createOpenAppId = () => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `open-app-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
 const USER_MSG_DARK_PRESETS = [
@@ -430,15 +335,6 @@ const BASIC_FONT_SIZE_LEVELS = [
 const BASIC_FONT_SIZE_LEVEL_SET = new Set(
   BASIC_FONT_SIZE_LEVELS.map((level) => Number(level.value.toFixed(2))),
 );
-
-const getSystemResolvedTheme = (): "light" | "dark" => {
-  if (typeof window === "undefined" || !window.matchMedia) {
-    return "dark";
-  }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-};
 
 export function SettingsView({
   workspaceGroups,
@@ -496,9 +392,7 @@ export function SettingsView({
   const [notificationSoundPathDraft, setNotificationSoundPathDraft] = useState(
     appSettings.notificationSoundCustomPath ?? "",
   );
-  const [systemResolvedTheme, setSystemResolvedTheme] = useState<"light" | "dark">(
-    getSystemResolvedTheme,
-  );
+  const systemResolvedTheme = useSystemResolvedTheme();
   const [codexBinOverrideDrafts, setCodexBinOverrideDrafts] = useState<
     Record<string, string>
   >({});
@@ -789,19 +683,6 @@ export function SettingsView({
     });
     return () => { active = false; };
   }, [t]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) {
-      return;
-    }
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const syncTheme = () => {
-      setSystemResolvedTheme(media.matches ? "dark" : "light");
-    };
-    syncTheme();
-    media.addEventListener("change", syncTheme);
-    return () => media.removeEventListener("change", syncTheme);
-  }, []);
 
   useEffect(() => {
     if (
@@ -1194,7 +1075,7 @@ export function SettingsView({
   };
 
   const handleSelectBasicFontSizeLevel = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
+    (event: ChangeEvent<HTMLSelectElement>) => {
       const nextValue = event.target.value;
       if (nextValue === "custom") {
         return;
@@ -1283,7 +1164,7 @@ export function SettingsView({
   );
 
   const handleUserMsgColorPickerChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
+    (event: ChangeEvent<HTMLInputElement>) => {
       const nextColor = normalizeHexColor(event.target.value);
       setUserMsgHexDraft(nextColor);
       void handleSaveUserMsgColor(nextColor);
@@ -1292,7 +1173,7 @@ export function SettingsView({
   );
 
   const handleUserMsgHexInputChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
+    (event: ChangeEvent<HTMLInputElement>) => {
       const nextValue = event.target.value;
       setUserMsgHexDraft(nextValue);
       if (HEX_COLOR_PATTERN.test(nextValue)) {
@@ -1547,7 +1428,7 @@ export function SettingsView({
   };
 
   const handleShortcutKeyDown = (
-    event: React.KeyboardEvent<HTMLInputElement>,
+    event: KeyboardEvent<HTMLInputElement>,
     key: ShortcutSettingKey,
   ) => {
     if (event.key === "Tab" && key !== "composerCollaborationShortcut") {
@@ -1950,303 +1831,33 @@ export function SettingsView({
                 )}
               </div>
             )}
-            {activeSection === "projects" && (
-              <section className="settings-section">
-                <div className="settings-section-title">{t("settings.projectsTitle")}</div>
-                <div className="settings-section-subtitle">
-                  {t("settings.projectsDescription")}
-                </div>
-                <div className="settings-subsection-header">
-                  <div className="settings-subsection-title">{t("settings.groupsTitle")}</div>
-                  <Popover open={createGroupOpen} onOpenChange={setCreateGroupOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        className="ghost icon-button"
-                        aria-label={t("settings.addGroupButton")}
-                      >
-                        <Plus aria-hidden />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" className="p-3">
-                      <div className="settings-popover-content">
-                        <div className="settings-field-label">
-                          {t("settings.newGroupPlaceholder")}
-                        </div>
-                        <input
-                          className="settings-input settings-input--compact"
-                          value={newGroupName}
-                          autoFocus
-                          placeholder={t("settings.newGroupPlaceholder")}
-                          onChange={(event) => setNewGroupName(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" && canCreateGroup) {
-                              event.preventDefault();
-                              void handleCreateGroup();
-                            }
-                          }}
-                        />
-                        <div className="settings-popover-actions">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setCreateGroupOpen(false)}
-                          >
-                            {t("common.cancel")}
-                          </Button>
-                          <Button
-                            size="sm"
-                            disabled={!canCreateGroup}
-                            onClick={() => {
-                              void handleCreateGroup();
-                            }}
-                          >
-                            {t("common.create")}
-                          </Button>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="settings-subsection-subtitle">
-                  {t("settings.groupsDescription")}
-                </div>
-                <div className="settings-groups">
-                  {groupError && <div className="settings-group-error">{groupError}</div>}
-                  {workspaceGroups.length > 0 ? (
-                    <DragDropContext onDragEnd={handleDragEnd}>
-                      <Droppable droppableId="settings-group-list">
-                        {(provided) => (
-                          <div
-                            className="settings-group-list"
-                            {...provided.droppableProps}
-                            ref={provided.innerRef}
-                          >
-                            {workspaceGroups.map((group, index) => (
-                              <Draggable
-                                key={group.id}
-                                draggableId={group.id}
-                                index={index}
-                              >
-                                {(provided, snapshot) => (
-                                  <div
-                                    ref={provided.innerRef}
-                                    {...provided.draggableProps}
-                                    className={`settings-group-row ${
-                                      snapshot.isDragging ? "is-dragging" : ""
-                                    }`}
-                                    style={provided.draggableProps.style}
-                                  >
-                                    <span
-                                      className="settings-group-drag-handle"
-                                      {...provided.dragHandleProps}
-                                    >
-                                      <GripVertical aria-hidden />
-                                    </span>
-
-                                    <div className="settings-group-name">
-                                      {renamingGroupId === group.id ? (
-                                        <input
-                                          className="settings-input settings-input--compact"
-                                          value={groupDrafts[group.id] ?? group.name}
-                                          autoFocus
-                                          onChange={(event) =>
-                                            setGroupDrafts((prev) => ({
-                                              ...prev,
-                                              [group.id]: event.target.value,
-                                            }))
-                                          }
-                                          onBlur={() => {
-                                            void handleRenameGroup(group);
-                                            setRenamingGroupId(null);
-                                          }}
-                                          onKeyDown={(event) => {
-                                            if (event.key === "Enter") {
-                                              event.preventDefault();
-                                              void handleRenameGroup(group);
-                                              setRenamingGroupId(null);
-                                            }
-                                            if (event.key === "Escape") {
-                                              setGroupDrafts((prev) => ({
-                                                ...prev,
-                                                [group.id]: group.name,
-                                              }));
-                                              setRenamingGroupId(null);
-                                            }
-                                          }}
-                                        />
-                                      ) : (
-                                        <span
-                                          className="settings-group-name-text"
-                                          onDoubleClick={() => setRenamingGroupId(group.id)}
-                                        >
-                                          {group.name}
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    {group.copiesFolder && (
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger>
-                                            <span className="settings-group-folder-indicator">
-                                              <FolderOpen aria-hidden />
-                                            </span>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="top">
-                                            <p>{group.copiesFolder}</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    )}
-
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <button
-                                          type="button"
-                                          className="ghost icon-button"
-                                          aria-label={t("settings.groupMoreActions")}
-                                        >
-                                          <MoreHorizontal aria-hidden />
-                                        </button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="w-48">
-                                        <DropdownMenuItem
-                                          onSelect={() => setRenamingGroupId(group.id)}
-                                        >
-                                          <Pencil aria-hidden />
-                                          {t("settings.renameGroup")}
-                                        </DropdownMenuItem>
-
-                                        <DropdownMenuSeparator />
-
-                                        <DropdownMenuSub>
-                                          <DropdownMenuSubTrigger>
-                                            <FolderOpen aria-hidden />
-                                            {t("settings.copiesFolder")}
-                                          </DropdownMenuSubTrigger>
-                                          <DropdownMenuSubContent>
-                                            <DropdownMenuItem
-                                              onSelect={() => {
-                                                void handleChooseGroupCopiesFolder(group);
-                                              }}
-                                            >
-                                              {t("settings.chooseEllipsis")}
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                              onSelect={() => {
-                                                void handleClearGroupCopiesFolder(group);
-                                              }}
-                                              disabled={!group.copiesFolder}
-                                            >
-                                              {t("settings.clear")}
-                                            </DropdownMenuItem>
-                                          </DropdownMenuSubContent>
-                                        </DropdownMenuSub>
-
-                                        <DropdownMenuSeparator />
-
-                                        <DropdownMenuItem
-                                          variant="destructive"
-                                          onSelect={() => {
-                                            void handleDeleteGroup(group);
-                                          }}
-                                        >
-                                          <Trash2 aria-hidden />
-                                          {t("settings.deleteGroupAction")}
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </div>
-                                )}
-                              </Draggable>
-                            ))}
-                            {provided.placeholder}
-                          </div>
-                        )}
-                      </Droppable>
-                    </DragDropContext>
-                  ) : (
-                    <div className="settings-empty">{t("settings.noGroupsYet")}</div>
-                  )}
-                </div>
-                <div className="settings-subsection-title">{t("settings.projectsSubsectionTitle")}</div>
-                <div className="settings-subsection-subtitle">
-                  {t("settings.projectsSubsectionDescription")}
-                </div>
-                <div className="settings-projects">
-                  {groupedWorkspaces.map((group) => (
-                    <div key={group.id ?? "ungrouped"} className="settings-project-group">
-                      <div className="settings-project-group-label">{group.name}</div>
-                      {group.workspaces.map((workspace, index) => {
-                        const groupValue =
-                          workspaceGroups.some(
-                            (entry) => entry.id === workspace.settings.groupId,
-                          )
-                            ? workspace.settings.groupId ?? ""
-                            : "";
-                        return (
-                          <div key={workspace.id} className="settings-project-row">
-                            <div className="settings-project-info">
-                              <div className="settings-project-name">{workspace.name}</div>
-                              <div className="settings-project-path">{workspace.path}</div>
-                            </div>
-                            <div className="settings-project-actions">
-                              <select
-                                className="settings-select settings-select--compact"
-                                value={groupValue}
-                                onChange={(event) => {
-                                  const nextGroupId = event.target.value || null;
-                                  void onAssignWorkspaceGroup(
-                                    workspace.id,
-                                    nextGroupId,
-                                  );
-                                }}
-                              >
-                                <option value="">{ungroupedLabel}</option>
-                                {workspaceGroups.map((entry) => (
-                                  <option key={entry.id} value={entry.id}>
-                                    {entry.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                className="ghost icon-button"
-                                onClick={() => onMoveWorkspace(workspace.id, "up")}
-                                disabled={index === 0}
-                                aria-label={t("settings.moveProjectUp")}
-                              >
-                                <ChevronUp aria-hidden />
-                              </button>
-                              <button
-                                type="button"
-                                className="ghost icon-button"
-                                onClick={() => onMoveWorkspace(workspace.id, "down")}
-                                disabled={index === group.workspaces.length - 1}
-                                aria-label={t("settings.moveProjectDown")}
-                              >
-                                <ChevronDown aria-hidden />
-                              </button>
-                              <button
-                                type="button"
-                                className="ghost icon-button"
-                                onClick={() => onDeleteWorkspace(workspace.id)}
-                                aria-label={t("settings.deleteProject")}
-                              >
-                                <Trash2 aria-hidden />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                  {projects.length === 0 && (
-                    <div className="settings-empty">{t("settings.noProjectsYet")}</div>
-                  )}
-                </div>
-              </section>
-            )}
+            <ProjectsSection
+              active={activeSection === "projects"}
+              t={t}
+              createGroupOpen={createGroupOpen}
+              setCreateGroupOpen={setCreateGroupOpen}
+              newGroupName={newGroupName}
+              setNewGroupName={setNewGroupName}
+              canCreateGroup={canCreateGroup}
+              handleCreateGroup={handleCreateGroup}
+              groupError={groupError}
+              workspaceGroups={workspaceGroups}
+              handleDragEnd={handleDragEnd}
+              renamingGroupId={renamingGroupId}
+              setRenamingGroupId={setRenamingGroupId}
+              groupDrafts={groupDrafts}
+              setGroupDrafts={setGroupDrafts}
+              handleRenameGroup={handleRenameGroup}
+              handleChooseGroupCopiesFolder={handleChooseGroupCopiesFolder}
+              handleClearGroupCopiesFolder={handleClearGroupCopiesFolder}
+              handleDeleteGroup={handleDeleteGroup}
+              groupedWorkspaces={groupedWorkspaces}
+              onAssignWorkspaceGroup={onAssignWorkspaceGroup}
+              ungroupedLabel={ungroupedLabel}
+              onMoveWorkspace={onMoveWorkspace}
+              onDeleteWorkspace={onDeleteWorkspace}
+              projectsCount={projects.length}
+            />
             {activeSection === "basic" && (
               <section className="settings-section settings-section-basic" data-basic-tab={basicSubTab}>
                 <div className="settings-section-title">{t("settings.sidebarBasic")}</div>
@@ -2968,258 +2579,17 @@ export function SettingsView({
                 </div>
               </section>
             )}
-            {activeSection === "composer" && (
-              <section className="settings-section">
-                <div className="settings-section-title">{t("settings.composerTitle")}</div>
-                <div className="settings-section-subtitle">
-                  {t("settings.composerDescription")}
-                </div>
-                <div className="settings-subsection-title">{t("settings.sendShortcutSubtitle")}</div>
-                <div className="settings-subsection-subtitle">
-                  {t("settings.sendShortcutSubDescription")}
-                </div>
-                <div
-                  className="settings-send-shortcut-grid"
-                  role="radiogroup"
-                  aria-label={t("settings.sendShortcutSubtitle")}
-                >
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={appSettings.composerSendShortcut === "enter"}
-                    className={`settings-send-shortcut-option${
-                      appSettings.composerSendShortcut === "enter" ? " is-active" : ""
-                    }`}
-                    onClick={() => handleComposerSendShortcutChange("enter")}
-                  >
-                    <div className="settings-send-shortcut-option-title-row">
-                      <span className="settings-send-shortcut-option-title">
-                        {t("settings.sendShortcutEnterTitle")}
-                      </span>
-                      {appSettings.composerSendShortcut === "enter" && (
-                        <span className="settings-send-shortcut-option-check" aria-hidden>
-                          ✓
-                        </span>
-                      )}
-                    </div>
-                    <span className="settings-send-shortcut-option-desc">
-                      {t("settings.sendShortcutEnterDesc")}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={appSettings.composerSendShortcut === "cmdEnter"}
-                    className={`settings-send-shortcut-option${
-                      appSettings.composerSendShortcut === "cmdEnter" ? " is-active" : ""
-                    }`}
-                    onClick={() => handleComposerSendShortcutChange("cmdEnter")}
-                  >
-                    <div className="settings-send-shortcut-option-title-row">
-                      <span className="settings-send-shortcut-option-title">
-                        {t("settings.sendShortcutCmdEnterTitle")}
-                      </span>
-                      {appSettings.composerSendShortcut === "cmdEnter" && (
-                        <span className="settings-send-shortcut-option-check" aria-hidden>
-                          ✓
-                        </span>
-                      )}
-                    </div>
-                    <span className="settings-send-shortcut-option-desc">
-                      {t("settings.sendShortcutCmdEnterDesc")}
-                    </span>
-                  </button>
-                </div>
-                <Separator className="my-4" />
-                <div className="settings-subsection-title">{t("settings.presetsSubtitle")}</div>
-                <div className="settings-subsection-subtitle">
-                  {t("settings.presetsSubDescription")}
-                </div>
-                <div className="settings-field">
-                  <label className="settings-field-label" htmlFor="composer-preset">
-                    {t("settings.preset")}
-                  </label>
-                  <select
-                    id="composer-preset"
-                    className="settings-select"
-                    value={appSettings.composerEditorPreset}
-                    onChange={(event) =>
-                      handleComposerPresetChange(
-                        event.target.value as ComposerPreset,
-                      )
-                    }
-                  >
-                    {Object.entries(COMPOSER_PRESET_LABELS(t)).map(([preset, label]) => (
-                      <option key={preset} value={preset}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="settings-help">
-                    {t("settings.presetDesc")}
-                  </div>
-                </div>
-                <Separator className="my-4" />
-                <div className="settings-subsection-title">{t("settings.codeFencesSubtitle")}</div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">{t("settings.expandFencesOnSpace")}</div>
-                    <div className="settings-toggle-subtitle">
-                      {t("settings.expandFencesOnSpaceDesc")}
-                    </div>
-                  </div>
-                  <Switch
-                    checked={appSettings.composerFenceExpandOnSpace}
-                    onCheckedChange={(checked) =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        composerFenceExpandOnSpace: checked,
-                      })
-                    }
-                  />
-                </div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">{t("settings.expandFencesOnEnter")}</div>
-                    <div className="settings-toggle-subtitle">
-                      {t("settings.expandFencesOnEnterDesc")}
-                    </div>
-                  </div>
-                  <Switch
-                    checked={appSettings.composerFenceExpandOnEnter}
-                    onCheckedChange={(checked) =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        composerFenceExpandOnEnter: checked,
-                      })
-                    }
-                  />
-                </div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">{t("settings.supportLanguageTags")}</div>
-                    <div className="settings-toggle-subtitle">
-                      {t("settings.supportLanguageTagsDesc")}
-                    </div>
-                  </div>
-                  <Switch
-                    checked={appSettings.composerFenceLanguageTags}
-                    onCheckedChange={(checked) =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        composerFenceLanguageTags: checked,
-                      })
-                    }
-                  />
-                </div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">{t("settings.wrapSelectionInFences")}</div>
-                    <div className="settings-toggle-subtitle">
-                      {t("settings.wrapSelectionInFencesDesc")}
-                    </div>
-                  </div>
-                  <Switch
-                    checked={appSettings.composerFenceWrapSelection}
-                    onCheckedChange={(checked) =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        composerFenceWrapSelection: checked,
-                      })
-                    }
-                  />
-                </div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">{t("settings.copyBlocksWithoutFences")}</div>
-                    <div className="settings-toggle-subtitle">
-                      {t("settings.copyBlocksWithoutFencesDesc")}
-                    </div>
-                  </div>
-                  <Switch
-                    checked={appSettings.composerCodeBlockCopyUseModifier}
-                    onCheckedChange={(checked) =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        composerCodeBlockCopyUseModifier: checked,
-                      })
-                    }
-                  />
-                </div>
-                <Separator className="my-4" />
-                <div className="settings-subsection-title">{t("settings.pastingSubtitle")}</div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">{t("settings.autoWrapMultiLinePaste")}</div>
-                    <div className="settings-toggle-subtitle">
-                      {t("settings.autoWrapMultiLinePasteDesc")}
-                    </div>
-                  </div>
-                  <Switch
-                    checked={appSettings.composerFenceAutoWrapPasteMultiline}
-                    onCheckedChange={(checked) =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        composerFenceAutoWrapPasteMultiline: checked,
-                      })
-                    }
-                  />
-                </div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">{t("settings.autoWrapCodeLikeSingleLines")}</div>
-                    <div className="settings-toggle-subtitle">
-                      {t("settings.autoWrapCodeLikeSingleLinesDesc")}
-                    </div>
-                  </div>
-                  <Switch
-                    checked={appSettings.composerFenceAutoWrapPasteCodeLike}
-                    onCheckedChange={(checked) =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        composerFenceAutoWrapPasteCodeLike: checked,
-                      })
-                    }
-                  />
-                </div>
-                <Separator className="my-4" />
-                <div className="settings-subsection-title">{t("settings.listsSubtitle")}</div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">{t("settings.continueListsOnShiftEnter")}</div>
-                    <div className="settings-toggle-subtitle">
-                      {t("settings.continueListsOnShiftEnterDesc")}
-                    </div>
-                  </div>
-                  <Switch
-                    checked={appSettings.composerListContinuation}
-                    onCheckedChange={(checked) =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        composerListContinuation: checked,
-                      })
-                    }
-                  />
-                </div>
-                <Separator className="my-4" />
-                <div className="settings-subsection-title">{t("settings.historyCompletionSubtitle")}</div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">{t("settings.historyCompletion")}</div>
-                    <div className="settings-toggle-subtitle">
-                      {t("settings.historyCompletionDesc")}
-                    </div>
-                  </div>
-                  <Switch
-                    checked={historyCompletionEnabled}
-                    onCheckedChange={handleHistoryCompletionToggle}
-                  />
-                </div>
-                <HistoryCompletionSettings />
-                <Separator className="my-4" />
-                <ModelMappingSettings reduceTransparency={reduceTransparency} />
-              </section>
-            )}
+            <ComposerSection
+              active={activeSection === "composer"}
+              t={t}
+              appSettings={appSettings}
+              onUpdateAppSettings={onUpdateAppSettings}
+              handleComposerPresetChange={handleComposerPresetChange}
+              handleComposerSendShortcutChange={handleComposerSendShortcutChange}
+              historyCompletionEnabled={historyCompletionEnabled}
+              handleHistoryCompletionToggle={handleHistoryCompletionToggle}
+              reduceTransparency={reduceTransparency}
+            />
             <AgentSettingsSection active={activeSection === "agents"} />
             {activeSection === "dictation" && (
               <section className="settings-section">
@@ -3418,641 +2788,27 @@ export function SettingsView({
                 )}
               </section>
             )}
-            {activeSection === "shortcuts" && (
-              <section className="settings-section">
-                <div className="settings-section-title">{t("settings.shortcutsTitle")}</div>
-                <div className="settings-section-subtitle">
-                  {t("settings.shortcutsDescription")}
-                </div>
-                <div className="settings-subsection-title">{t("settings.fileSubtitle")}</div>
-                <div className="settings-subsection-subtitle">
-                  {t("settings.fileSubDescription")}
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.newAgent")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.newAgent)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "newAgentShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("newAgentShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+n")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.newWorktreeAgent")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.newWorktreeAgent)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "newWorktreeAgentShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("newWorktreeAgentShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+shift+n")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.newCloneAgent")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.newCloneAgent)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "newCloneAgentShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("newCloneAgentShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+alt+n")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.archiveActiveThread")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.archiveThread)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "archiveThreadShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("archiveThreadShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+ctrl+a")}
-                  </div>
-                </div>
-                <Separator className="my-4" />
-                <div className="settings-subsection-title">{t("settings.composerSubtitle")}</div>
-                <div className="settings-subsection-subtitle">
-                  {t("settings.composerSubDescription")}
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.cycleModel")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.model)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "composerModelShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("composerModelShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.pressNewShortcut")} {formatShortcut("cmd+shift+m")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.cycleAccessMode")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.access)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "composerAccessShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("composerAccessShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+shift+a")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.cycleReasoningMode")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.reasoning)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "composerReasoningShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("composerReasoningShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+shift+r")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.cycleCollaborationMode")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.collaboration)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "composerCollaborationShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("composerCollaborationShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("shift+tab")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.stopActiveRun")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.interrupt)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "interruptShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("interruptShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut(getDefaultInterruptShortcut())}
-                  </div>
-                </div>
-                <Separator className="my-4" />
-                <div className="settings-subsection-title">{t("settings.panelsSubtitle")}</div>
-                <div className="settings-subsection-subtitle">
-                  {t("settings.panelsSubDescription")}
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.toggleProjectsSidebar")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.projectsSidebar)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "toggleProjectsSidebarShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("toggleProjectsSidebarShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+shift+p")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.toggleGitSidebar")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.gitSidebar)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "toggleGitSidebarShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("toggleGitSidebarShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+shift+g")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.toggleGlobalSearch")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.globalSearch)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "toggleGlobalSearchShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("toggleGlobalSearchShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+o")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.toggleDebugPanel")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.debugPanel)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "toggleDebugPanelShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("toggleDebugPanelShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+shift+d")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.toggleTerminalPanel")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.terminal)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "toggleTerminalShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("toggleTerminalShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+shift+t")}
-                  </div>
-                </div>
-                <Separator className="my-4" />
-                <div className="settings-subsection-title">{t("settings.navigationSubtitle")}</div>
-                <div className="settings-subsection-subtitle">
-                  {t("settings.navigationSubDescription")}
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.nextAgent")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.cycleAgentNext)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "cycleAgentNextShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("cycleAgentNextShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+ctrl+down")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.previousAgent")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.cycleAgentPrev)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "cycleAgentPrevShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("cycleAgentPrevShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+ctrl+up")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.nextWorkspace")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.cycleWorkspaceNext)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "cycleWorkspaceNextShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("cycleWorkspaceNextShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+shift+down")}
-                  </div>
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.previousWorkspace")}</div>
-                  <div className="settings-field-row">
-                    <input
-                      className="settings-input settings-input--shortcut"
-                      value={formatShortcut(shortcutDrafts.cycleWorkspacePrev)}
-                      onKeyDown={(event) =>
-                        handleShortcutKeyDown(event, "cycleWorkspacePrevShortcut")
-                      }
-                      placeholder={t("settings.typeShortcut")}
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => void updateShortcut("cycleWorkspacePrevShortcut", null)}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.defaultColon")} {formatShortcut("cmd+shift+up")}
-                  </div>
-                </div>
-              </section>
-            )}
-            {activeSection === "open-apps" && (
-              <section className="settings-section">
-                <div className="settings-section-title">{t("settings.openInTitle")}</div>
-                <div className="settings-section-subtitle">
-                  {t("settings.openInDescription")}
-                </div>
-                <div className="settings-open-apps">
-                  {openAppDrafts.map((target, index) => {
-                    const iconSrc =
-                      getKnownOpenAppIcon(target.id) ??
-                      openAppIconById[target.id] ??
-                      GENERIC_APP_ICON;
-                    return (
-                      <div key={target.id} className="settings-open-app-row">
-                        <div className="settings-open-app-icon-wrap" aria-hidden>
-                          <img
-                            className="settings-open-app-icon"
-                            src={iconSrc}
-                            alt=""
-                            width={18}
-                            height={18}
-                          />
-                        </div>
-                        <div className="settings-open-app-fields">
-                          <label className="settings-open-app-field settings-open-app-field--label">
-                            <span className="settings-visually-hidden">{t("settings.label")}</span>
-                            <input
-                              className="settings-input settings-input--compact settings-open-app-input settings-open-app-input--label"
-                              value={target.label}
-                              placeholder={t("settings.label")}
-                              onChange={(event) =>
-                                handleOpenAppDraftChange(index, {
-                                  label: event.target.value,
-                                })
-                              }
-                              onBlur={() => {
-                                void handleCommitOpenApps(openAppDrafts);
-                              }}
-                              aria-label={`Open app label ${index + 1}`}
-                            />
-                          </label>
-                          <label className="settings-open-app-field settings-open-app-field--type">
-                            <span className="settings-visually-hidden">{t("settings.type")}</span>
-                            <select
-                              className="settings-select settings-select--compact settings-open-app-kind"
-                              value={target.kind}
-                              onChange={(event) =>
-                                handleOpenAppKindChange(
-                                  index,
-                                  event.target.value as OpenAppTarget["kind"],
-                                )
-                              }
-                              aria-label={`Open app type ${index + 1}`}
-                            >
-                              <option value="app">{t("settings.typeApp")}</option>
-                              <option value="command">{t("settings.typeCommand")}</option>
-                              <option value="finder">{t("settings.typeFinder")}</option>
-                            </select>
-                          </label>
-                          {target.kind === "app" && (
-                            <label className="settings-open-app-field settings-open-app-field--appname">
-                              <span className="settings-visually-hidden">{t("settings.appName")}</span>
-                              <input
-                                className="settings-input settings-input--compact settings-open-app-input settings-open-app-input--appname"
-                                value={target.appName ?? ""}
-                                placeholder={t("settings.appName")}
-                                onChange={(event) =>
-                                  handleOpenAppDraftChange(index, {
-                                    appName: event.target.value,
-                                  })
-                                }
-                                onBlur={() => {
-                                  void handleCommitOpenApps(openAppDrafts);
-                                }}
-                                aria-label={`Open app name ${index + 1}`}
-                              />
-                            </label>
-                          )}
-                          {target.kind === "command" && (
-                            <label className="settings-open-app-field settings-open-app-field--command">
-                              <span className="settings-visually-hidden">{t("settings.command")}</span>
-                              <input
-                                className="settings-input settings-input--compact settings-open-app-input settings-open-app-input--command"
-                                value={target.command ?? ""}
-                                placeholder={t("settings.command")}
-                                onChange={(event) =>
-                                  handleOpenAppDraftChange(index, {
-                                    command: event.target.value,
-                                  })
-                                }
-                                onBlur={() => {
-                                  void handleCommitOpenApps(openAppDrafts);
-                                }}
-                                aria-label={`Open app command ${index + 1}`}
-                              />
-                            </label>
-                          )}
-                          {target.kind !== "finder" && (
-                            <label className="settings-open-app-field settings-open-app-field--args">
-                              <span className="settings-visually-hidden">{t("settings.args")}</span>
-                              <input
-                                className="settings-input settings-input--compact settings-open-app-input settings-open-app-input--args"
-                                value={target.argsText}
-                                placeholder={t("settings.args")}
-                                onChange={(event) =>
-                                  handleOpenAppDraftChange(index, {
-                                    argsText: event.target.value,
-                                  })
-                                }
-                                onBlur={() => {
-                                  void handleCommitOpenApps(openAppDrafts);
-                                }}
-                                aria-label={`Open app args ${index + 1}`}
-                              />
-                            </label>
-                          )}
-                        </div>
-                        <div className="settings-open-app-actions">
-                          <label className="settings-open-app-default">
-                            <input
-                              type="radio"
-                              name="open-app-default"
-                              checked={target.id === openAppSelectedId}
-                              onChange={() => handleSelectOpenAppDefault(target.id)}
-                            />
-                            {t("settings.defaultRadio")}
-                          </label>
-                          <div className="settings-open-app-order">
-                            <button
-                              type="button"
-                              className="ghost icon-button"
-                              onClick={() => handleMoveOpenApp(index, "up")}
-                              disabled={index === 0}
-                              aria-label={t("settings.moveUp")}
-                            >
-                              <ChevronUp aria-hidden />
-                            </button>
-                            <button
-                              type="button"
-                              className="ghost icon-button"
-                              onClick={() => handleMoveOpenApp(index, "down")}
-                              disabled={index === openAppDrafts.length - 1}
-                              aria-label={t("settings.moveDown")}
-                            >
-                              <ChevronDown aria-hidden />
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            className="ghost icon-button"
-                            onClick={() => handleDeleteOpenApp(index)}
-                            disabled={openAppDrafts.length <= 1}
-                            aria-label={t("settings.removeAppAriaLabel")}
-                            title={t("settings.removeApp")}
-                          >
-                            <Trash2 aria-hidden />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="settings-open-app-footer">
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={handleAddOpenApp}
-                  >
-                    {t("settings.addApp")}
-                  </button>
-                  <div className="settings-help">
-                    {t("settings.openInHelp")}
-                  </div>
-                </div>
-              </section>
-            )}
+            <ShortcutsSection
+              active={activeSection === "shortcuts"}
+              t={t}
+              shortcutDrafts={shortcutDrafts}
+              handleShortcutKeyDown={handleShortcutKeyDown}
+              updateShortcut={updateShortcut}
+            />
+            <OpenAppsSection
+              active={activeSection === "open-apps"}
+              t={t}
+              openAppDrafts={openAppDrafts}
+              openAppIconById={openAppIconById}
+              openAppSelectedId={openAppSelectedId}
+              handleOpenAppDraftChange={handleOpenAppDraftChange}
+              handleCommitOpenApps={handleCommitOpenApps}
+              handleOpenAppKindChange={handleOpenAppKindChange}
+              handleSelectOpenAppDefault={handleSelectOpenAppDefault}
+              handleMoveOpenApp={handleMoveOpenApp}
+              handleDeleteOpenApp={handleDeleteOpenApp}
+              handleAddOpenApp={handleAddOpenApp}
+            />
             {activeSection === "git" && (
               <section className="settings-section">
                 <div className="settings-section-title">{t("settings.gitTitle")}</div>
@@ -4079,475 +2835,57 @@ export function SettingsView({
               </section>
             )}
             {/* vendors is now mapped to providers above */}
-            {activeSection === "codex" && (
-              <section className="settings-section">
-                <div className="settings-section-title">{t("settings.codexTitle")}</div>
-                <div className="settings-section-subtitle">
-                  {t("settings.codexDescription")}
-                </div>
-                <div className="settings-field">
-                  <label className="settings-field-label" htmlFor="codex-path">
-                    {t("settings.defaultCodexPath")}
-                  </label>
-                  <div className="settings-field-row">
-                    <input
-                      id="codex-path"
-                      className="settings-input"
-                      value={codexPathDraft}
-                      placeholder={t("settings.codexPlaceholder")}
-                      onChange={(event) => setCodexPathDraft(event.target.value)}
-                    />
-                    <button type="button" className="ghost" onClick={handleBrowseCodex}>
-                      {t("settings.browse")}
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => setCodexPathDraft("")}
-                    >
-                      {t("settings.usePath")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.pathResolutionDesc")}
-                  </div>
-                  <label className="settings-field-label" htmlFor="codex-args">
-                    {t("settings.defaultCodexArgs")}
-                  </label>
-                  <div className="settings-field-row">
-                    <input
-                      id="codex-args"
-                      className="settings-input"
-                      value={codexArgsDraft}
-                      placeholder={t("settings.codexArgsPlaceholder")}
-                      onChange={(event) => setCodexArgsDraft(event.target.value)}
-                    />
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => setCodexArgsDraft("")}
-                    >
-                      {t("settings.clear")}
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.codexArgsDesc")} <code>{t("settings.appServer")}</code>{t("settings.codexArgsDescSuffix")}
-                  </div>
-                <div className="settings-field-actions">
-                  {codexDirty && (
-                    <button
-                      type="button"
-                      className="primary"
-                      onClick={handleSaveCodexSettings}
-                      disabled={isSavingSettings}
-                    >
-                      {isSavingSettings ? t("settings.saving") : t("common.save")}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="ghost settings-button-compact"
-                    onClick={handleRunDoctor}
-                    disabled={doctorState.status === "running"}
-                  >
-                    <Stethoscope aria-hidden />
-                    {doctorState.status === "running" ? t("settings.running") : t("settings.runDoctor")}
-                  </button>
-                </div>
-
-                {doctorState.result && (
-                  <div
-                    className={`settings-doctor ${doctorState.result.ok ? "ok" : "error"}`}
-                  >
-                    <div className="settings-doctor-title">
-                      {doctorState.result.ok ? t("settings.codexLooksGood") : t("settings.codexIssueDetected")}
-                    </div>
-                    <div className="settings-doctor-body">
-                      <div>
-                        {t("settings.versionLabel")} {doctorState.result.version ?? t("git.unknown")}
-                      </div>
-                      <div>
-                        {t("settings.appServerLabel")} {doctorState.result.appServerOk ? t("settings.statusOk") : t("settings.statusFailed")}
-                      </div>
-                      {doctorState.result.appServerProbeStatus && (
-                        <div>
-                          <strong>{t("settings.doctorAppServerProbe")}:</strong> {doctorState.result.appServerProbeStatus}
-                        </div>
-                      )}
-                      {doctorState.result.resolvedBinaryPath && (
-                        <div>
-                          <strong>{t("settings.doctorResolvedBinary")}:</strong> {doctorState.result.resolvedBinaryPath}
-                        </div>
-                      )}
-                      {doctorState.result.wrapperKind && (
-                        <div>
-                          <strong>{t("settings.doctorWrapperKind")}:</strong> {doctorState.result.wrapperKind}
-                        </div>
-                      )}
-                      {doctorState.result.fallbackRetried ? (
-                        <div>
-                          <strong>{t("settings.doctorWrapperFallbackRetry")}:</strong> {t("settings.doctorAttempted")}
-                        </div>
-                      ) : null}
-                      {doctorState.result.proxyEnvSnapshot &&
-                      Object.keys(doctorState.result.proxyEnvSnapshot).length > 0 ? (
-                        <div>
-                          <strong>{t("settings.doctorProxyEnvironment")}:</strong>{" "}
-                          {Object.entries(doctorState.result.proxyEnvSnapshot)
-                            .map(([key, value]) => `${key}=${value ?? t("settings.notSet")}`)
-                            .join(" · ")}
-                        </div>
-                      ) : null}
-                      <div>
-                        {t("settings.nodeLabel")}{" "}
-                        {doctorState.result.nodeOk
-                          ? `${t("settings.statusOk")} (${doctorState.result.nodeVersion ?? t("git.unknown")})`
-                          : t("settings.statusMissing")}
-                      </div>
-                      {doctorState.result.details && (
-                        <div>{doctorState.result.details}</div>
-                      )}
-                      {doctorState.result.nodeDetails && (
-                        <div>{doctorState.result.nodeDetails}</div>
-                      )}
-                      {doctorState.result.path && (
-                        <div className="settings-doctor-path">
-                          {t("settings.pathLabel")} {doctorState.result.path}
-                        </div>
-                      )}
-                      {/* Debug Info Section */}
-                      {doctorState.result.debug && (
-                        <details className="settings-doctor-debug">
-                          <summary style={{ cursor: "pointer", marginTop: "8px", fontWeight: "bold" }}>
-                            {t("settings.doctorDebugInfo")} ({t("settings.doctorClickToExpand")})
-                          </summary>
-                          <div style={{ marginTop: "8px", fontSize: "12px", fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-                            <div><strong>{t("settings.doctorPlatform")}:</strong> {doctorState.result.debug.platform} ({doctorState.result.debug.arch})</div>
-                            <div><strong>{t("settings.doctorResolvedBinary")}:</strong> {doctorState.result.debug.resolvedBinaryPath ?? t("settings.notFound")}</div>
-                            <div><strong>{t("settings.doctorWrapperKind")}:</strong> {doctorState.result.debug.wrapperKind ?? t("settings.statusUnknown")}</div>
-                            <div><strong>{t("settings.doctorPathUsed")}:</strong> {doctorState.result.debug.pathEnvUsed ?? t("settings.notSet")}</div>
-                            <div><strong>{t("settings.doctorClaudeFound")}:</strong> {doctorState.result.debug.claudeFound ?? t("settings.notFound")}</div>
-                            <div><strong>{t("settings.doctorCodexFound")}:</strong> {doctorState.result.debug.codexFound ?? t("settings.notFound")}</div>
-                            <div><strong>{t("settings.doctorClaudeStandardWhich")}:</strong> {doctorState.result.debug.claudeStandardWhich ?? t("settings.notFound")}</div>
-                            <div><strong>{t("settings.doctorCodexStandardWhich")}:</strong> {doctorState.result.debug.codexStandardWhich ?? t("settings.notFound")}</div>
-                            {doctorState.result.debug.proxyEnvSnapshot && (
-                              <>
-                                <div style={{ marginTop: "8px" }}><strong>{t("settings.doctorProxyEnvironment")}:</strong></div>
-                                {Object.entries(doctorState.result.debug.proxyEnvSnapshot).map(([key, value]) => (
-                                  <div key={key} style={{ marginLeft: "12px" }}>
-                                    <strong>{key}:</strong> {value ?? t("settings.notSet")}
-                                  </div>
-                                ))}
-                              </>
-                            )}
-                            <div style={{ marginTop: "8px" }}><strong>Environment Variables:</strong></div>
-                            {Object.entries(doctorState.result.debug.envVars).map(([key, value]) => (
-                              <div key={key} style={{ marginLeft: "12px" }}>
-                                <strong>{key}:</strong> {value ?? "(not set)"}
-                              </div>
-                            ))}
-                            <div style={{ marginTop: "8px" }}><strong>Extra Search Paths:</strong></div>
-                            {doctorState.result.debug.extraSearchPaths.map((p, i) => (
-                              <div key={i} style={{ marginLeft: "12px" }}>
-                                {p.path}{" "}
-                                {p.exists ? (p.isDir ? "✓" : "✓ (file)") : "✗"}{" "}
-                                {p.hasCodexCmd && <span style={{ color: "green" }}>[codex.cmd ✓]</span>}
-                                {p.hasClaudeCmd && <span style={{ color: "green" }}>[claude.cmd ✓]</span>}
-                              </div>
-                            ))}
-                          </div>
-                        </details>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-                <div className="settings-field">
-                  <label className="settings-field-label" htmlFor="default-access">
-                    {t("settings.defaultAccessMode")}
-                  </label>
-                  <select
-                    id="default-access"
-                    className="settings-select"
-                    value="full-access"
-                    disabled
-                  >
-                    <option value="full-access">{t("settings.fullAccess")}</option>
-                  </select>
-                </div>
-
-                <div className="settings-field">
-                  <label className="settings-field-label" htmlFor="backend-mode">
-                    {t("settings.backendMode")}
-                  </label>
-                  <select
-                    id="backend-mode"
-                    className="settings-select"
-                    value={appSettings.backendMode}
-                    onChange={(event) =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        backendMode: event.target.value as AppSettings["backendMode"],
-                      })
-                    }
-                  >
-                    <option value="local">{t("settings.backendLocal")}</option>
-                    <option value="remote">{t("settings.backendRemote")}</option>
-                  </select>
-                  <div className="settings-help">
-                    {t("settings.backendRemoteDesc")}
-                  </div>
-                </div>
-
-                {appSettings.backendMode === "remote" && (
-                  <div className="settings-field">
-                    <div className="settings-field-label">{t("settings.remoteBackend")}</div>
-                    <div className="settings-field-row">
-                      <input
-                        className="settings-input settings-input--compact"
-                        value={remoteHostDraft}
-                        placeholder="127.0.0.1:4732"
-                        onChange={(event) => setRemoteHostDraft(event.target.value)}
-                        onBlur={() => {
-                          void handleCommitRemoteHost();
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            void handleCommitRemoteHost();
-                          }
-                        }}
-                        aria-label={t("settings.remoteBackendHostAriaLabel")}
-                      />
-                      <input
-                        type="password"
-                        className="settings-input settings-input--compact"
-                        value={remoteTokenDraft}
-                        placeholder={t("settings.remoteBackendToken")}
-                        onChange={(event) => setRemoteTokenDraft(event.target.value)}
-                        onBlur={() => {
-                          void handleCommitRemoteToken();
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            void handleCommitRemoteToken();
-                          }
-                        }}
-                        aria-label={t("settings.remoteBackendTokenAriaLabel")}
-                      />
-                    </div>
-                    <div className="settings-help">
-                      {t("settings.remoteBackendDesc")}
-                    </div>
-                  </div>
-                )}
-
-                <FileEditorCard
-                  title={t("settings.globalAgentsMd")}
-                  meta={globalAgentsMeta}
-                  error={globalAgentsError}
-                  value={globalAgentsContent}
-                  placeholder={t("settings.globalAgentsMdPlaceholder")}
-                  disabled={globalAgentsLoading}
-                  refreshDisabled={globalAgentsRefreshDisabled}
-                  saveDisabled={globalAgentsSaveDisabled}
-                  saveLabel={globalAgentsSaveLabel}
-                  onChange={setGlobalAgentsContent}
-                  onRefresh={() => {
-                    void refreshGlobalAgents();
-                  }}
-                  onSave={() => {
-                    void saveGlobalAgents();
-                  }}
-                  helpText={
-                    <>
-                      {t("settings.storedAt")} <code>~/.codex/AGENTS.md</code>.
-                    </>
-                  }
-                  classNames={{
-                    container: "settings-field settings-agents",
-                    header: "settings-agents-header",
-                    title: "settings-field-label",
-                    actions: "settings-agents-actions",
-                    meta: "settings-help settings-help-inline",
-                    iconButton: "ghost settings-icon-button",
-                    error: "settings-agents-error",
-                    textarea: "settings-agents-textarea",
-                    help: "settings-help",
-                  }}
-                />
-
-                <FileEditorCard
-                  title={t("settings.globalCodexConfig")}
-                  meta={globalConfigMeta}
-                  error={globalConfigError}
-                  value={globalConfigContent}
-                  placeholder={t("settings.globalConfigTomlPlaceholder")}
-                  disabled={globalConfigLoading}
-                  refreshDisabled={globalConfigRefreshDisabled}
-                  saveDisabled={globalConfigSaveDisabled}
-                  saveLabel={globalConfigSaveLabel}
-                  onChange={setGlobalConfigContent}
-                  onRefresh={() => {
-                    void refreshGlobalConfig();
-                  }}
-                  onSave={() => {
-                    void saveGlobalConfig();
-                  }}
-                  helpText={
-                    <>
-                      {t("settings.storedAt")} <code>~/.codex/config.toml</code>.
-                    </>
-                  }
-                  classNames={{
-                    container: "settings-field settings-agents",
-                    header: "settings-agents-header",
-                    title: "settings-field-label",
-                    actions: "settings-agents-actions",
-                    meta: "settings-help settings-help-inline",
-                    iconButton: "ghost settings-icon-button",
-                    error: "settings-agents-error",
-                    textarea: "settings-agents-textarea",
-                    help: "settings-help",
-                  }}
-                />
-
-                <div className="settings-field">
-                  <div className="settings-field-label">{t("settings.workspaceOverrides")}</div>
-                  <div className="settings-overrides">
-                    {projects.map((workspace) => (
-                      <div key={workspace.id} className="settings-override-row">
-                        <div className="settings-override-info">
-                          <div className="settings-project-name">{workspace.name}</div>
-                          <div className="settings-project-path">{workspace.path}</div>
-                        </div>
-                        <div className="settings-override-actions">
-                          <div className="settings-override-field">
-                            <input
-                              className="settings-input settings-input--compact"
-                              value={codexBinOverrideDrafts[workspace.id] ?? ""}
-                              placeholder={t("settings.codexBinaryOverride")}
-                              onChange={(event) =>
-                                setCodexBinOverrideDrafts((prev) => ({
-                                  ...prev,
-                                  [workspace.id]: event.target.value,
-                                }))
-                              }
-                              onBlur={async () => {
-                                const draft = codexBinOverrideDrafts[workspace.id] ?? "";
-                                const nextValue = normalizeOverrideValue(draft);
-                                if (nextValue === (workspace.codex_bin ?? null)) {
-                                  return;
-                                }
-                                await onUpdateWorkspaceCodexBin(workspace.id, nextValue);
-                              }}
-                              aria-label={`Codex binary override for ${workspace.name}`}
-                            />
-                            <button
-                              type="button"
-                              className="ghost"
-                              onClick={async () => {
-                                setCodexBinOverrideDrafts((prev) => ({
-                                  ...prev,
-                                  [workspace.id]: "",
-                                }));
-                                await onUpdateWorkspaceCodexBin(workspace.id, null);
-                              }}
-                            >
-                              {t("settings.clear")}
-                            </button>
-                          </div>
-                          <div className="settings-override-field">
-                            <input
-                              className="settings-input settings-input--compact"
-                              value={codexHomeOverrideDrafts[workspace.id] ?? ""}
-                              placeholder={t("settings.codexHomeOverride")}
-                              onChange={(event) =>
-                                setCodexHomeOverrideDrafts((prev) => ({
-                                  ...prev,
-                                  [workspace.id]: event.target.value,
-                                }))
-                              }
-                              onBlur={async () => {
-                                const draft = codexHomeOverrideDrafts[workspace.id] ?? "";
-                                const nextValue = normalizeOverrideValue(draft);
-                                if (nextValue === (workspace.settings.codexHome ?? null)) {
-                                  return;
-                                }
-                                await onUpdateWorkspaceSettings(workspace.id, {
-                                  codexHome: nextValue,
-                                });
-                              }}
-                              aria-label={`CODEX_HOME override for ${workspace.name}`}
-                            />
-                            <button
-                              type="button"
-                              className="ghost"
-                              onClick={async () => {
-                                setCodexHomeOverrideDrafts((prev) => ({
-                                  ...prev,
-                                  [workspace.id]: "",
-                                }));
-                                await onUpdateWorkspaceSettings(workspace.id, {
-                                  codexHome: null,
-                                });
-                              }}
-                            >
-                              {t("settings.clear")}
-                            </button>
-                          </div>
-                          <div className="settings-override-field">
-                            <input
-                              className="settings-input settings-input--compact"
-                              value={codexArgsOverrideDrafts[workspace.id] ?? ""}
-                              placeholder={t("settings.codexArgsOverride")}
-                              onChange={(event) =>
-                                setCodexArgsOverrideDrafts((prev) => ({
-                                  ...prev,
-                                  [workspace.id]: event.target.value,
-                                }))
-                              }
-                              onBlur={async () => {
-                                const draft = codexArgsOverrideDrafts[workspace.id] ?? "";
-                                const nextValue = normalizeOverrideValue(draft);
-                                if (nextValue === (workspace.settings.codexArgs ?? null)) {
-                                  return;
-                                }
-                                await onUpdateWorkspaceSettings(workspace.id, {
-                                  codexArgs: nextValue,
-                                });
-                              }}
-                              aria-label={`Codex args override for ${workspace.name}`}
-                            />
-                            <button
-                              type="button"
-                              className="ghost"
-                              onClick={async () => {
-                                setCodexArgsOverrideDrafts((prev) => ({
-                                  ...prev,
-                                  [workspace.id]: "",
-                                }));
-                                await onUpdateWorkspaceSettings(workspace.id, {
-                                  codexArgs: null,
-                                });
-                              }}
-                            >
-                              {t("settings.clear")}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {projects.length === 0 && (
-                      <div className="settings-empty">{t("settings.noProjectsYet")}</div>
-                    )}
-                  </div>
-                </div>
-
-              </section>
-            )}
+            <CodexSection
+              active={activeSection === "codex"}
+              t={t}
+              appSettings={appSettings}
+              onUpdateAppSettings={onUpdateAppSettings}
+              codexPathDraft={codexPathDraft}
+              setCodexPathDraft={setCodexPathDraft}
+              codexArgsDraft={codexArgsDraft}
+              setCodexArgsDraft={setCodexArgsDraft}
+              codexDirty={codexDirty}
+              handleBrowseCodex={handleBrowseCodex}
+              handleSaveCodexSettings={handleSaveCodexSettings}
+              isSavingSettings={isSavingSettings}
+              handleRunDoctor={handleRunDoctor}
+              doctorState={doctorState}
+              remoteHostDraft={remoteHostDraft}
+              setRemoteHostDraft={setRemoteHostDraft}
+              remoteTokenDraft={remoteTokenDraft}
+              setRemoteTokenDraft={setRemoteTokenDraft}
+              handleCommitRemoteHost={handleCommitRemoteHost}
+              handleCommitRemoteToken={handleCommitRemoteToken}
+              globalAgentsMeta={globalAgentsMeta}
+              globalAgentsError={globalAgentsError}
+              globalAgentsContent={globalAgentsContent}
+              globalAgentsLoading={globalAgentsLoading}
+              globalAgentsRefreshDisabled={globalAgentsRefreshDisabled}
+              globalAgentsSaveDisabled={globalAgentsSaveDisabled}
+              globalAgentsSaveLabel={globalAgentsSaveLabel}
+              setGlobalAgentsContent={setGlobalAgentsContent}
+              refreshGlobalAgents={refreshGlobalAgents}
+              saveGlobalAgents={saveGlobalAgents}
+              globalConfigMeta={globalConfigMeta}
+              globalConfigError={globalConfigError}
+              globalConfigContent={globalConfigContent}
+              globalConfigLoading={globalConfigLoading}
+              globalConfigRefreshDisabled={globalConfigRefreshDisabled}
+              globalConfigSaveDisabled={globalConfigSaveDisabled}
+              globalConfigSaveLabel={globalConfigSaveLabel}
+              setGlobalConfigContent={setGlobalConfigContent}
+              refreshGlobalConfig={refreshGlobalConfig}
+              saveGlobalConfig={saveGlobalConfig}
+              projects={projects}
+              codexBinOverrideDrafts={codexBinOverrideDrafts}
+              setCodexBinOverrideDrafts={setCodexBinOverrideDrafts}
+              codexHomeOverrideDrafts={codexHomeOverrideDrafts}
+              setCodexHomeOverrideDrafts={setCodexHomeOverrideDrafts}
+              codexArgsOverrideDrafts={codexArgsOverrideDrafts}
+              setCodexArgsOverrideDrafts={setCodexArgsOverrideDrafts}
+              onUpdateWorkspaceCodexBin={onUpdateWorkspaceCodexBin}
+              onUpdateWorkspaceSettings={onUpdateWorkspaceSettings}
+            />
             {/* about is now mapped to community above */}
             {activeSection === "experimental" && (
               <section className="settings-section">

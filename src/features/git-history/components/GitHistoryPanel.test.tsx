@@ -117,6 +117,11 @@ vi.mock("../../../services/tauri", () => ({
     totalAdditions: 0,
     totalDeletions: 0,
   })),
+  getGitDiffs: vi.fn(async () => ({
+    files: [],
+    totalAdditions: 0,
+    totalDeletions: 0,
+  })),
   getGitCommitDetails: vi.fn(async () => ({
     sha: "a".repeat(40),
     summary: "feat: one",
