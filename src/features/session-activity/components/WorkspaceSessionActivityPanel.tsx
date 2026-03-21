@@ -590,18 +590,17 @@ export function WorkspaceSessionActivityPanel({
     [viewModel.timeline],
   );
 
-  const tabItems: { id: ActivityTab; label: string }[] = [
-    { id: "all", label: t("activityPanel.tabs.all") },
-    { id: "command", label: t("activityPanel.tabs.command") },
-    { id: "fileChange", label: t("activityPanel.tabs.file") },
-    { id: "task", label: t("activityPanel.tabs.task") },
-    { id: "explore", label: t("activityPanel.tabs.explore") },
-    { id: "reasoning", label: t("activityPanel.tabs.reasoning") },
-  ];
-  const visibleTabItems = useMemo(
-    () => tabItems.filter((tab) => tabCounts[tab.id] > 0),
-    [tabCounts, tabItems],
-  );
+  const visibleTabItems = useMemo(() => {
+    const tabItems: { id: ActivityTab; label: string }[] = [
+      { id: "all", label: t("activityPanel.tabs.all") },
+      { id: "command", label: t("activityPanel.tabs.command") },
+      { id: "fileChange", label: t("activityPanel.tabs.file") },
+      { id: "task", label: t("activityPanel.tabs.task") },
+      { id: "explore", label: t("activityPanel.tabs.explore") },
+      { id: "reasoning", label: t("activityPanel.tabs.reasoning") },
+    ];
+    return tabItems.filter((tab) => tabCounts[tab.id] > 0);
+  }, [tabCounts, t]);
   const relatedSessionSummaries = useMemo(
     () => viewModel.sessionSummaries.filter((session) => session.sessionRole === "child"),
     [viewModel.sessionSummaries],

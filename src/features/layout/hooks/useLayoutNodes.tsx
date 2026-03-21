@@ -593,6 +593,7 @@ function toConversationEngine(engine: EngineType | undefined): ConversationEngin
 
 export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
   const { t } = useTranslation();
+  const onOpenFile = options.onOpenFile;
   const activeThreadStatus = options.activeThreadId
     ? options.threadStatusById[options.activeThreadId] ?? null
     : null;
@@ -673,9 +674,9 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       location?: EditorNavigationLocation,
       highlightOptions?: OpenFileOptions,
     ) => {
-      options.onOpenFile(path, location, highlightOptions);
+      onOpenFile(path, location, highlightOptions);
     },
-    [options.onOpenFile],
+    [onOpenFile],
   );
   const groupedWorkspacesForHeader = useMemo(() => {
     const worktreesByParent = new Map<string, WorkspaceInfo[]>();
