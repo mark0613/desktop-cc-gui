@@ -10,6 +10,13 @@ import type {
 } from "../../../types";
 import { normalizeItem, prepareThreadItems, upsertItem } from "../../../utils/threadItems";
 import { settlePlanInProgressSteps } from "../utils/threadNormalize";
+import {
+  isIncrementalDerivationEnabled,
+  isReducerNoopGuardEnabled,
+} from "../utils/realtimePerfFlags";
+
+const REDUCER_NOOP_GUARD_ENABLED = isReducerNoopGuardEnabled();
+const INCREMENTAL_DERIVATION_ENABLED = isIncrementalDerivationEnabled();
 
 function formatThreadName(text: string) {
   const trimmed = text.trim();
@@ -1804,6 +1811,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       const lastDurationMs = previous?.lastDurationMs ?? null;
       const heartbeatPulse = previous?.heartbeatPulse ?? 0;
       if (action.isProcessing) {
+        if (REDUCER_NOOP_GUARD_ENABLED && wasProcessing) {
+          return state;
+        }
         return {
           ...state,
           threadStatusById: {
@@ -1820,6 +1830,15 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             },
           },
         };
+      }
+      if (
+        REDUCER_NOOP_GUARD_ENABLED &&
+        (!previous ||
+          (!wasProcessing &&
+            previous.processingStartedAt == null &&
+            (previous.heartbeatPulse ?? 0) === 0))
+      ) {
+        return state;
       }
       const nextDuration =
         wasProcessing && startedAt
@@ -2075,10 +2094,18 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           return state;
         }
         const nextId = shouldCanonicalizeLegacyId ? segmentedItemId : existing.id;
+        const nextText = mergeAgentMessageText(existing.text, action.delta);
+        if (
+          INCREMENTAL_DERIVATION_ENABLED &&
+          nextId === existing.id &&
+          nextText === existing.text
+        ) {
+          return state;
+        }
         list[index] = {
           ...existing,
           id: nextId,
-          text: mergeAgentMessageText(existing.text, action.delta),
+          text: nextText,
         };
       } else {
         list.push({
@@ -2533,13 +2560,22 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
               summary: "",
               content: "",
             };
+      const nextSummary = mergeReasoningTextForThread(
+        action.threadId,
+        "summary" in base ? base.summary : "",
+        action.delta,
+      );
+      if (
+        INCREMENTAL_DERIVATION_ENABLED &&
+        index >= 0 &&
+        "summary" in base &&
+        nextSummary === base.summary
+      ) {
+        return state;
+      }
       const updated: ConversationItem = {
         ...base,
-        summary: mergeReasoningTextForThread(
-          action.threadId,
-          "summary" in base ? base.summary : "",
-          action.delta,
-        ),
+        summary: nextSummary,
       } as ConversationItem;
       const next = index >= 0 ? [...list] : [...list, updated];
       if (index >= 0) {
@@ -2568,9 +2604,18 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
               summary: "",
               content: "",
             };
+      const nextSummary = addSummaryBoundary("summary" in base ? base.summary : "");
+      if (
+        INCREMENTAL_DERIVATION_ENABLED &&
+        index >= 0 &&
+        "summary" in base &&
+        nextSummary === base.summary
+      ) {
+        return state;
+      }
       const updated: ConversationItem = {
         ...base,
-        summary: addSummaryBoundary("summary" in base ? base.summary : ""),
+        summary: nextSummary,
       } as ConversationItem;
       const next = index >= 0 ? [...list] : [...list, updated];
       if (index >= 0) {
@@ -2619,13 +2664,22 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
               summary: "",
               content: "",
             };
+      const nextContent = mergeReasoningTextForThread(
+        action.threadId,
+        "content" in base ? base.content : "",
+        action.delta,
+      );
+      if (
+        INCREMENTAL_DERIVATION_ENABLED &&
+        index >= 0 &&
+        "content" in base &&
+        nextContent === base.content
+      ) {
+        return state;
+      }
       const updated: ConversationItem = {
         ...base,
-        content: mergeReasoningTextForThread(
-          action.threadId,
-          "content" in base ? base.content : "",
-          action.delta,
-        ),
+        content: nextContent,
       } as ConversationItem;
       const next = index >= 0 ? [...list] : [...list, updated];
       if (index >= 0) {
@@ -2678,9 +2732,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         return state;
       }
       const existing = list[index];
+      const nextOutput = mergeStreamingText(existing.output ?? "", action.delta);
+      if (
+        INCREMENTAL_DERIVATION_ENABLED &&
+        nextOutput === (existing.output ?? "")
+      ) {
+        return state;
+      }
       const updated: ConversationItem = {
         ...existing,
-        output: mergeStreamingText(existing.output ?? "", action.delta),
+        output: nextOutput,
       } as ConversationItem;
       const next = [...list];
       next[index] = updated;

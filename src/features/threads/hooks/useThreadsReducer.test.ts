@@ -1016,6 +1016,47 @@ describe("threadReducer", () => {
     expect(stopped.threadStatusById["thread-1"]?.heartbeatPulse ?? 0).toBe(0);
   });
 
+  it("keeps state identity for repeated markProcessing true updates", () => {
+    const started = threadReducer(initialState, {
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: true,
+      timestamp: 1000,
+    });
+    const repeated = threadReducer(started, {
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: true,
+      timestamp: 1200,
+    });
+    expect(repeated).toBe(started);
+  });
+
+  it("keeps state identity when duplicate tool output delta does not change content", () => {
+    const baseTool: ConversationItem = {
+      id: "cmd-1",
+      kind: "tool",
+      toolType: "commandExecution",
+      title: "Command",
+      detail: "",
+      status: "running",
+      output: "hello",
+    };
+    const baseState: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [baseTool],
+      },
+    };
+    const next = threadReducer(baseState, {
+      type: "appendToolOutput",
+      threadId: "thread-1",
+      itemId: "cmd-1",
+      delta: "hello",
+    });
+    expect(next).toBe(baseState);
+  });
+
   it("tracks request user input queue", () => {
     const request = {
       workspace_id: "ws-1",
