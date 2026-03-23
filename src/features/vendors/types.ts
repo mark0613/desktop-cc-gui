@@ -101,7 +101,31 @@ export interface CodexProviderConfig {
   customModels?: CodexCustomModel[];
 }
 
-export type VendorTab = "claude" | "codex";
+export const GEMINI_AUTH_MODES = [
+  "custom",
+  "login_google",
+  "gemini_api_key",
+  "vertex_adc",
+  "vertex_service_account",
+  "vertex_api_key",
+] as const;
+
+export type GeminiAuthMode = (typeof GEMINI_AUTH_MODES)[number];
+
+export interface GeminiVendorDraft {
+  enabled: boolean;
+  envText: string;
+  authMode: GeminiAuthMode;
+  apiBaseUrl: string;
+  geminiApiKey: string;
+  googleApiKey: string;
+  googleCloudProject: string;
+  googleCloudLocation: string;
+  googleApplicationCredentials: string;
+  model: string;
+}
+
+export type VendorTab = "claude" | "codex" | "gemini";
 
 export interface ClaudeProviderPreset {
   id: string;

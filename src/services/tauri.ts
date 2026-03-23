@@ -2165,6 +2165,37 @@ export async function switchCodexProvider(id: string): Promise<void> {
   return invoke("vendor_switch_codex_provider", { id });
 }
 
+export interface GeminiVendorSettings {
+  enabled: boolean;
+  env: Record<string, string>;
+  authMode: string;
+}
+
+export interface GeminiVendorPreflightCheck {
+  id: string;
+  label: string;
+  status: "pass" | "fail" | string;
+  message: string;
+}
+
+export interface GeminiVendorPreflightResult {
+  checks: GeminiVendorPreflightCheck[];
+}
+
+export async function getGeminiVendorSettings(): Promise<GeminiVendorSettings> {
+  return invoke<GeminiVendorSettings>("vendor_get_gemini_settings");
+}
+
+export async function saveGeminiVendorSettings(
+  settings: GeminiVendorSettings,
+): Promise<void> {
+  return invoke("vendor_save_gemini_settings", { settings });
+}
+
+export async function getGeminiVendorPreflight(): Promise<GeminiVendorPreflightResult> {
+  return invoke<GeminiVendorPreflightResult>("vendor_gemini_preflight");
+}
+
 // ==================== Agent API ====================
 
 export async function listAgentConfigs(): Promise<AgentConfig[]> {

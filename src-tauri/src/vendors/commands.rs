@@ -1,10 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::process::Command;
+use tokio::time::timeout;
 
+use crate::backend::app_server::build_codex_path_env;
 use crate::types::{CodexProviderConfig, ProviderConfig};
+use crate::utils::async_command;
 
 // ==================== Claude Settings Sync ====================
 
@@ -40,6 +45,16 @@ const LOCAL_PROVIDER_MODEL_MAPPING_KEYS: &[&str] = &[
     "ANTHROPIC_DEFAULT_SONNET_MODEL",
     "ANTHROPIC_DEFAULT_OPUS_MODEL",
 ];
+const GEMINI_PREFLIGHT_TIMEOUT: Duration = Duration::from_secs(8);
+const GEMINI_DEFAULT_AUTH_MODE: &str = "login_google";
+
+fn default_enabled_true() -> bool {
+    true
+}
+
+fn default_gemini_auth_mode() -> String {
+    GEMINI_DEFAULT_AUTH_MODE.to_string()
+}
 
 fn claude_settings_path() -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
@@ -194,6 +209,8 @@ struct CodemossConfig {
     claude: ClaudeSection,
     #[serde(default)]
     codex: CodexSection,
+    #[serde(default)]
+    gemini: GeminiSection,
     /// Preserve all other top-level fields (mcpServers, agents, ui, etc.)
     #[serde(flatten)]
     extra: HashMap<String, Value>,
@@ -215,6 +232,26 @@ struct CodexSection {
     current: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct GeminiSection {
+    #[serde(default = "default_enabled_true")]
+    enabled: bool,
+    #[serde(default)]
+    env: HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    auth_mode: Option<String>,
+}
+
+impl Default for GeminiSection {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            env: HashMap::new(),
+            auth_mode: Some(default_gemini_auth_mode()),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ClaudeCurrentConfig {
@@ -228,6 +265,32 @@ pub(crate) struct ClaudeCurrentConfig {
     provider_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     provider_name: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GeminiVendorSettings {
+    #[serde(default = "default_enabled_true")]
+    pub(crate) enabled: bool,
+    #[serde(default)]
+    pub(crate) env: BTreeMap<String, String>,
+    #[serde(default = "default_gemini_auth_mode")]
+    pub(crate) auth_mode: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GeminiVendorPreflightCheck {
+    pub(crate) id: String,
+    pub(crate) label: String,
+    pub(crate) status: String,
+    pub(crate) message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GeminiVendorPreflightResult {
+    pub(crate) checks: Vec<GeminiVendorPreflightCheck>,
 }
 
 // ==================== Helpers ====================
@@ -409,6 +472,107 @@ fn codex_provider_to_value(provider: &CodexProviderConfig) -> Value {
         }
     }
     Value::Object(map)
+}
+
+fn normalize_gemini_auth_mode(mode: &str) -> String {
+    let normalized = mode.trim().to_lowercase();
+    match normalized.as_str() {
+        "custom"
+        | "login_google"
+        | "gemini_api_key"
+        | "vertex_adc"
+        | "vertex_service_account"
+        | "vertex_api_key" => normalized,
+        _ => GEMINI_DEFAULT_AUTH_MODE.to_string(),
+    }
+}
+
+fn sanitize_env_map(input: BTreeMap<String, String>) -> HashMap<String, String> {
+    let mut output = HashMap::new();
+    for (key, value) in input {
+        let normalized_key = key.trim();
+        if normalized_key.is_empty() {
+            continue;
+        }
+        output.insert(normalized_key.to_string(), value.trim().to_string());
+    }
+    output
+}
+
+async fn run_preflight_probe(
+    command_candidates: &[&str],
+    args: &[&str],
+) -> Result<String, String> {
+    let path_env = build_codex_path_env(None);
+    let mut last_error: Option<String> = None;
+
+    for candidate in command_candidates {
+        let mut cmd: Command = async_command(candidate);
+        if let Some(path) = &path_env {
+            cmd.env("PATH", path);
+        }
+        cmd.args(args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        let output = match timeout(GEMINI_PREFLIGHT_TIMEOUT, cmd.output()).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(error)) => {
+                last_error = Some(format!("{} execution failed: {}", candidate, error));
+                continue;
+            }
+            Err(_) => {
+                last_error = Some(format!("{} timed out", candidate));
+                continue;
+            }
+        };
+
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !stdout.is_empty() {
+                return Ok(stdout);
+            }
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Ok(if stderr.is_empty() {
+                "ok".to_string()
+            } else {
+                stderr
+            });
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        last_error = Some(if !stderr.is_empty() {
+            format!("{} failed: {}", candidate, stderr)
+        } else if !stdout.is_empty() {
+            format!("{} failed: {}", candidate, stdout)
+        } else {
+            format!("{} exited with status {}", candidate, output.status)
+        });
+    }
+
+    Err(last_error.unwrap_or_else(|| "command probe failed".to_string()))
+}
+
+fn build_preflight_check(
+    id: &str,
+    label: &str,
+    result: Result<String, String>,
+) -> GeminiVendorPreflightCheck {
+    match result {
+        Ok(message) => GeminiVendorPreflightCheck {
+            id: id.to_string(),
+            label: label.to_string(),
+            status: "pass".to_string(),
+            message,
+        },
+        Err(message) => GeminiVendorPreflightCheck {
+            id: id.to_string(),
+            label: label.to_string(),
+            status: "fail".to_string(),
+            message,
+        },
+    }
 }
 
 // ==================== Claude Provider Commands ====================
@@ -656,4 +820,57 @@ pub(crate) async fn vendor_switch_codex_provider(id: String) -> Result<(), Strin
     }
     config.codex.current = Some(id);
     write_config(&config)
+}
+
+// ==================== Gemini Vendor Commands ====================
+
+#[tauri::command]
+pub(crate) async fn vendor_get_gemini_settings() -> Result<GeminiVendorSettings, String> {
+    let config = read_config()?;
+    let mut env = BTreeMap::new();
+    for (key, value) in config.gemini.env {
+        let normalized_key = key.trim();
+        if normalized_key.is_empty() {
+            continue;
+        }
+        env.insert(normalized_key.to_string(), value);
+    }
+    Ok(GeminiVendorSettings {
+        enabled: config.gemini.enabled,
+        env,
+        auth_mode: config
+            .gemini
+            .auth_mode
+            .as_deref()
+            .map(normalize_gemini_auth_mode)
+            .unwrap_or_else(default_gemini_auth_mode),
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn vendor_save_gemini_settings(
+    settings: GeminiVendorSettings,
+) -> Result<(), String> {
+    let mut config = read_config()?;
+    config.gemini = GeminiSection {
+        enabled: settings.enabled,
+        env: sanitize_env_map(settings.env),
+        auth_mode: Some(normalize_gemini_auth_mode(&settings.auth_mode)),
+    };
+    write_config(&config)
+}
+
+#[tauri::command]
+pub(crate) async fn vendor_gemini_preflight() -> Result<GeminiVendorPreflightResult, String> {
+    let gemini_result = run_preflight_probe(&["gemini", "gemini.cmd"], &["--version"]).await;
+    let node_result = run_preflight_probe(&["node", "node.exe"], &["--version"]).await;
+    let npm_result = run_preflight_probe(&["npm", "npm.cmd"], &["--version"]).await;
+
+    let checks = vec![
+        build_preflight_check("gemini_version", "Gemini CLI", gemini_result),
+        build_preflight_check("node", "Node.js", node_result),
+        build_preflight_check("npm", "npm", npm_result),
+    ];
+
+    Ok(GeminiVendorPreflightResult { checks })
 }

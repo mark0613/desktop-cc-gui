@@ -814,7 +814,7 @@ const enPart1 = {
 
     // Vendor management
     vendorsTitle: "Vendor Management",
-    vendorsDescription: "Manage API vendor configurations for Claude and Codex.",
+    vendorsDescription: "Manage vendor configurations for Claude, Codex, and Gemini CLI.",
     vendor: {
       allProviders: "All Providers",
       allCodexProviders: "All Codex Providers",
@@ -904,6 +904,45 @@ const enPart1 = {
         configHint: "Configure Codex CLI connection parameters",
         authHint: "Authentication keys in JSON format",
         customModels: "Custom Models",
+      },
+      gemini: {
+        subtitle: "Google official Gemini CLI configuration",
+        enabled: "Enabled",
+        disabled: "Disabled",
+        enabledSwitch: "Gemini configuration enabled switch",
+        preflightCount: "Preflight checks: {{count}}",
+        preflightLoading: "Running Gemini environment checks...",
+        preflightEmpty: "No preflight checks yet.",
+        envVars: "Environment Variables",
+        saving: "Saving...",
+        saveEnv: "Save Environment Variables",
+        saveConfig: "Save Gemini Config",
+        authConfig: "Gemini Auth Config",
+        authConfigDescription:
+          "Aligned with Gemini CLI authentication docs, supporting custom endpoint, Google login, Gemini API Key and Vertex AI (ADC / service account / API Key).",
+        authMode: "Auth Mode",
+        modelHintDefault: "Leave empty to use system default model.",
+        viewAuthDoc: "View auth docs",
+        showKey: "Show Key",
+        hideKey: "Hide Key",
+        savedAt: "Saved ({{time}})",
+        mode: {
+          custom: "Custom Endpoint",
+          loginGoogle: "Google Login (OAuth)",
+          vertexServiceAccount: "Vertex AI (Service Account)",
+        },
+        hint: {
+          custom:
+            "Fill API URL, API Key and Model, mapped to GOOGLE_GEMINI_BASE_URL / GEMINI_API_KEY / GEMINI_MODEL.",
+          loginGoogle:
+            "Run gemini in terminal and complete Google login first; API key is not required.",
+          geminiApiKey: "Fill GEMINI_API_KEY when using Gemini API.",
+          vertexAdc:
+            "Use gcloud ADC; GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION are recommended.",
+          vertexServiceAccount:
+            "Set service account JSON path to GOOGLE_APPLICATION_CREDENTIALS.",
+          vertexApiKey: "Fill GOOGLE_API_KEY when using Vertex AI API key.",
+        },
       },
       deleteConfirm: {
         title: "Confirm Delete",

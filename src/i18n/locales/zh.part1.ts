@@ -826,7 +826,7 @@ const zhPart1 = {
 
     // 供应商管理
     vendorsTitle: "供应商管理",
-    vendorsDescription: "管理 Claude 和 Codex 的 API 供应商配置。",
+    vendorsDescription: "管理 Claude、Codex 和 Gemini CLI 的供应商配置。",
     vendor: {
       allProviders: "所有供应商",
       allCodexProviders: "所有 Codex 供应商",
@@ -913,6 +913,44 @@ const zhPart1 = {
         configHint: "配置 Codex CLI 连接参数",
         authHint: "认证密钥的 JSON 格式配置",
         customModels: "自定义模型",
+      },
+      gemini: {
+        subtitle: "Google 官方 Gemini 命令行工具配置",
+        enabled: "已启用",
+        disabled: "已停用",
+        enabledSwitch: "Gemini 配置启用开关",
+        preflightCount: "预检项：{{count}}",
+        preflightLoading: "正在检测 Gemini 运行环境...",
+        preflightEmpty: "尚未获取预检结果",
+        envVars: "环境变量",
+        saving: "保存中...",
+        saveEnv: "保存环境变量",
+        saveConfig: "保存 Gemini 配置",
+        authConfig: "Gemini 认证配置",
+        authConfigDescription:
+          "对齐 Gemini CLI 认证文档，支持自定义、Google 登录、Gemini API Key、Vertex AI（ADC / 服务账号 / API Key）。",
+        authMode: "认证方式",
+        modelHintDefault: "留空则使用系统默认模型。",
+        viewAuthDoc: "查看认证文档",
+        showKey: "显示 Key",
+        hideKey: "隐藏 Key",
+        savedAt: "已保存（{{time}}）",
+        mode: {
+          custom: "自定义接口",
+          loginGoogle: "Google 登录（OAuth）",
+          vertexServiceAccount: "Vertex AI（服务账号）",
+        },
+        hint: {
+          custom:
+            "填写 API URL、API Key 和 Model，分别映射到 GOOGLE_GEMINI_BASE_URL / GEMINI_API_KEY / GEMINI_MODEL。",
+          loginGoogle: "首次在终端运行 gemini 并完成 Google 登录；无需填写 API Key。",
+          geminiApiKey: "使用 Gemini API 时填写 GEMINI_API_KEY。",
+          vertexAdc:
+            "使用 gcloud ADC，建议填写 GOOGLE_CLOUD_PROJECT 与 GOOGLE_CLOUD_LOCATION。",
+          vertexServiceAccount:
+            "服务账号 JSON 路径写入 GOOGLE_APPLICATION_CREDENTIALS。",
+          vertexApiKey: "使用 Vertex AI API key 时填写 GOOGLE_API_KEY。",
+        },
       },
       deleteConfirm: {
         title: "确认删除",
