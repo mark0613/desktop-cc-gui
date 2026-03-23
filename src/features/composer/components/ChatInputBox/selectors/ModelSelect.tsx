@@ -101,7 +101,17 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const currentModel = models.find(m => m.id === value) || models[0];
+  const effectiveModels = useMemo(() => {
+    if (models.length > 0) {
+      return models;
+    }
+    if (value && value.trim().length > 0) {
+      return [{ id: value, label: value }];
+    }
+    return [] as ModelInfo[];
+  }, [models, value]);
+
+  const currentModel = effectiveModels.find(m => m.id === value) || effectiveModels[0];
 
   // Cache model mapping to avoid redundant localStorage reads on every render
   const modelMapping = useMemo(() => getModelMapping(), []);
@@ -192,10 +202,10 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
         ref={buttonRef}
         className="selector-button"
         onClick={handleToggle}
-        title={t('chat.currentModel', { model: getModelLabel(currentModel) })}
+        title={t('chat.currentModel', { model: currentModel ? getModelLabel(currentModel) : t('models.selectModel') })}
       >
         <ModelIcon provider={currentProvider} size={12} />
-        <span className="selector-button-text">{getModelLabel(currentModel)}</span>
+        <span className="selector-button-text">{currentModel ? getModelLabel(currentModel) : t('models.selectModel')}</span>
         <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
       </button>
 
@@ -212,7 +222,7 @@ export const ModelSelect = ({ value, onChange, models = AVAILABLE_MODELS, curren
           }}
         >
           <div className="selector-dropdown-title">{t('models.selectModel')}</div>
-          {models.map((model) => (
+          {effectiveModels.map((model) => (
             <div
               key={model.id}
               className={`selector-option ${model.id === value ? 'selected' : ''}`}

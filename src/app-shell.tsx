@@ -449,7 +449,12 @@ export function AppShell() {
 
   const handleOpenModelSettings = useCallback(
     (providerId?: string) => {
-      const target = providerId === "codex" ? "codex" : "claude";
+      const target =
+        providerId === "codex"
+          ? "codex"
+          : providerId === "gemini"
+            ? "gemini"
+            : "claude";
       requestVendorModelManager({ target, addMode: true });
       openSettings("providers");
     },
@@ -932,9 +937,6 @@ export function AppShell() {
     if (activeEngine === "codex") {
       return;
     }
-    if (activeEngine === "claude") {
-      return;
-    }
     if (engineModelsAsOptions.length === 0) {
       return;
     }
@@ -962,15 +964,12 @@ export function AppShell() {
     if (activeEngine === "codex") {
       return selectedModelId;
     }
-    if (activeEngine === "claude") {
-      return (
-        engineSelectedModelIdByType[activeEngine] ??
-        "claude-sonnet-4-6"
-      );
-    }
     const engineSelection = engineSelectedModelIdByType[activeEngine] ?? null;
     if (engineModelsAsOptions.length === 0) {
-      return null;
+      if (activeEngine === "claude") {
+        return engineSelection ?? "claude-sonnet-4-6";
+      }
+      return engineSelection;
     }
     const validModel = engineModelsAsOptions.find(
       (model) => model.id === engineSelection,
@@ -1258,8 +1257,7 @@ export function AppShell() {
     selectedEffort: resolvedEffort,
     resolvedModel,
   });
-  const threadAccessMode =
-    accessMode === "default" ? "current" : accessMode;
+  const threadAccessMode = accessMode;
 
   const {
     setActiveThreadId,

@@ -115,15 +115,51 @@ function resolveCollaborationModeIdFromPayload(
 }
 
 function normalizeAccessMode(
-  mode: AccessMode | "read-only" | "current" | "full-access" | undefined,
-): "read-only" | "current" | "full-access" | undefined {
+  mode:
+    | AccessMode
+    | "default"
+    | "read-only"
+    | "current"
+    | "full-access"
+    | undefined,
+  engine: EngineType,
+): "default" | "read-only" | "current" | "full-access" | undefined {
   if (mode === undefined) {
     return undefined;
   }
   if (mode === "default") {
-    return "current";
+    // Codex does not expose a dedicated "default" policy, so we keep legacy behavior there.
+    return engine === "codex" ? "current" : "default";
   }
   return mode;
+}
+
+function isLikelyForeignModelForGemini(modelId: string): boolean {
+  const normalized = modelId.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  // Allow custom Gemini aliases like "[L]gemini-3-pro-preview" even if they
+  // are wrapped by proxy-specific prefixes.
+  if (normalized.includes("gemini")) {
+    return false;
+  }
+  if (normalized.startsWith("claude-")) {
+    return true;
+  }
+  if (normalized.startsWith("gpt-") || normalized.includes("codex")) {
+    return true;
+  }
+  return (
+    normalized.startsWith("openai/")
+    || normalized.startsWith("anthropic/")
+    || normalized.startsWith("x-ai/")
+    || normalized.startsWith("openrouter/")
+    || normalized.startsWith("deepseek/")
+    || normalized.startsWith("qwen/")
+    || normalized.startsWith("meta/")
+    || normalized.startsWith("mistral/")
+  );
 }
 
 function resolveWorkspaceSpecRoot(workspaceId: string): string | null {
@@ -359,7 +395,7 @@ function resolveRecoverableCodexFirstPacketTimeout(
 type UseThreadMessagingOptions = {
   activeWorkspace: WorkspaceInfo | null;
   activeThreadId: string | null;
-  accessMode?: "read-only" | "current" | "full-access";
+  accessMode?: "default" | "read-only" | "current" | "full-access";
   model?: string | null;
   effort?: string | null;
   collaborationMode?: Record<string, unknown> | null;
@@ -378,7 +414,7 @@ type UseThreadMessagingOptions = {
   getThreadEngine: (
     workspaceId: string,
     threadId: string,
-  ) => "claude" | "codex" | "opencode" | undefined;
+  ) => "claude" | "codex" | "gemini" | "opencode" | undefined;
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
@@ -401,7 +437,7 @@ type UseThreadMessagingOptions = {
   updateThreadParent: (parentId: string, childIds: string[]) => void;
   startThreadForWorkspace: (
     workspaceId: string,
-    options?: { activate?: boolean; engine?: "claude" | "codex" | "opencode" },
+    options?: { activate?: boolean; engine?: "claude" | "codex" | "gemini" | "opencode" },
   ) => Promise<string | null>;
   resolveOpenCodeAgent?: (threadId: string | null) => string | null;
   resolveOpenCodeVariant?: (threadId: string | null) => string | null;
@@ -464,8 +500,14 @@ export function useThreadMessaging({
   const normalizeEngineSelection = useCallback(
     (
       engine: "claude" | "codex" | "gemini" | "opencode" | undefined,
-    ): "claude" | "codex" | "opencode" =>
-      engine === "claude" ? "claude" : engine === "opencode" ? "opencode" : "codex",
+    ): "claude" | "codex" | "gemini" | "opencode" =>
+      engine === "claude"
+        ? "claude"
+        : engine === "opencode"
+          ? "opencode"
+          : engine === "gemini"
+            ? "gemini"
+            : "codex",
     [],
   );
 
@@ -473,13 +515,16 @@ export function useThreadMessaging({
     (
       workspaceId: string,
       threadId: string,
-    ): "claude" | "codex" | "opencode" => {
+    ): "claude" | "codex" | "gemini" | "opencode" => {
       const persistedEngine = getThreadEngine(workspaceId, threadId);
       if (persistedEngine) {
         return persistedEngine;
       }
       if (threadId.startsWith("claude:") || threadId.startsWith("claude-pending-")) {
         return "claude";
+      }
+      if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")) {
+        return "gemini";
       }
       if (
         threadId.startsWith("opencode:") ||
@@ -494,13 +539,19 @@ export function useThreadMessaging({
 
   const isThreadIdCompatibleWithEngine = useCallback(
     (
-      engine: "claude" | "codex" | "opencode",
+      engine: "claude" | "codex" | "gemini" | "opencode",
       threadId: string,
     ): boolean => {
       if (engine === "claude") {
         return (
           threadId.startsWith("claude:") ||
           threadId.startsWith("claude-pending-")
+        );
+      }
+      if (engine === "gemini") {
+        return (
+          threadId.startsWith("gemini:") ||
+          threadId.startsWith("gemini-pending-")
         );
       }
       if (engine === "opencode") {
@@ -512,6 +563,8 @@ export function useThreadMessaging({
       return (
         !threadId.startsWith("claude:")
         && !threadId.startsWith("claude-pending-")
+        && !threadId.startsWith("gemini:")
+        && !threadId.startsWith("gemini-pending-")
         && !threadId.startsWith("opencode:")
         && !threadId.startsWith("opencode-pending-")
       );
@@ -660,6 +713,7 @@ export function useThreadMessaging({
           : null;
       const resolvedAccessMode = normalizeAccessMode(
         options?.accessMode !== undefined ? options.accessMode : accessMode,
+        resolvedEngine,
       );
       const resolvedOpenCodeAgent =
         resolvedEngine === "opencode" ? (resolveOpenCodeAgent?.(threadId) ?? null) : null;
@@ -688,6 +742,10 @@ export function useThreadMessaging({
               resolvedModel &&
               resolvedModel.startsWith("claude-")
             ? null
+            : resolvedEngine === "gemini" &&
+                resolvedModel &&
+                isLikelyForeignModelForGemini(resolvedModel)
+              ? null
             : resolvedModel;
       const sanitizedOpenCodeModel =
         resolvedEngine === "opencode"
@@ -946,6 +1004,8 @@ export function useThreadMessaging({
         const realSessionId =
           resolvedEngine === "claude" && isClaudeSession
             ? threadId.slice("claude:".length)
+            : resolvedEngine === "gemini" && threadId.startsWith("gemini:")
+              ? threadId.slice("gemini:".length)
             : resolvedEngine === "opencode" && isOpenCodeSession
               ? threadId.slice("opencode:".length)
               : null;

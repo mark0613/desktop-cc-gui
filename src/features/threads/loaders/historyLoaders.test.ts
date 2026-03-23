@@ -6,6 +6,7 @@ import {
 import { buildWorkspaceSessionActivity } from "../../session-activity/adapters/buildWorkspaceSessionActivity";
 import { createCodexHistoryLoader } from "./codexHistoryLoader";
 import { parseCodexSessionHistory } from "./codexSessionHistory";
+import { createGeminiHistoryLoader } from "./geminiHistoryLoader";
 import { createOpenCodeHistoryLoader } from "./opencodeHistoryLoader";
 
 describe("history loaders", () => {
@@ -84,6 +85,46 @@ describe("history loaders", () => {
         },
       },
     ]);
+  });
+
+  it("loads gemini history into normalized snapshot", async () => {
+    const loader = createGeminiHistoryLoader({
+      workspaceId: "ws-gemini",
+      workspacePath: "/tmp/workspace",
+      loadGeminiSession: vi.fn().mockResolvedValue({
+        messages: [
+          {
+            id: "gemini-user-1",
+            kind: "message",
+            role: "user",
+            text: "hello",
+          },
+          {
+            id: "gemini-assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "hi",
+          },
+        ],
+      }),
+    });
+
+    const snapshot = await loader.load("gemini:session-1");
+    expect(snapshot.engine).toBe("gemini");
+    expect(snapshot.threadId).toBe("gemini:session-1");
+    expect(snapshot.items).toHaveLength(2);
+    expect(snapshot.items[0]).toEqual(
+      expect.objectContaining({
+        kind: "message",
+        role: "user",
+      }),
+    );
+    expect(snapshot.items[1]).toEqual(
+      expect.objectContaining({
+        kind: "message",
+        role: "assistant",
+      }),
+    );
   });
 
   it("reconstructs codex local session history into structured activity items", () => {

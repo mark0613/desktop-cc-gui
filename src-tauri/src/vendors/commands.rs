@@ -517,10 +517,7 @@ fn build_preflight_command(candidate: &str) -> Command {
     }
 }
 
-async fn run_preflight_probe(
-    command_candidates: &[&str],
-    args: &[&str],
-) -> Result<String, String> {
+async fn run_preflight_probe(command_candidates: &[&str], args: &[&str]) -> Result<String, String> {
     let path_env = build_codex_path_env(None);
     let mut last_error: Option<String> = None;
 

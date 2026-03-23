@@ -312,7 +312,7 @@ type UseThreadsOptions = {
   model?: string | null;
   effort?: string | null;
   collaborationMode?: Record<string, unknown> | null;
-  accessMode?: "read-only" | "current" | "full-access";
+  accessMode?: "default" | "read-only" | "current" | "full-access";
   steerEnabled?: boolean;
   customPrompts?: CustomPromptOption[];
   onMessageActivity?: () => void;
@@ -339,7 +339,7 @@ type UseThreadsOptions = {
 
 type PendingResolutionInput = {
   workspaceId: string;
-  engine: "claude" | "opencode";
+  engine: "claude" | "gemini" | "opencode";
   threadsByWorkspace: Record<string, Array<{ id: string }>>;
   activeThreadIdByWorkspace: Record<string, string | null>;
   threadStatusById: Record<string, { isProcessing?: boolean } | undefined>;
@@ -565,7 +565,7 @@ export function useThreads({
   );
 
   const getThreadEngine = useCallback(
-    (workspaceId: string, threadId: string): "claude" | "codex" | "opencode" | undefined => {
+    (workspaceId: string, threadId: string): "claude" | "codex" | "gemini" | "opencode" | undefined => {
       const threads = state.threadsByWorkspace[workspaceId] ?? [];
       const thread = threads.find((t) => t.id === threadId);
       return thread?.engineSource;
@@ -576,7 +576,7 @@ export function useThreads({
   const resolvePendingThreadForSession = useCallback(
     (
       workspaceId: string,
-      engine: "claude" | "opencode",
+      engine: "claude" | "gemini" | "opencode",
     ): string | null => {
       const resolved = resolvePendingThreadIdForSession({
         workspaceId,

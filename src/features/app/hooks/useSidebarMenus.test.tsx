@@ -56,7 +56,7 @@ function createHandlers() {
 }
 
 describe("useSidebarMenus", () => {
-  it("marks Gemini entry as unavailable in workspace plus menu", () => {
+  it("shows Gemini entry as available in workspace plus menu", () => {
     const handlers = createHandlers();
     const { result } = renderHook(() => useSidebarMenus(handlers));
 
@@ -79,10 +79,10 @@ describe("useSidebarMenus", () => {
       ?.actions.find((action) => action.id === "new-session-gemini");
 
     expect(geminiAction?.label).toBe("Gemini");
-    expect(geminiAction?.unavailable).toBe(true);
+    expect(geminiAction?.unavailable).toBeUndefined();
   });
 
-  it("does not trigger create action when unavailable entry is clicked", () => {
+  it("triggers create action when Gemini entry is clicked", () => {
     const handlers = createHandlers();
     const { result } = renderHook(() => useSidebarMenus(handlers));
 
@@ -108,6 +108,7 @@ describe("useSidebarMenus", () => {
       result.current.onWorkspaceMenuAction(geminiAction!);
     });
 
-    expect(handlers.onAddAgent).not.toHaveBeenCalled();
+    expect(handlers.onAddAgent).toHaveBeenCalledTimes(1);
+    expect(handlers.onAddAgent).toHaveBeenCalledWith(workspace, "gemini");
   });
 });

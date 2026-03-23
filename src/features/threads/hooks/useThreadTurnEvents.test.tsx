@@ -334,7 +334,7 @@ describe("useThreadTurnEvents", () => {
       resolvePendingThreadForSession,
     } = makeOptions();
     resolvePendingThreadForSession.mockImplementation(
-      (_workspaceId: string, engine: "claude" | "opencode") =>
+      (_workspaceId: string, engine: "claude" | "gemini" | "opencode") =>
         engine === "opencode" ? "opencode-pending-abc" : null,
     );
 
@@ -494,7 +494,7 @@ describe("useThreadTurnEvents", () => {
       renamePendingMemoryCaptureKey,
     } = makeOptions();
     resolvePendingThreadForSession.mockImplementation(
-      (_workspaceId: string, engine: "claude" | "opencode") =>
+      (_workspaceId: string, engine: "claude" | "gemini" | "opencode") =>
         engine === "claude" ? "claude-pending-active" : null,
     );
 
@@ -587,7 +587,7 @@ describe("useThreadTurnEvents", () => {
       resolvePendingThreadForSession,
     } = makeOptions();
     resolvePendingThreadForSession.mockImplementation(
-      (_workspaceId: string, engine: "claude" | "opencode") =>
+      (_workspaceId: string, engine: "claude" | "gemini" | "opencode") =>
         engine === "opencode" ? "opencode-pending-active" : null,
     );
 
@@ -632,7 +632,7 @@ describe("useThreadTurnEvents", () => {
       resolvePendingThreadForSession,
     } = makeOptions();
     resolvePendingThreadForSession.mockImplementation(
-      (_workspaceId: string, engine: "claude" | "opencode") =>
+      (_workspaceId: string, engine: "claude" | "gemini" | "opencode") =>
         engine === "opencode" ? "opencode-pending-active" : "claude-pending-active",
     );
 

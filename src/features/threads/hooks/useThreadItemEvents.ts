@@ -10,11 +10,14 @@ const CLAUDE_STREAM_DEBUG_FLAG_KEY = "mossx.debug.claude.stream";
 
 /**
  * Infer engine type from thread ID.
- * Claude/OpenCode threads use "<engine>:" or "<engine>-pending-" prefixes.
+ * Claude/Gemini/OpenCode threads use "<engine>:" or "<engine>-pending-" prefixes.
  */
-function inferEngineFromThreadId(threadId: string): "claude" | "codex" | "opencode" {
+function inferEngineFromThreadId(threadId: string): "claude" | "codex" | "gemini" | "opencode" {
   if (threadId.startsWith("claude:") || threadId.startsWith("claude-pending-")) {
     return "claude";
+  }
+  if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")) {
+    return "gemini";
   }
   if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")) {
     return "opencode";

@@ -1,4 +1,4 @@
-export type VendorModelManagerTarget = "claude" | "codex";
+export type VendorModelManagerTarget = "claude" | "codex" | "gemini";
 
 export interface VendorModelManagerRequest {
   target: VendorModelManagerTarget;
@@ -17,7 +17,12 @@ export function requestVendorModelManager(
   }
 
   const payload = {
-    target: request.target === "codex" ? "codex" : "claude",
+    target:
+      request.target === "codex"
+        ? "codex"
+        : request.target === "gemini"
+          ? "gemini"
+          : "claude",
     addMode: Boolean(request.addMode),
     timestamp: Date.now(),
   } satisfies VendorModelManagerRequest & { timestamp: number };
@@ -52,7 +57,12 @@ export function consumeVendorModelManagerRequest():
 
   try {
     const parsed = JSON.parse(raw) as Partial<VendorModelManagerRequest>;
-    const target = parsed.target === "codex" ? "codex" : "claude";
+    const target =
+      parsed.target === "codex"
+        ? "codex"
+        : parsed.target === "gemini"
+          ? "gemini"
+          : "claude";
     return {
       target,
       addMode: Boolean(parsed.addMode),

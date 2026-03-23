@@ -25,7 +25,7 @@ use crate::state::AppState;
 
 use super::codex_prompt_service::{normalize_custom_spec_root, run_codex_prompt_sync};
 use super::events::{engine_event_to_app_server_event, EngineEvent};
-use super::status::detect_opencode_status;
+use super::status::{detect_gemini_status, detect_opencode_status};
 use super::{EngineConfig, EngineStatus, EngineType};
 
 #[path = "commands_parse_helpers.rs"]
@@ -141,6 +141,96 @@ fn strip_ansi_codes(input: &str) -> String {
         out.push(ch);
     }
     out
+}
+
+fn extract_turn_result_text_internal(value: &Value, depth: usize) -> Option<String> {
+    if depth > 4 {
+        return None;
+    }
+    if let Some(text) = value
+        .as_str()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+    {
+        return Some(text.to_string());
+    }
+    if let Some(array) = value.as_array() {
+        let mut merged = String::new();
+        for item in array {
+            if let Some(text) = extract_turn_result_text_internal(item, depth + 1) {
+                if !merged.is_empty() {
+                    merged.push('\n');
+                }
+                merged.push_str(&text);
+            }
+        }
+        return if merged.trim().is_empty() {
+            None
+        } else {
+            Some(merged)
+        };
+    }
+    if let Some(object) = value.as_object() {
+        for key in [
+            "text",
+            "delta",
+            "output_text",
+            "outputText",
+            "content",
+            "message",
+        ] {
+            if let Some(text) = object
+                .get(key)
+                .and_then(|entry| entry.as_str())
+                .map(str::trim)
+                .filter(|entry| !entry.is_empty())
+            {
+                return Some(text.to_string());
+            }
+        }
+        for key in [
+            "result", "response", "content", "message", "output", "data", "payload",
+        ] {
+            if let Some(entry) = object.get(key) {
+                if let Some(text) = extract_turn_result_text_internal(entry, depth + 1) {
+                    return Some(text);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn extract_turn_result_text(result: Option<&Value>) -> Option<String> {
+    result.and_then(|value| extract_turn_result_text_internal(value, 0))
+}
+
+fn is_likely_foreign_model_for_gemini(model: &str) -> bool {
+    let normalized = model.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return false;
+    }
+    if normalized.contains("gemini") {
+        return false;
+    }
+    if normalized.starts_with("claude-") {
+        return true;
+    }
+    if normalized.starts_with("gpt-") || normalized.contains("codex") {
+        return true;
+    }
+    normalized.starts_with("openai/")
+        || normalized.starts_with("anthropic/")
+        || normalized.starts_with("x-ai/")
+        || normalized.starts_with("openrouter/")
+        || normalized.starts_with("deepseek/")
+        || normalized.starts_with("qwen/")
+        || normalized.starts_with("meta/")
+        || normalized.starts_with("mistral/")
+}
+
+fn is_likely_legacy_claude_model_id(model: &str) -> bool {
+    model.trim().to_ascii_lowercase().starts_with("claude-")
 }
 
 fn resolve_opencode_bin(config: Option<&EngineConfig>) -> String {
@@ -851,6 +941,26 @@ pub async fn get_engine_models(
 
             Ok(fresh_status.models)
         }
+        EngineType::Gemini => {
+            let config = manager.get_engine_config(EngineType::Gemini).await;
+            let custom_bin = config
+                .as_ref()
+                .and_then(|cfg| cfg.bin_path.as_ref())
+                .map(|s| s.as_str());
+            let fresh_status = detect_gemini_status(custom_bin).await;
+
+            if !fresh_status.models.is_empty() {
+                return Ok(fresh_status.models);
+            }
+
+            if let Some(cached) = manager.get_engine_status(EngineType::Gemini).await {
+                if !cached.models.is_empty() {
+                    return Ok(cached.models);
+                }
+            }
+
+            Ok(fresh_status.models)
+        }
         EngineType::Claude | EngineType::Codex => {
             if let Some(status) = manager.get_engine_status(engine_type).await {
                 if !status.models.is_empty() {
@@ -867,10 +977,6 @@ pub async fn get_engine_models(
                 Err(format!("{} not detected", engine_type.display_name()))
             }
         }
-        _ => Err(format!(
-            "{} is not supported yet",
-            engine_type.display_name()
-        )),
     }
 }
 
@@ -1915,12 +2021,8 @@ pub async fn engine_send_message(
                     // 不会产生 item/completed + type:"agentMessage"。
                     // 这里优先使用流式累积文本，回退使用 result.text。
                     if let EngineEvent::TurnCompleted { result, .. } = &event {
-                        let fallback_text = result
-                            .as_ref()
-                            .and_then(|result_val| result_val.get("text"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                        let fallback_text =
+                            extract_turn_result_text(result.as_ref()).unwrap_or_default();
                         let completed_text = if accumulated_agent_text.trim().is_empty() {
                             fallback_text
                         } else {
@@ -2041,7 +2143,7 @@ pub async fn engine_send_message(
                 .map(|value| value.trim())
                 .filter(|value| !value.is_empty())
                 .and_then(|value| {
-                    if value.starts_with("claude-") {
+                    if is_likely_legacy_claude_model_id(value) {
                         None
                     } else {
                         Some(value.to_string())
@@ -2151,10 +2253,173 @@ pub async fn engine_send_message(
                 }
             }))
         }
-        _ => Err(format!(
-            "{} is not supported yet",
-            effective_engine.display_name()
-        )),
+        EngineType::Gemini => {
+            let workspace_path = {
+                let workspaces = state.workspaces.lock().await;
+                workspaces
+                    .get(&workspace_id)
+                    .map(|w| std::path::PathBuf::from(&w.path))
+                    .ok_or_else(|| "Workspace not found".to_string())?
+            };
+
+            let session = manager
+                .get_or_create_gemini_session(&workspace_id, &workspace_path)
+                .await;
+
+            let resolved_session_id = if continue_session {
+                if session_id.is_some() {
+                    session_id
+                } else {
+                    session.get_session_id().await
+                }
+            } else {
+                Some(session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()))
+            };
+
+            let sanitized_model = model
+                .as_ref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .and_then(|value| {
+                    if is_likely_foreign_model_for_gemini(value) {
+                        None
+                    } else {
+                        Some(value.to_string())
+                    }
+                });
+            if model.is_some() && sanitized_model.is_none() {
+                log::warn!(
+                    "[engine_send_message] dropped invalid gemini model={:?}, fallback to default",
+                    model
+                );
+            }
+
+            let params = super::SendMessageParams {
+                text,
+                model: sanitized_model,
+                effort,
+                access_mode,
+                images,
+                continue_session,
+                session_id: resolved_session_id,
+                agent: None,
+                variant: None,
+                collaboration_mode: None,
+                custom_spec_root: normalized_custom_spec_root.clone(),
+            };
+
+            let turn_id = format!("gemini-turn-{}", uuid::Uuid::new_v4());
+            let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+            let item_id = format!("gemini-item-{}", uuid::Uuid::new_v4());
+
+            let mut receiver = session.subscribe();
+            let app_clone = app.clone();
+            let mut current_thread_id = thread_id.clone();
+            let item_id_clone = item_id.clone();
+            let turn_id_for_forwarder = turn_id.clone();
+            let mut accumulated_agent_text = String::new();
+            tokio::spawn(async move {
+                let deadline = tokio::time::Instant::now()
+                    + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
+                loop {
+                    let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
+                    let turn_event = match recv_result {
+                        Ok(Ok(event)) => event,
+                        Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
+                        Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped))) => {
+                            log::warn!(
+                                "Gemini event forwarder lagged; skipped {} events for turn {}",
+                                skipped,
+                                turn_id_for_forwarder
+                            );
+                            continue;
+                        }
+                        Err(_) => break,
+                    };
+                    if turn_event.turn_id != turn_id_for_forwarder {
+                        continue;
+                    }
+
+                    let event = turn_event.event;
+                    let is_terminal = event.is_terminal();
+
+                    if let EngineEvent::TextDelta { text, .. } = &event {
+                        accumulated_agent_text.push_str(text);
+                    }
+
+                    if let EngineEvent::TurnCompleted { result, .. } = &event {
+                        let fallback_text =
+                            extract_turn_result_text(result.as_ref()).unwrap_or_default();
+                        let completed_text = if accumulated_agent_text.trim().is_empty() {
+                            fallback_text
+                        } else {
+                            accumulated_agent_text.clone()
+                        };
+                        if !completed_text.trim().is_empty() {
+                            let synthetic = AppServerEvent {
+                                workspace_id: event.workspace_id().to_string(),
+                                message: json!({
+                                    "method": "item/completed",
+                                    "params": {
+                                        "threadId": &current_thread_id,
+                                        "item": {
+                                            "id": &item_id_clone,
+                                            "type": "agentMessage",
+                                            "text": completed_text,
+                                            "status": "completed",
+                                        }
+                                    }
+                                }),
+                            };
+                            let _ = app_clone.emit("app-server-event", synthetic);
+                        }
+                    }
+
+                    if let Some(payload) =
+                        engine_event_to_app_server_event(&event, &current_thread_id, &item_id_clone)
+                    {
+                        let _ = app_clone.emit("app-server-event", payload);
+                    }
+
+                    if let EngineEvent::SessionStarted {
+                        session_id, engine, ..
+                    } = &event
+                    {
+                        if !session_id.is_empty() && session_id != "pending" {
+                            if matches!(engine, EngineType::Gemini) {
+                                current_thread_id = format!("gemini:{}", session_id);
+                            }
+                        }
+                    }
+
+                    if is_terminal {
+                        break;
+                    }
+                }
+            });
+
+            let session_clone = session.clone();
+            let turn_id_clone = turn_id.clone();
+            tokio::spawn(async move {
+                if let Err(e) = session_clone.send_message(params, &turn_id_clone).await {
+                    log::error!("Gemini send_message failed: {}", e);
+                }
+            });
+
+            Ok(json!({
+                "engine": "gemini",
+                "result": {
+                    "turn": {
+                        "id": turn_id,
+                        "status": "started"
+                    },
+                },
+                "turn": {
+                    "id": turn_id,
+                    "status": "started"
+                }
+            }))
+        }
     }
 }
 
@@ -2272,7 +2537,7 @@ pub async fn engine_send_message_sync(
                 .map(|value| value.trim())
                 .filter(|value| !value.is_empty())
                 .and_then(|value| {
-                    if value.starts_with("claude-") {
+                    if is_likely_legacy_claude_model_id(value) {
                         None
                     } else {
                         Some(value.to_string())
@@ -2327,7 +2592,65 @@ pub async fn engine_send_message_sync(
             }))
         }
         EngineType::Gemini => {
-            Err("Gemini is not yet supported for sync project generation".to_string())
+            let workspace_path = {
+                let workspaces = state.workspaces.lock().await;
+                workspaces
+                    .get(&workspace_id)
+                    .map(|w| std::path::PathBuf::from(&w.path))
+                    .ok_or_else(|| "Workspace not found".to_string())?
+            };
+
+            let session = manager
+                .get_or_create_gemini_session(&workspace_id, &workspace_path)
+                .await;
+            let resolved_session_id = if continue_session {
+                if session_id.is_some() {
+                    session_id
+                } else {
+                    session.get_session_id().await
+                }
+            } else {
+                Some(session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()))
+            };
+
+            let sanitized_model = model
+                .as_ref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .and_then(|value| {
+                    if is_likely_foreign_model_for_gemini(value) {
+                        None
+                    } else {
+                        Some(value.to_string())
+                    }
+                });
+
+            let params = super::SendMessageParams {
+                text,
+                model: sanitized_model,
+                effort,
+                access_mode,
+                images,
+                continue_session,
+                session_id: resolved_session_id,
+                agent: None,
+                variant: None,
+                collaboration_mode: None,
+                custom_spec_root: normalized_custom_spec_root.clone(),
+            };
+
+            let turn_id = format!("gemini-sync-{}", uuid::Uuid::new_v4());
+            let response = timeout(
+                Duration::from_secs(900),
+                session.send_message(params, &turn_id),
+            )
+            .await
+            .map_err(|_| "Gemini response timed out".to_string())??;
+
+            Ok(json!({
+                "engine": "gemini",
+                "text": response
+            }))
         }
     }
 }
@@ -2363,10 +2686,12 @@ pub async fn engine_interrupt(
             }
             Ok(())
         }
-        _ => Err(format!(
-            "{} is not supported yet",
-            active_engine.display_name()
-        )),
+        EngineType::Gemini => {
+            if let Some(session) = manager.get_gemini_session(&workspace_id).await {
+                session.interrupt().await?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -2419,13 +2744,71 @@ pub async fn delete_claude_session(
     super::claude_history::delete_claude_session(&path, &session_id).await
 }
 
+/// List Gemini CLI session history for a workspace path.
+#[tauri::command]
+pub async fn list_gemini_sessions(
+    workspace_path: String,
+    limit: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let path = std::path::PathBuf::from(&workspace_path);
+    let manager = &state.engine_manager;
+    let config = manager.get_engine_config(EngineType::Gemini).await;
+    let sessions = super::gemini_history::list_gemini_sessions(
+        &path,
+        limit,
+        config.as_ref().and_then(|item| item.home_dir.as_deref()),
+    )
+    .await?;
+    serde_json::to_value(sessions).map_err(|e| e.to_string())
+}
+
+/// Load full message history for a specific Gemini CLI session.
+#[tauri::command]
+pub async fn load_gemini_session(
+    workspace_path: String,
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let path = std::path::PathBuf::from(&workspace_path);
+    let manager = &state.engine_manager;
+    let config = manager.get_engine_config(EngineType::Gemini).await;
+    let result = super::gemini_history::load_gemini_session(
+        &path,
+        &session_id,
+        config.as_ref().and_then(|item| item.home_dir.as_deref()),
+    )
+    .await?;
+    serde_json::to_value(result).map_err(|e| e.to_string())
+}
+
+/// Delete a Gemini CLI session.
+#[tauri::command]
+pub async fn delete_gemini_session(
+    workspace_path: String,
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path = std::path::PathBuf::from(&workspace_path);
+    let manager = &state.engine_manager;
+    let config = manager.get_engine_config(EngineType::Gemini).await;
+    super::gemini_history::delete_gemini_session(
+        &path,
+        &session_id,
+        config.as_ref().and_then(|item| item.home_dir.as_deref()),
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         build_provider_prefill_query, delete_opencode_session_files,
-        delete_opencode_session_from_datastore, merge_opencode_agents, normalize_provider_key,
-        opencode_data_candidate_roots, opencode_session_candidate_paths, parse_imported_session_id,
-        parse_json_value, parse_opencode_agent_list, parse_opencode_auth_providers,
+        delete_opencode_session_from_datastore, extract_turn_result_text, merge_opencode_agents,
+        is_likely_foreign_model_for_gemini, is_likely_legacy_claude_model_id,
+        normalize_provider_key, opencode_data_candidate_roots, opencode_session_candidate_paths,
+        parse_imported_session_id, parse_json_value, parse_opencode_agent_list,
+        parse_opencode_auth_providers,
         parse_opencode_debug_config_agents, parse_opencode_help_commands,
         parse_opencode_mcp_servers, parse_opencode_session_list, parse_opencode_updated_at,
         provider_keys_match, EngineConfig, OpenCodeAgentEntry,
@@ -2434,6 +2817,59 @@ mod tests {
     use rusqlite::{params, Connection};
     use serde_json::json;
     use std::path::PathBuf;
+
+    #[test]
+    fn extract_turn_result_text_supports_nested_payload() {
+        let payload = json!({
+            "result": {
+                "response": {
+                    "content": [
+                        { "text": "hello" },
+                        { "text": "world" }
+                    ]
+                }
+            }
+        });
+        let text = extract_turn_result_text(Some(&payload));
+        assert_eq!(text.as_deref(), Some("hello\nworld"));
+    }
+
+    #[test]
+    fn extract_turn_result_text_prefers_top_level_text() {
+        let payload = json!({
+            "text": "final answer",
+            "result": { "text": "ignored" }
+        });
+        let text = extract_turn_result_text(Some(&payload));
+        assert_eq!(text.as_deref(), Some("final answer"));
+    }
+
+    #[test]
+    fn gemini_model_guard_rejects_foreign_engine_defaults() {
+        assert!(is_likely_foreign_model_for_gemini("claude-sonnet-4-6"));
+        assert!(is_likely_foreign_model_for_gemini("openai/gpt-5.3-codex"));
+        assert!(is_likely_foreign_model_for_gemini("gpt-5.1"));
+    }
+
+    #[test]
+    fn gemini_model_guard_allows_gemini_and_custom_aliases() {
+        assert!(!is_likely_foreign_model_for_gemini("gemini-2.5-pro"));
+        assert!(!is_likely_foreign_model_for_gemini("[L]gemini-3-pro-preview"));
+        assert!(!is_likely_foreign_model_for_gemini("123"));
+    }
+
+    #[test]
+    fn opencode_model_guard_rejects_legacy_claude_ids() {
+        assert!(is_likely_legacy_claude_model_id("claude-sonnet-4-6"));
+        assert!(is_likely_legacy_claude_model_id("Claude-Haiku-4-5"));
+    }
+
+    #[test]
+    fn opencode_model_guard_allows_provider_scoped_models() {
+        assert!(!is_likely_legacy_claude_model_id("openai/gpt-5.3-codex"));
+        assert!(!is_likely_legacy_claude_model_id("google/gemini-2.5-pro"));
+        assert!(!is_likely_legacy_claude_model_id("123"));
+    }
 
     #[test]
     fn parse_opencode_commands_from_help() {

@@ -6,9 +6,10 @@ export const STORAGE_KEYS = {
   CODEX_CUSTOM_MODELS: 'codex-custom-models',
   CLAUDE_MODEL_MAPPING: 'claude-model-mapping',
   CLAUDE_CUSTOM_MODELS: 'claude-custom-models',
+  GEMINI_CUSTOM_MODELS: 'gemini-custom-models',
 } as const;
 
-export const MODEL_ID_PATTERN = /^[a-zA-Z0-9._\-/:]+$/;
+export const MODEL_ID_PATTERN = /^[a-zA-Z0-9._\-/:\[\]]+$/;
 
 export function isValidModelId(id: string): boolean {
   if (!id || typeof id !== 'string') return false;

@@ -112,7 +112,7 @@ export type ThreadSummary = {
   id: string;
   name: string;
   updatedAt: number;
-  engineSource?: "codex" | "claude" | "opencode";
+  engineSource?: "codex" | "claude" | "gemini" | "opencode";
 };
 
 export type ReviewTarget =

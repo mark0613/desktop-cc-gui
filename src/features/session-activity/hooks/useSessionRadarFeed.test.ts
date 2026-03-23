@@ -17,7 +17,7 @@ function createThread(
   id: string,
   name: string,
   updatedAt: number,
-  engineSource: "codex" | "claude" | "opencode" = "codex",
+  engineSource: "codex" | "claude" | "gemini" | "opencode" = "codex",
 ): ThreadSummary {
   return {
     id,

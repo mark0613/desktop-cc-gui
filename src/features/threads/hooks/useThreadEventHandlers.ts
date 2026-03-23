@@ -60,7 +60,7 @@ type ThreadEventHandlersOptions = {
   ) => Promise<void>;
   resolvePendingThreadForSession?: (
     workspaceId: string,
-    engine: "claude" | "opencode",
+    engine: "claude" | "gemini" | "opencode",
   ) => string | null;
   renamePendingMemoryCaptureKey: (
     oldThreadId: string,

@@ -462,4 +462,60 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
       }),
     );
   });
+
+  it('uses current engine model fallback when selected model is empty', async () => {
+    renderAdapter({
+      selectedEngine: 'gemini',
+      selectedModelId: null,
+      models: [
+        {
+          id: 'gemini-2.5-pro',
+          displayName: 'Gemini 2.5 Pro',
+          model: 'gemini-2.5-pro',
+        },
+        {
+          id: 'gemini-2.5-flash',
+          displayName: 'Gemini 2.5 Flash',
+          model: 'gemini-2.5-flash',
+        },
+      ],
+    });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      selectedModel?: string;
+      models?: Array<{ id: string; label: string; description?: string }>;
+    };
+
+    expect(latest.selectedModel).toBe('gemini-2.5-pro');
+    expect(latest.models).toEqual([
+      {
+        id: 'gemini-2.5-pro',
+        label: 'Gemini 2.5 Pro',
+        description: 'gemini-2.5-pro',
+      },
+      {
+        id: 'gemini-2.5-flash',
+        label: 'Gemini 2.5 Flash',
+        description: 'gemini-2.5-flash',
+      },
+    ]);
+  });
+
+  it('does not fallback to claude model when gemini has no models yet', async () => {
+    renderAdapter({
+      selectedEngine: 'gemini',
+      selectedModelId: null,
+      models: [],
+    });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      selectedModel?: string;
+    };
+
+    expect(latest.selectedModel).toBe('');
+  });
 });

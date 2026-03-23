@@ -295,7 +295,7 @@ export async function sendUserMessage(
   options?: {
     model?: string | null;
     effort?: string | null;
-    accessMode?: "read-only" | "current" | "full-access";
+    accessMode?: "default" | "read-only" | "current" | "full-access";
     images?: string[];
     collaborationMode?: Record<string, unknown> | null;
     preferredLanguage?: string | null;
@@ -1881,6 +1881,32 @@ export async function loadClaudeSession(
 }
 
 /**
+ * List Gemini CLI session history for a workspace path.
+ */
+export async function listGeminiSessions(
+  workspacePath: string,
+  limit?: number | null,
+): Promise<any> {
+  return invoke<any>("list_gemini_sessions", {
+    workspacePath,
+    limit: limit ?? null,
+  });
+}
+
+/**
+ * Load full message history for a specific Gemini CLI session.
+ */
+export async function loadGeminiSession(
+  workspacePath: string,
+  sessionId: string,
+): Promise<any> {
+  return invoke<any>("load_gemini_session", {
+    workspacePath,
+    sessionId,
+  });
+}
+
+/**
  * Load full Codex local session history for a specific workspace/session.
  */
 export async function loadCodexSession(
@@ -1914,6 +1940,19 @@ export async function deleteClaudeSession(
   sessionId: string,
 ): Promise<void> {
   return invoke<void>("delete_claude_session", {
+    workspacePath,
+    sessionId,
+  });
+}
+
+/**
+ * Delete a Gemini CLI session (remove session JSON file from disk).
+ */
+export async function deleteGeminiSession(
+  workspacePath: string,
+  sessionId: string,
+): Promise<void> {
+  return invoke<void>("delete_gemini_session", {
     workspacePath,
     sessionId,
   });

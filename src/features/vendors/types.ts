@@ -8,6 +8,7 @@
 export const STORAGE_KEYS = {
   CODEX_CUSTOM_MODELS: 'codex-custom-models',
   CLAUDE_CUSTOM_MODELS: 'claude-custom-models',
+  GEMINI_CUSTOM_MODELS: 'gemini-custom-models',
   /** @deprecated Use STORAGE_KEYS from features/models/constants instead for model mapping */
   CLAUDE_MODEL_MAPPING: 'claude-model-mapping',
 } as const;

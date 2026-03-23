@@ -11,6 +11,10 @@ const LEGACY_STORAGE_KEY_ALIASES: Record<string, string[]> = {
     "mossx-codex-custom-models",
     "codemoss-codex-custom-models",
   ],
+  "gemini-custom-models": [
+    "mossx-gemini-custom-models",
+    "codemoss-gemini-custom-models",
+  ],
 };
 
 function parseModels(value: string | null): CodexCustomModel[] {

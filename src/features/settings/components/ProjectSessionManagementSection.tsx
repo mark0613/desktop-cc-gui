@@ -65,6 +65,9 @@ function resolveEngineLabel(
   if (engine === "claude") {
     return t("settings.projectSessionEngineClaude");
   }
+  if (engine === "gemini") {
+    return t("settings.projectSessionEngineGemini");
+  }
   if (engine === "opencode") {
     return t("settings.projectSessionEngineOpencode");
   }
@@ -72,7 +75,7 @@ function resolveEngineLabel(
 }
 
 function resolveEngineType(engine: ThreadSummary["engineSource"] | undefined): EngineType {
-  if (engine === "claude" || engine === "opencode") {
+  if (engine === "claude" || engine === "gemini" || engine === "opencode") {
     return engine;
   }
   return "codex";

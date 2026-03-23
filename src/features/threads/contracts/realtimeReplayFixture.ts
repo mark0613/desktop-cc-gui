@@ -2,7 +2,7 @@ import type { RealtimeReplayEvent } from "./realtimeReplayTypes";
 
 type ThreadFixture = {
   threadId: string;
-  engine: "codex" | "claude" | "opencode";
+  engine: "codex" | "claude" | "gemini" | "opencode";
   threadLabel: string;
 };
 
@@ -144,4 +144,3 @@ export function buildThreeThreadReplayEventsForMinutes(minutes: number): Realtim
   const safeMinutes = Math.max(1, minutes);
   return buildThreeThreadReplayEventsForDuration(safeMinutes * 60_000);
 }
-

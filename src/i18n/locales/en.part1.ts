@@ -703,6 +703,7 @@ const enPart1 = {
     projectSessionItemUntitled: "Untitled session",
     projectSessionEngineCodex: "Codex",
     projectSessionEngineClaude: "Claude",
+    projectSessionEngineGemini: "Gemini",
     projectSessionEngineOpencode: "OpenCode",
     radarHistoryTitle: "Radar History Management",
     radarHistoryDescription: "Delete recently completed radar sessions with batch operations.",

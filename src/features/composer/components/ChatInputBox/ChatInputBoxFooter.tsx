@@ -9,6 +9,7 @@ import type {
   AccountRateLimitsInfo,
   DropdownItemData,
   DropdownPosition,
+  ModelInfo,
   PermissionMode,
   ProviderId,
   ReasoningEffort,
@@ -153,6 +154,7 @@ export function ChatInputBoxFooter({
   isLoading,
   isEnhancing,
   selectedModel,
+  models,
   permissionMode,
   currentProvider,
   providerAvailability,
@@ -199,6 +201,7 @@ export function ChatInputBoxFooter({
   isLoading: boolean;
   isEnhancing: boolean;
   selectedModel: string;
+  models?: ModelInfo[];
   permissionMode: PermissionMode;
   currentProvider: string;
   providerAvailability?: Partial<Record<ProviderId, boolean>>;
@@ -321,6 +324,7 @@ export function ChatInputBoxFooter({
         isLoading={isLoading}
         isEnhancing={isEnhancing}
         selectedModel={selectedModel}
+        models={models}
         permissionMode={permissionMode}
         currentProvider={currentProvider}
         providerAvailability={providerAvailability}

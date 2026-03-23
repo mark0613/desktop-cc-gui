@@ -127,7 +127,7 @@ describe("useThreadMessaging", () => {
       activeThreadId?: string;
       ensuredThreadId?: string;
       activeTurnIdByThread?: Record<string, string | null>;
-      threadEngineById?: Record<string, "claude" | "codex" | "opencode" | undefined>;
+      threadEngineById?: Record<string, "claude" | "codex" | "gemini" | "opencode" | undefined>;
       itemsByThread?: Record<string, ConversationItem[]>;
       startThreadForWorkspace?: ReturnType<typeof vi.fn>;
       dispatch?: ReturnType<typeof vi.fn>;
@@ -278,6 +278,50 @@ describe("useThreadMessaging", () => {
       "hello codex",
       expect.objectContaining({
         model: null,
+      }),
+    );
+  });
+
+  it("sanitizes leaked codex default model for gemini", async () => {
+    const { result } = makeHook("gemini");
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "gemini-pending-abc",
+        "hello gemini",
+        [],
+        { model: "openai/gpt-5.3-codex" },
+      );
+    });
+
+    expect(engineSendMessage).toHaveBeenCalledWith(
+      "ws-1",
+      expect.objectContaining({
+        engine: "gemini",
+        model: null,
+      }),
+    );
+  });
+
+  it("keeps custom gemini model aliases for gemini engine", async () => {
+    const { result } = makeHook("gemini");
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "gemini-pending-abc",
+        "hello gemini",
+        [],
+        { model: "123" },
+      );
+    });
+
+    expect(engineSendMessage).toHaveBeenCalledWith(
+      "ws-1",
+      expect.objectContaining({
+        engine: "gemini",
+        model: "123",
       }),
     );
   });

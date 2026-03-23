@@ -25,6 +25,9 @@ function resolveEngineType(engine: string | undefined): EngineType {
   if (normalized === "claude") {
     return "claude";
   }
+  if (normalized === "gemini") {
+    return "gemini";
+  }
   if (normalized === "opencode") {
     return "opencode";
   }

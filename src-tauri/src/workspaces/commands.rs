@@ -310,6 +310,10 @@ async fn cleanup_engine_sessions_for_workspace(state: &AppState, workspace_id: &
         .await;
     state
         .engine_manager
+        .remove_gemini_session(workspace_id)
+        .await;
+    state
+        .engine_manager
         .remove_codex_adapter(workspace_id)
         .await;
     state
@@ -704,6 +708,7 @@ pub(crate) async fn add_workspace(
         claude_bin_setting.as_deref(),
         codex_bin.as_deref().or(codex_bin_setting.as_deref()),
         None,
+        None,
     )
     .await;
 
@@ -731,22 +736,24 @@ pub(crate) async fn add_workspace(
             // OpenCode follows local CLI session model (no persistent daemon session).
             add_workspace_for_cli_engine(EngineType::OpenCode, path, codex_bin, &state).await
         }
-        _ => Err(format!(
-            "Engine type {:?} is not yet supported. Please use Claude Code or Codex CLI.",
-            engine_type
-        )),
+        EngineType::Gemini => {
+            // Gemini follows local CLI session model (no persistent daemon session).
+            add_workspace_for_cli_engine(EngineType::Gemini, path, codex_bin, &state).await
+        }
     }
 }
 
 /// Add workspace for a CLI-based engine (no persistent session needed).
-/// Supports Claude and OpenCode engines.
+/// Supports Claude, Gemini and OpenCode engines.
 async fn add_workspace_for_cli_engine(
     engine_type: EngineType,
     path: String,
     codex_bin: Option<String>,
     state: &AppState,
 ) -> Result<WorkspaceInfo, String> {
-    use crate::engine::status::{detect_claude_status, detect_opencode_status};
+    use crate::engine::status::{
+        detect_claude_status, detect_gemini_status, detect_opencode_status,
+    };
     use std::path::PathBuf;
 
     if !PathBuf::from(&path).is_dir() {
@@ -755,6 +762,7 @@ async fn add_workspace_for_cli_engine(
 
     let engine_name = match engine_type {
         EngineType::Claude => "claude",
+        EngineType::Gemini => "gemini",
         EngineType::OpenCode => "opencode",
         _ => return Err(format!("Unsupported CLI engine: {:?}", engine_type)),
     };
@@ -768,6 +776,7 @@ async fn add_workspace_for_cli_engine(
             };
             detect_claude_status(claude_bin.as_deref()).await.installed
         }
+        EngineType::Gemini => detect_gemini_status(None).await.installed,
         EngineType::OpenCode => detect_opencode_status(None).await.installed,
         _ => false,
     };

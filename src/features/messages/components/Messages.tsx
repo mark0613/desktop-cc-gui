@@ -320,7 +320,7 @@ function extractLatestUserInputTextPreserveFormatting(text: string): string {
 function toConversationEngine(
   engine: "claude" | "codex" | "gemini" | "opencode",
 ): ConversationEngine {
-  if (engine === "claude" || engine === "opencode") {
+  if (engine === "claude" || engine === "gemini" || engine === "opencode") {
     return engine;
   }
   return "codex";

@@ -597,7 +597,7 @@ type LayoutNodesResult = {
 const EMPTY_COMMANDS: CustomCommandOption[] = [];
 
 function toConversationEngine(engine: EngineType | undefined): ConversationEngine {
-  if (engine === "claude" || engine === "opencode") {
+  if (engine === "claude" || engine === "gemini" || engine === "opencode") {
     return engine;
   }
   return "codex";
@@ -836,6 +836,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
     {
       codex: t("settings.projectSessionEngineCodex"),
       claude: t("settings.projectSessionEngineClaude"),
+      gemini: t("settings.projectSessionEngineGemini"),
       opencode: t("settings.projectSessionEngineOpencode"),
     },
   );

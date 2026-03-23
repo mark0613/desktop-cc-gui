@@ -66,7 +66,7 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
 
 type HarnessProps = {
   initialText?: string;
-  selectedEngine?: "claude" | "codex" | "opencode";
+  selectedEngine?: "claude" | "codex" | "gemini" | "opencode";
   commands?: { name: string; path: string; content: string }[];
   attachedImages?: string[];
   onSend?: (text: string, images: string[], options?: { selectedMemoryIds?: string[] }) => void;

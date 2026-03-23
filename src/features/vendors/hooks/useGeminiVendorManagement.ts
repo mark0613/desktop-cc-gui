@@ -24,6 +24,8 @@ const GEMINI_ENV_KEYS = {
   model: "GEMINI_MODEL",
 } as const;
 
+const GEMINI_VENDOR_UPDATED_EVENT = "mossx:gemini-vendor-updated";
+
 type GeminiImportantValues = Omit<GeminiVendorDraft, "enabled" | "envText" | "authMode">;
 
 function envMapToText(env: Record<string, string>): string {
@@ -250,6 +252,9 @@ export function useGeminiVendorManagement() {
       authMode: nextDraft.authMode,
       env: parseEnvText(nextDraft.envText),
     });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(GEMINI_VENDOR_UPDATED_EVENT));
+    }
     setSavedAt(Date.now());
   }, []);
 

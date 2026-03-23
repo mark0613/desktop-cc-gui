@@ -346,9 +346,10 @@ impl ClaudeSession {
                 log::info!("Resumed Claude with user's answer");
                 Ok(new_lines)
             }
-            Err(e) => {
-                Err(format!("Failed to spawn AskUserQuestion resume process: {}", e))
-            }
+            Err(e) => Err(format!(
+                "Failed to spawn AskUserQuestion resume process: {}",
+                e
+            )),
         }
     }
 

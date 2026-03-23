@@ -12,9 +12,11 @@ use crate::codex::WorkspaceSession as CodexWorkspaceSession;
 
 use super::claude::{ClaudeSession, ClaudeSessionManager};
 use super::codex_adapter::CodexSessionAdapter;
+use super::gemini::GeminiSession;
 use super::opencode::OpenCodeSession;
 use super::status::{
-    detect_all_engines, detect_claude_status, detect_codex_status, detect_opencode_status,
+    detect_all_engines, detect_claude_status, detect_codex_status, detect_gemini_status,
+    detect_opencode_status,
 };
 use super::{EngineConfig, EngineStatus, EngineType};
 
@@ -35,6 +37,9 @@ pub struct EngineManager {
     /// OpenCode sessions per workspace
     opencode_sessions: Mutex<HashMap<String, Arc<OpenCodeSession>>>,
 
+    /// Gemini sessions per workspace
+    gemini_sessions: Mutex<HashMap<String, Arc<GeminiSession>>>,
+
     /// Engine configurations
     engine_configs: RwLock<HashMap<EngineType, EngineConfig>>,
 }
@@ -48,6 +53,7 @@ impl EngineManager {
             claude_manager: ClaudeSessionManager::new(),
             codex_adapters: Mutex::new(HashMap::new()),
             opencode_sessions: Mutex::new(HashMap::new()),
+            gemini_sessions: Mutex::new(HashMap::new()),
             engine_configs: RwLock::new(HashMap::new()),
         }
     }
@@ -93,8 +99,8 @@ impl EngineManager {
         let status = match engine_type {
             EngineType::Claude => detect_claude_status(bin).await,
             EngineType::Codex => detect_codex_status(bin).await,
+            EngineType::Gemini => detect_gemini_status(bin).await,
             EngineType::OpenCode => detect_opencode_status(bin).await,
-            _ => EngineStatus::with_error(engine_type, "Engine not supported yet".to_string()),
         };
 
         // Cache the result
@@ -106,7 +112,7 @@ impl EngineManager {
 
     /// Detect all supported engines
     pub async fn detect_engines(&self) -> Vec<EngineStatus> {
-        let (claude_bin, codex_bin, opencode_bin) = {
+        let (claude_bin, codex_bin, gemini_bin, opencode_bin) = {
             let configs = self.engine_configs.read().await;
             (
                 configs
@@ -114,6 +120,9 @@ impl EngineManager {
                     .and_then(|c| c.bin_path.clone()),
                 configs
                     .get(&EngineType::Codex)
+                    .and_then(|c| c.bin_path.clone()),
+                configs
+                    .get(&EngineType::Gemini)
                     .and_then(|c| c.bin_path.clone()),
                 configs
                     .get(&EngineType::OpenCode)
@@ -124,6 +133,7 @@ impl EngineManager {
         let statuses = detect_all_engines(
             claude_bin.as_deref(),
             codex_bin.as_deref(),
+            gemini_bin.as_deref(),
             opencode_bin.as_deref(),
         )
         .await;
@@ -249,6 +259,44 @@ impl EngineManager {
     /// Remove an OpenCode session
     pub async fn remove_opencode_session(&self, workspace_id: &str) {
         let mut sessions = self.opencode_sessions.lock().await;
+        sessions.remove(workspace_id);
+    }
+
+    // ==================== Gemini Session Management ====================
+
+    /// Get or create a Gemini session for a workspace
+    pub async fn get_or_create_gemini_session(
+        &self,
+        workspace_id: &str,
+        workspace_path: &Path,
+    ) -> Arc<GeminiSession> {
+        {
+            let sessions = self.gemini_sessions.lock().await;
+            if let Some(session) = sessions.get(workspace_id) {
+                return session.clone();
+            }
+        }
+
+        let config = self.get_engine_config(EngineType::Gemini).await;
+        let session = Arc::new(GeminiSession::new(
+            workspace_id.to_string(),
+            workspace_path.to_path_buf(),
+            config,
+        ));
+        let mut sessions = self.gemini_sessions.lock().await;
+        sessions.insert(workspace_id.to_string(), session.clone());
+        session
+    }
+
+    /// Get Gemini session by workspace
+    pub async fn get_gemini_session(&self, workspace_id: &str) -> Option<Arc<GeminiSession>> {
+        let sessions = self.gemini_sessions.lock().await;
+        sessions.get(workspace_id).cloned()
+    }
+
+    /// Remove a Gemini session
+    pub async fn remove_gemini_session(&self, workspace_id: &str) {
+        let mut sessions = self.gemini_sessions.lock().await;
         sessions.remove(workspace_id);
     }
 

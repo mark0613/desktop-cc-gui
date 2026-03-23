@@ -96,6 +96,8 @@ export function PinnedThreadList({
         const engineTitle =
           engineSource === "claude"
             ? "Claude Code"
+            : engineSource === "gemini"
+              ? "Gemini"
             : engineSource === "opencode"
               ? "OpenCode"
               : "Codex";

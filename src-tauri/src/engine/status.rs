@@ -2,6 +2,7 @@
 //!
 //! Detects installed CLI tools and their capabilities.
 
+use serde_json::Value;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::process::Command;
@@ -230,6 +231,38 @@ pub async fn detect_opencode_status(custom_bin: Option<&str>) -> EngineStatus {
     }
 }
 
+/// Detect Gemini CLI installation status
+pub async fn detect_gemini_status(custom_bin: Option<&str>) -> EngineStatus {
+    let bin_path = resolve_bin_path("gemini", custom_bin);
+    let bin = bin_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| "gemini".to_string());
+    let path_env = build_codex_path_env(custom_bin);
+
+    let (installed, version, error) = probe_cli_version(&bin, "gemini", path_env.as_ref()).await;
+
+    if !installed {
+        return not_installed_status(EngineType::Gemini, error);
+    }
+
+    let home_dir = get_gemini_home_dir();
+    let models = get_gemini_models();
+    let default_model = models.iter().find(|m| m.default).map(|m| m.id.clone());
+
+    EngineStatus {
+        engine_type: EngineType::Gemini,
+        installed: true,
+        version,
+        bin_path: Some(bin.to_string()),
+        home_dir: home_dir.map(|p| p.to_string_lossy().to_string()),
+        models,
+        default_model,
+        features: EngineFeatures::gemini(),
+        error: None,
+    }
+}
+
 /// Get Claude Code home directory
 fn get_claude_home_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(".claude"))
@@ -245,6 +278,14 @@ fn get_opencode_home_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(".opencode"))
 }
 
+/// Get Gemini home directory
+fn get_gemini_home_dir() -> Option<PathBuf> {
+    if let Some(home) = std::env::var_os("GEMINI_CLI_HOME").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(home));
+    }
+    dirs::home_dir().map(|home| home.join(".gemini"))
+}
+
 /// Get Codex CLI available models (hardcoded as they don't change frequently)
 fn get_codex_models() -> Vec<ModelInfo> {
     vec![
@@ -256,6 +297,63 @@ fn get_codex_models() -> Vec<ModelInfo> {
         ModelInfo::new("gpt-5.1-codex-max", "GPT-5.1 Codex Max").with_provider("openai"),
         ModelInfo::new("gpt-5.1-codex-mini", "GPT-5.1 Codex Mini").with_provider("openai"),
     ]
+}
+
+/// Get Gemini CLI available models (stable defaults + preview model).
+fn get_gemini_models() -> Vec<ModelInfo> {
+    let mut models = vec![
+        ModelInfo::new("gemini-2.5-pro", "Gemini 2.5 Pro")
+            .as_default()
+            .with_provider("google"),
+        ModelInfo::new("gemini-2.5-flash", "Gemini 2.5 Flash").with_provider("google"),
+    ];
+
+    if let Some(configured_model) = read_configured_gemini_model() {
+        for model in &mut models {
+            model.default = false;
+        }
+        if let Some(existing_index) = models.iter().position(|model| model.id == configured_model) {
+            let mut existing = models.remove(existing_index);
+            existing.default = true;
+            models.insert(0, existing);
+        } else {
+            models.insert(
+                0,
+                ModelInfo::new(configured_model.clone(), configured_model)
+                    .as_default()
+                    .with_provider("google")
+                    .with_description("Configured in Gemini vendor settings"),
+            );
+        }
+    }
+
+    models
+}
+
+fn read_configured_gemini_model() -> Option<String> {
+    if let Some(from_config) = read_gemini_model_from_codemoss_config() {
+        return Some(from_config);
+    }
+    std::env::var("GEMINI_MODEL")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn read_gemini_model_from_codemoss_config() -> Option<String> {
+    let config_path = dirs::home_dir()?.join(".codemoss").join("config.json");
+    let content = std::fs::read_to_string(config_path).ok()?;
+    let root = serde_json::from_str::<Value>(&content).ok()?;
+    parse_gemini_model_from_config_json(&root)
+}
+
+fn parse_gemini_model_from_config_json(root: &Value) -> Option<String> {
+    root.get("gemini")?
+        .get("env")?
+        .get("GEMINI_MODEL")?
+        .as_str()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 /// Get Claude Code available models (hardcoded as they don't change frequently)
@@ -403,16 +501,18 @@ fn format_opencode_model_name(provider: &str, model_id: &str) -> String {
 pub async fn detect_all_engines(
     claude_bin: Option<&str>,
     codex_bin: Option<&str>,
+    gemini_bin: Option<&str>,
     opencode_bin: Option<&str>,
 ) -> Vec<EngineStatus> {
     // Run detections in parallel
-    let (claude_status, codex_status, opencode_status) = tokio::join!(
+    let (claude_status, codex_status, gemini_status, opencode_status) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
+        detect_gemini_status(gemini_bin),
         detect_opencode_status(opencode_bin),
     );
 
-    vec![claude_status, codex_status, opencode_status]
+    vec![claude_status, codex_status, gemini_status, opencode_status]
 }
 
 /// Detect available engines and return the preferred default engine.
@@ -420,11 +520,13 @@ pub async fn detect_all_engines(
 pub async fn detect_preferred_engine(
     claude_bin: Option<&str>,
     codex_bin: Option<&str>,
+    gemini_bin: Option<&str>,
     opencode_bin: Option<&str>,
 ) -> EngineType {
-    let (claude_status, codex_status, opencode_status) = tokio::join!(
+    let (claude_status, codex_status, gemini_status, opencode_status) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
+        detect_gemini_status(gemini_bin),
         detect_opencode_status(opencode_bin),
     );
 
@@ -434,6 +536,9 @@ pub async fn detect_preferred_engine(
     }
     if codex_status.installed {
         return EngineType::Codex;
+    }
+    if gemini_status.installed {
+        return EngineType::Gemini;
     }
     if opencode_status.installed {
         return EngineType::OpenCode;
@@ -453,6 +558,7 @@ pub async fn resolve_engine_type(
     app_default_engine: Option<&str>,
     claude_bin: Option<&str>,
     codex_bin: Option<&str>,
+    gemini_bin: Option<&str>,
     opencode_bin: Option<&str>,
 ) -> EngineType {
     // 1. Check workspace-specific setting
@@ -460,6 +566,7 @@ pub async fn resolve_engine_type(
         match engine.to_lowercase().as_str() {
             "claude" => return EngineType::Claude,
             "codex" => return EngineType::Codex,
+            "gemini" => return EngineType::Gemini,
             "opencode" => return EngineType::OpenCode,
             _ => {} // Invalid value, fall through
         }
@@ -470,18 +577,20 @@ pub async fn resolve_engine_type(
         match engine.to_lowercase().as_str() {
             "claude" => return EngineType::Claude,
             "codex" => return EngineType::Codex,
+            "gemini" => return EngineType::Gemini,
             "opencode" => return EngineType::OpenCode,
             _ => {} // Invalid value, fall through
         }
     }
 
     // 3. Auto-detect based on installed CLIs
-    detect_preferred_engine(claude_bin, codex_bin, opencode_bin).await
+    detect_preferred_engine(claude_bin, codex_bin, gemini_bin, opencode_bin).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn claude_models_have_defaults() {
@@ -498,14 +607,22 @@ mod tests {
         // These should not panic
         let _ = get_claude_home_dir();
         let _ = get_codex_home_dir();
+        let _ = get_gemini_home_dir();
         let _ = get_opencode_home_dir();
     }
 
     #[tokio::test]
     async fn resolve_engine_type_supports_opencode() {
         let resolved =
-            resolve_engine_type(Some("opencode"), Some("claude"), None, None, None).await;
+            resolve_engine_type(Some("opencode"), Some("claude"), None, None, None, None).await;
         assert_eq!(resolved, EngineType::OpenCode);
+    }
+
+    #[tokio::test]
+    async fn resolve_engine_type_supports_gemini() {
+        let resolved =
+            resolve_engine_type(Some("gemini"), Some("claude"), None, None, None, None).await;
+        assert_eq!(resolved, EngineType::Gemini);
     }
 
     #[test]
@@ -537,5 +654,18 @@ opencode/gpt-5-nano
         assert!(models
             .iter()
             .any(|m| m.id == "minimax-cn-coding-plan/MiniMax-M2.5"));
+    }
+
+    #[test]
+    fn parse_gemini_model_from_config_json_extracts_trimmed_model() {
+        let config = json!({
+            "gemini": {
+                "env": {
+                    "GEMINI_MODEL": "  [L]gemini-3-pro-preview  "
+                }
+            }
+        });
+        let model = parse_gemini_model_from_config_json(&config);
+        assert_eq!(model.as_deref(), Some("[L]gemini-3-pro-preview"));
     }
 }

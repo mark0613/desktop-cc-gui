@@ -15,10 +15,14 @@ import {
   switchEngine,
 } from "../../../services/tauri";
 import {
-  STORAGE_KEYS,
+  STORAGE_KEYS as MODEL_STORAGE_KEYS,
   getModelMapping,
   applyModelMapping as applyMappingToDisplayName,
 } from "../../models/constants";
+import {
+  STORAGE_KEYS as PROVIDER_STORAGE_KEYS,
+  validateCodexCustomModels,
+} from "../../composer/types/provider";
 
 type UseEngineControllerOptions = {
   activeWorkspace: WorkspaceInfo | null;
@@ -50,6 +54,30 @@ const ENGINE_DISPLAY_MAP: Record<
   opencode: { displayName: "OpenCode", shortName: "OpenCode" },
 };
 
+const GEMINI_VENDOR_UPDATED_EVENT = "mossx:gemini-vendor-updated";
+
+function readCustomGeminiModels(): EngineModelInfo[] {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(PROVIDER_STORAGE_KEYS.GEMINI_CUSTOM_MODELS);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    const models = validateCodexCustomModels(parsed);
+    return models.map((model) => ({
+      id: model.id,
+      displayName: model.label?.trim() || model.id,
+      description: model.description?.trim() ?? "",
+      isDefault: false,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Convert EngineModelInfo to ModelOption format for UI compatibility
  */
@@ -79,6 +107,7 @@ export function useEngineController({
   const [isDetecting, setIsDetecting] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [modelMapping, setModelMapping] = useState(getModelMapping);
+  const [geminiCustomModelsVersion, setGeminiCustomModelsVersion] = useState(0);
 
   // Track initialization
   const initRef = useRef(false);
@@ -229,6 +258,9 @@ export function useEngineController({
       try {
         await switchEngine(engineType);
         setActiveEngineState(engineType);
+        // Immediately switch visible model list to target engine snapshot to avoid
+        // showing stale models from previous engine while CLI refresh is in flight.
+        setEngineModels(status.models.length > 0 ? status.models : []);
 
         // Always refresh models from CLI and keep status models as fallback.
         await loadModelsForEngine(engineType, status.models);
@@ -298,6 +330,17 @@ export function useEngineController({
   }, [installedEngines]);
 
   const mappedEngineModels = useMemo((): EngineModelInfo[] => {
+    if (activeEngine === "gemini") {
+      const customGeminiModels = readCustomGeminiModels();
+      if (customGeminiModels.length === 0) {
+        return engineModels;
+      }
+      const customIds = new Set(customGeminiModels.map((model) => model.id));
+      const filteredEngineModels = engineModels.filter(
+        (model) => !customIds.has(model.id),
+      );
+      return [...customGeminiModels, ...filteredEngineModels];
+    }
     if (activeEngine !== "claude") {
       return engineModels;
     }
@@ -309,7 +352,7 @@ export function useEngineController({
         modelMapping,
       ),
     }));
-  }, [activeEngine, engineModels, modelMapping]);
+  }, [activeEngine, engineModels, geminiCustomModelsVersion, modelMapping]);
 
   /**
    * Convert engine models to ModelOption format for UI compatibility
@@ -320,15 +363,21 @@ export function useEngineController({
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
+      if (e.key === MODEL_STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
         setModelMapping(getModelMapping());
+      } else if (e.key === PROVIDER_STORAGE_KEYS.GEMINI_CUSTOM_MODELS) {
+        setGeminiCustomModelsVersion((value) => value + 1);
       }
     };
 
     const handleCustomStorageChange = (e: Event) => {
       const customEvent = e as CustomEvent<{ key: string }>;
-      if (customEvent.detail?.key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
+      if (customEvent.detail?.key === MODEL_STORAGE_KEYS.CLAUDE_MODEL_MAPPING) {
         setModelMapping(getModelMapping());
+      } else if (
+        customEvent.detail?.key === PROVIDER_STORAGE_KEYS.GEMINI_CUSTOM_MODELS
+      ) {
+        setGeminiCustomModelsVersion((value) => value + 1);
       }
     };
 
@@ -348,6 +397,23 @@ export function useEngineController({
     }
     initRef.current = true;
     refreshEngines();
+  }, [refreshEngines]);
+
+  useEffect(() => {
+    const handleGeminiVendorUpdated = () => {
+      void refreshEngines();
+    };
+
+    window.addEventListener(
+      GEMINI_VENDOR_UPDATED_EVENT,
+      handleGeminiVendorUpdated,
+    );
+    return () => {
+      window.removeEventListener(
+        GEMINI_VENDOR_UPDATED_EVENT,
+        handleGeminiVendorUpdated,
+      );
+    };
   }, [refreshEngines]);
 
   // Reset models when workspace changes

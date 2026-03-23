@@ -23,6 +23,16 @@ describe("modelManagerRequest", () => {
     expect(consumeVendorModelManagerRequest()).toBeNull();
   });
 
+  it("stores and consumes gemini request", () => {
+    requestVendorModelManager({ target: "gemini", addMode: true });
+
+    const request = consumeVendorModelManagerRequest();
+    expect(request).toEqual({
+      target: "gemini",
+      addMode: true,
+    });
+  });
+
   it("defaults target to claude for unsupported payload", () => {
     window.sessionStorage.setItem(
       "mossx.vendor.model-manager-request",

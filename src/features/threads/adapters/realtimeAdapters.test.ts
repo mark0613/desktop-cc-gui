@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { claudeRealtimeAdapter } from "./claudeRealtimeAdapter";
 import { codexRealtimeAdapter } from "./codexRealtimeAdapter";
+import { geminiRealtimeAdapter } from "./geminiRealtimeAdapter";
 import { opencodeRealtimeAdapter } from "./opencodeRealtimeAdapter";
 
 describe("realtime adapters", () => {
@@ -250,6 +251,24 @@ describe("realtime adapters", () => {
       },
     });
     expect(heartbeatEvent).toBeNull();
+  });
+
+  it("maps gemini text:delta alias to assistant delta", () => {
+    const event = geminiRealtimeAdapter.mapEvent({
+      workspaceId: "ws-4",
+      message: {
+        method: "text:delta",
+        params: {
+          threadId: "gemini:session-1",
+          itemId: "agent-1",
+          delta: "working",
+        },
+      },
+    });
+    expect(event).toBeTruthy();
+    expect(event?.engine).toBe("gemini");
+    expect(event?.operation).toBe("appendAgentMessageDelta");
+    expect(event?.item.kind).toBe("message");
   });
 
   it("maps claude text:delta without itemId to a thread-scoped fallback id", () => {

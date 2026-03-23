@@ -259,6 +259,8 @@ function isLocalCliReasoningThread(threadId: string) {
   return (
     threadId.startsWith("claude:") ||
     threadId.startsWith("claude-pending-") ||
+    threadId.startsWith("gemini:") ||
+    threadId.startsWith("gemini-pending-") ||
     threadId.startsWith("opencode:") ||
     threadId.startsWith("opencode-pending-")
   );
@@ -306,7 +308,7 @@ export type ThreadAction =
       type: "ensureThread";
       workspaceId: string;
       threadId: string;
-      engine?: "codex" | "claude" | "opencode";
+      engine?: "codex" | "claude" | "gemini" | "opencode";
     }
   | { type: "hideThread"; workspaceId: string; threadId: string }
   | { type: "removeThread"; workspaceId: string; threadId: string }
@@ -336,7 +338,7 @@ export type ThreadAction =
       type: "setThreadEngine";
       workspaceId: string;
       threadId: string;
-      engine: "codex" | "claude" | "opencode";
+      engine: "codex" | "claude" | "gemini" | "opencode";
     }
   | {
       type: "setThreadTimestamp";
@@ -1561,6 +1563,8 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       // If threadId is engine:{sessionId} but not found, check for pending thread to rename.
       const pendingPrefix = action.threadId.startsWith("claude:")
         ? "claude-pending-"
+        : action.threadId.startsWith("gemini:")
+          ? "gemini-pending-"
         : action.threadId.startsWith("opencode:")
           ? "opencode-pending-"
           : null;

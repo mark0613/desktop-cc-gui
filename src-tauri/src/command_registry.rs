@@ -60,6 +60,9 @@ pub(crate) fn invoke_handler(
         crate::engine::load_claude_session,
         crate::engine::fork_claude_session,
         crate::engine::delete_claude_session,
+        crate::engine::list_gemini_sessions,
+        crate::engine::load_gemini_session,
+        crate::engine::delete_gemini_session,
         crate::local_usage::load_codex_session,
         // Codex
         crate::codex::get_config_model,

@@ -682,6 +682,7 @@ export function ComposerInput({
   }, []);
 
   const isCodexEngine = selectedEngine === "codex";
+  const isGeminiEngine = selectedEngine === "gemini";
   const collaborationModeDisabled = disabled;
   const planModeId = collaborationModes.find((mode) => mode.id === "plan")?.id ?? "plan";
   const defaultModeId = collaborationModes.find((mode) => mode.id !== planModeId)?.id ?? "code";
@@ -1098,7 +1099,7 @@ export function ComposerInput({
                         align="start"
                         className="composer-inline-select-popup"
                       >
-                        <SelectItem value="read-only" disabled>
+                        <SelectItem value="read-only" disabled={!isGeminiEngine}>
                           <span className="composer-inline-select-item">
                             <Lock size={14} aria-hidden />
                             <span className="composer-inline-select-item-label">
@@ -1106,7 +1107,7 @@ export function ComposerInput({
                             </span>
                           </span>
                         </SelectItem>
-                        <SelectItem value="current" disabled>
+                        <SelectItem value="current" disabled={!isGeminiEngine}>
                           <span className="composer-inline-select-item">
                             <Clock3 size={14} aria-hidden />
                             <span className="composer-inline-select-item-label">

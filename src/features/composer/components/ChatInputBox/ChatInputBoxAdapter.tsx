@@ -413,6 +413,7 @@ export const ChatInputBoxAdapter = forwardRef<ChatInputBoxHandle, ChatInputBoxAd
       selectedEngine,
       engines,
       onSelectEngine,
+      models,
       onSelectModel,
       selectedEffort,
       onSelectEffort,
@@ -468,6 +469,29 @@ export const ChatInputBoxAdapter = forwardRef<ChatInputBoxHandle, ChatInputBoxAd
       () => readStoredStreamingEnabled(),
     );
     const [codexSpeedMode, setCodexSpeedMode] = useState<CodexSpeedMode>('unknown');
+    const normalizedModels = useMemo(() => {
+      if (!models || models.length === 0) {
+        return undefined;
+      }
+      return models.map((modelOption) => ({
+        id: modelOption.id,
+        label: modelOption.displayName || modelOption.model || modelOption.id,
+        description:
+          modelOption.model &&
+          modelOption.model !== modelOption.displayName
+            ? modelOption.model
+            : undefined,
+      }));
+    }, [models]);
+    const resolvedSelectedModelId = useMemo(() => {
+      if (selectedModelId) {
+        return selectedModelId;
+      }
+      if (models && models.length > 0) {
+        return models[0]?.id ?? '';
+      }
+      return selectedEngine === 'claude' ? 'claude-sonnet-4-6' : '';
+    }, [models, selectedEngine, selectedModelId]);
 
     // Expose ChatInputBoxHandle to parent
     useImperativeHandle(ref, () => ({
@@ -992,7 +1016,8 @@ export const ChatInputBoxAdapter = forwardRef<ChatInputBoxHandle, ChatInputBoxAd
         value={text}
         placeholder={placeholder ?? t('chat.inputPlaceholder')}
         sendShortcut={sendShortcut}
-        selectedModel={selectedModelId ?? 'claude-sonnet-4-6'}
+        selectedModel={resolvedSelectedModelId}
+        models={normalizedModels}
         permissionMode={permissionMode}
         currentProvider={engineToProvider(selectedEngine)}
         providerAvailability={providerAvailability}

@@ -71,7 +71,7 @@ function truncateSessionLabel(label: string): string {
 }
 
 function resolveEngineType(engineSource: ThreadSummary["engineSource"] | undefined): EngineType {
-  if (engineSource === "claude" || engineSource === "opencode") {
+  if (engineSource === "claude" || engineSource === "gemini" || engineSource === "opencode") {
     return engineSource;
   }
   return "codex";

@@ -165,6 +165,9 @@ export function inferEngineFromThreadId(
   if (threadId.startsWith("claude:") || threadId.startsWith("claude-pending-")) {
     return "claude";
   }
+  if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")) {
+    return "gemini";
+  }
   if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")) {
     return "opencode";
   }

@@ -4,6 +4,7 @@ import type { EngineDisplayInfo } from "../hooks/useEngineController";
 const IMPLEMENTED_ENGINE_SET = new Set<EngineType>([
   "claude",
   "codex",
+  "gemini",
   "opencode",
 ]);
 

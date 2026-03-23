@@ -479,6 +479,8 @@ export interface ChatInputBoxProps {
   isLoading?: boolean;
   /** Current model */
   selectedModel?: string;
+  /** Optional dynamic model list from host engine */
+  models?: ModelInfo[];
   /** Current permission mode */
   permissionMode?: PermissionMode;
   /** Current provider */
@@ -647,6 +649,8 @@ export interface ButtonAreaProps {
   isEnhancing?: boolean;
   /** Current model */
   selectedModel?: string;
+  /** Optional dynamic model list from host engine */
+  models?: ModelInfo[];
   /** Current mode */
   permissionMode?: PermissionMode;
   /** Current provider */

@@ -9,14 +9,17 @@ import type {
 import {
   archiveThread as archiveThreadService,
   deleteClaudeSession as deleteClaudeSessionService,
+  deleteGeminiSession as deleteGeminiSessionService,
   deleteOpenCodeSession as deleteOpenCodeSessionService,
   forkClaudeSession as forkClaudeSessionService,
   forkThread as forkThreadService,
   listThreadTitles as listThreadTitlesService,
   listThreads as listThreadsService,
   listClaudeSessions as listClaudeSessionsService,
+  listGeminiSessions as listGeminiSessionsService,
   getOpenCodeSessionList as getOpenCodeSessionListService,
   loadClaudeSession as loadClaudeSessionService,
+  loadGeminiSession as loadGeminiSessionService,
   loadCodexSession as loadCodexSessionService,
   renameThreadTitleKey as renameThreadTitleKeyService,
   setThreadTitle as setThreadTitleService,
@@ -35,6 +38,7 @@ import {
   parseClaudeHistoryMessages,
 } from "../loaders/claudeHistoryLoader";
 import { createCodexHistoryLoader } from "../loaders/codexHistoryLoader";
+import { createGeminiHistoryLoader } from "../loaders/geminiHistoryLoader";
 import { createOpenCodeHistoryLoader } from "../loaders/opencodeHistoryLoader";
 import {
   asString,
@@ -82,12 +86,94 @@ const THREAD_LIST_MAX_TOTAL_PAGES = 40;
 const THREAD_LIST_MAX_EMPTY_PAGES_LOAD_OLDER = 10;
 const THREAD_LIST_MAX_FETCH_DURATION_MS = 1_500;
 const DEFAULT_CLAUDE_CONTEXT_WINDOW = 200_000;
+const GEMINI_SESSION_CACHE_TTL_MS = 60_000;
+const GEMINI_SESSION_FETCH_TIMEOUT_MS = 800;
 const CODEX_BACKGROUND_HELPER_PROMPT_PREFIXES = [
   "Generate a concise title for a coding chat thread from the first user message.",
   "You create concise run metadata for a coding task.",
   "You are generating OpenSpec project context.",
   "Generate a concise git commit message for the following changes.",
 ] as const;
+
+type GeminiSessionSummary = {
+  sessionId: string;
+  firstMessage: string;
+  updatedAt: number;
+};
+
+function normalizeGeminiSessionSummaries(value: unknown): GeminiSessionSummary[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+      const record = entry as Record<string, unknown>;
+      const sessionId = asString(record.sessionId).trim();
+      if (!sessionId) {
+        return null;
+      }
+      return {
+        sessionId,
+        firstMessage: asString(record.firstMessage).trim(),
+        updatedAt: asNumber(record.updatedAt),
+      } satisfies GeminiSessionSummary;
+    })
+    .filter((entry): entry is GeminiSessionSummary => entry !== null);
+}
+
+function mergeGeminiSessionSummaries(
+  baseSummaries: ThreadSummary[],
+  geminiSessions: GeminiSessionSummary[],
+  workspaceId: string,
+  mappedTitles: Record<string, string>,
+  getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+): ThreadSummary[] {
+  if (geminiSessions.length === 0) {
+    return baseSummaries;
+  }
+  const mergedById = new Map<string, ThreadSummary>();
+  baseSummaries.forEach((entry) => mergedById.set(entry.id, entry));
+  geminiSessions.forEach((session) => {
+    const id = `gemini:${session.sessionId}`;
+    const prev = mergedById.get(id);
+    const updatedAt = Number.isFinite(session.updatedAt)
+      ? Math.max(0, session.updatedAt)
+      : 0;
+    const next: ThreadSummary = {
+      id,
+      name:
+        mappedTitles[id] ||
+        getCustomName(workspaceId, id) ||
+        session.firstMessage ||
+        "Gemini Session",
+      updatedAt,
+      engineSource: "gemini",
+    };
+    if (!prev || next.updatedAt >= prev.updatedAt) {
+      mergedById.set(id, next);
+    }
+  });
+  return Array.from(mergedById.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
 
 function normalizeComparableWorkspacePath(path: string): string {
   return normalizeWindowsPathForComparison(normalizeRootPath(path).trim());
@@ -330,6 +416,12 @@ export function useThreadActions({
 }: UseThreadActionsOptions) {
   // Map workspaceId → filesystem path, populated in listThreadsForWorkspace
   const workspacePathsByIdRef = useRef<Record<string, string>>({});
+  const geminiSessionCacheRef = useRef<
+    Record<string, { fetchedAt: number; sessions: GeminiSessionSummary[] }>
+  >({});
+  const threadListRequestSeqRef = useRef<Record<string, number>>({});
+  const latestThreadsByWorkspaceRef = useRef(threadsByWorkspace);
+  latestThreadsByWorkspaceRef.current = threadsByWorkspace;
 
   const extractThreadId = useCallback((response: Record<string, any>) => {
     const candidates = [
@@ -356,8 +448,8 @@ export function useThreadActions({
       const shouldActivate = options?.activate !== false;
       const engine = options?.engine;
 
-      // For local CLI engines (Claude/OpenCode), generate a local pending thread ID.
-      if (engine === "claude" || engine === "opencode") {
+      // For local CLI engines (Claude/Gemini/OpenCode), generate a local pending thread ID.
+      if (engine === "claude" || engine === "gemini" || engine === "opencode") {
         const prefix = engine;
         const threadId = `${prefix}-pending-${Date.now()}-${Math.random()
           .toString(36)
@@ -450,6 +542,12 @@ export function useThreadActions({
                   workspacePath,
                   loadClaudeSession: loadClaudeSessionService,
                 })
+              : targetThreadId.startsWith("gemini:")
+                ? createGeminiHistoryLoader({
+                    workspaceId,
+                    workspacePath,
+                    loadGeminiSession: loadGeminiSessionService,
+                  })
               : targetThreadId.startsWith("opencode:")
                 ? createOpenCodeHistoryLoader({
                     workspaceId,
@@ -588,9 +686,9 @@ export function useThreadActions({
       }
       // Claude sessions don't use Codex thread/resume RPC —
       // load message history from JSONL and populate the thread
+      const workspacePath = workspacePathsByIdRef.current[workspaceId];
       if (threadId.startsWith("claude:")) {
         dispatch({ type: "ensureThread", workspaceId, threadId, engine: "claude" });
-        const workspacePath = workspacePathsByIdRef.current[workspaceId];
         if (workspacePath && !loadedThreadsRef.current[threadId]) {
           const realSessionId = threadId.slice("claude:".length);
           try {
@@ -646,6 +744,27 @@ export function useThreadActions({
       }
       if (threadId.startsWith("opencode:")) {
         dispatch({ type: "ensureThread", workspaceId, threadId, engine: "opencode" });
+        loadedThreadsRef.current[threadId] = true;
+        return threadId;
+      }
+      if (threadId.startsWith("gemini:")) {
+        dispatch({ type: "ensureThread", workspaceId, threadId, engine: "gemini" });
+        if (workspacePath && !loadedThreadsRef.current[threadId]) {
+          const realSessionId = threadId.slice("gemini:".length);
+          try {
+            const result = await loadGeminiSessionService(
+              workspacePath,
+              realSessionId,
+            );
+            const messagesData = (result as { messages?: unknown }).messages ?? result;
+            const items = parseClaudeHistoryMessages(messagesData);
+            if (items.length > 0) {
+              dispatch({ type: "setThreadItems", threadId, items });
+            }
+          } catch {
+            // Failed to load Gemini session history — not fatal
+          }
+        }
         loadedThreadsRef.current[threadId] = true;
         return threadId;
       }
@@ -808,6 +927,8 @@ export function useThreadActions({
           response = await forkClaudeSessionService(workspacePath, sessionId);
         } else if (threadId.startsWith("claude-pending-")) {
           return null;
+        } else if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")) {
+          return null;
         } else {
           response = await forkThreadService(workspaceId, threadId);
         }
@@ -822,7 +943,11 @@ export function useThreadActions({
         if (!forkedThreadId) {
           return null;
         }
-        const forkedEngine = forkedThreadId.startsWith("claude:") ? "claude" : "codex";
+        const forkedEngine = forkedThreadId.startsWith("claude:")
+          ? "claude"
+          : forkedThreadId.startsWith("gemini:")
+            ? "gemini"
+            : "codex";
         dispatch({
           type: "ensureThread",
           workspaceId,
@@ -889,6 +1014,8 @@ export function useThreadActions({
     ) => {
       // Store workspace path for Claude session loading
       workspacePathsByIdRef.current[workspace.id] = workspace.path;
+      const requestSeq = (threadListRequestSeqRef.current[workspace.id] ?? 0) + 1;
+      threadListRequestSeqRef.current[workspace.id] = requestSeq;
       const preserveState = options?.preserveState ?? false;
       const workspacePath = normalizeComparableWorkspacePath(workspace.path);
       if (!preserveState) {
@@ -919,9 +1046,24 @@ export function useThreadActions({
           mappedTitles = {};
         }
         const existingThreads = threadsByWorkspace[workspace.id] ?? [];
+        const activeThreadId = activeThreadIdByWorkspace[workspace.id] ?? "";
         const engineById = new Map(
           existingThreads.map((thread) => [thread.id, thread.engineSource]),
         );
+        const hasGeminiSignal =
+          existingThreads.some(
+            (thread) =>
+              thread.engineSource === "gemini" ||
+              thread.id.startsWith("gemini:") ||
+              thread.id.startsWith("gemini-pending-"),
+          ) ||
+          activeThreadId.startsWith("gemini:") ||
+          activeThreadId.startsWith("gemini-pending-") ||
+          Object.keys(mappedTitles).some((id) => id.startsWith("gemini:"));
+        const cachedGemini = geminiSessionCacheRef.current[workspace.id];
+        const hasFreshGeminiCache =
+          !!cachedGemini &&
+          Date.now() - cachedGemini.fetchedAt <= GEMINI_SESSION_CACHE_TTL_MS;
         const knownActivityByThread = threadActivityRef.current[workspace.id] ?? {};
         const hasKnownActivity = Object.keys(knownActivityByThread).length > 0;
         const matchingThreads: Record<string, unknown>[] = [];
@@ -1063,7 +1205,9 @@ export function useThreadActions({
           })
           .filter((entry) => entry.id);
 
-        // Also fetch Claude/OpenCode sessions and merge them into one timeline.
+        // Fetch Claude/OpenCode sessions in the critical path.
+        // Gemini history is merged from cache first, then refreshed in background,
+        // so codex/claude thread list latency stays isolated from Gemini I/O scans.
         let allSummaries: ThreadSummary[] = summaries;
         const mergedById = new Map<string, ThreadSummary>();
         summaries.forEach((entry) => mergedById.set(entry.id, entry));
@@ -1138,6 +1282,15 @@ export function useThreadActions({
         allSummaries = Array.from(mergedById.values()).sort(
           (a, b) => b.updatedAt - a.updatedAt,
         );
+        if (hasFreshGeminiCache && cachedGemini.sessions.length > 0) {
+          allSummaries = mergeGeminiSessionSummaries(
+            allSummaries,
+            cachedGemini.sessions,
+            workspace.id,
+            mappedTitles,
+            getCustomName,
+          );
+        }
         if (didChangeActivity) {
           const next = {
             ...threadActivityRef.current,
@@ -1152,6 +1305,10 @@ export function useThreadActions({
           workspaceId: workspace.id,
           threads: allSummaries,
         });
+        latestThreadsByWorkspaceRef.current = {
+          ...latestThreadsByWorkspaceRef.current,
+          [workspace.id]: allSummaries,
+        };
         dispatch({
           type: "setThreadListCursor",
           workspaceId: workspace.id,
@@ -1170,6 +1327,71 @@ export function useThreadActions({
             timestamp: getThreadTimestamp(thread),
           });
         });
+
+        const shouldRefreshGeminiSessions = hasGeminiSignal || !!cachedGemini;
+        if (shouldRefreshGeminiSessions) {
+          void (async () => {
+            const geminiResult = await withTimeout(
+              listGeminiSessionsService(workspace.path, 50),
+              GEMINI_SESSION_FETCH_TIMEOUT_MS,
+            );
+            if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
+              return;
+            }
+            if (geminiResult === null) {
+              onDebug?.({
+                id: `${Date.now()}-client-gemini-session-timeout`,
+                timestamp: Date.now(),
+                source: "client",
+                label: "thread/list gemini timeout",
+                payload: {
+                  workspaceId: workspace.id,
+                  timeoutMs: GEMINI_SESSION_FETCH_TIMEOUT_MS,
+                },
+              });
+              return;
+            }
+            const normalizedGeminiSessions = normalizeGeminiSessionSummaries(geminiResult);
+            geminiSessionCacheRef.current[workspace.id] = {
+              fetchedAt: Date.now(),
+              sessions: normalizedGeminiSessions,
+            };
+            const currentSnapshot =
+              latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
+            const baselineSummaries =
+              currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            const nextSummaries = mergeGeminiSessionSummaries(
+              baselineSummaries,
+              normalizedGeminiSessions,
+              workspace.id,
+              mappedTitles,
+              getCustomName,
+            );
+            const unchanged =
+              nextSummaries.length === baselineSummaries.length &&
+              nextSummaries.every((entry, index) => {
+                const prev = baselineSummaries[index];
+                return (
+                  !!prev &&
+                  prev.id === entry.id &&
+                  prev.name === entry.name &&
+                  prev.updatedAt === entry.updatedAt &&
+                  prev.engineSource === entry.engineSource
+                );
+              });
+            if (!unchanged) {
+              dispatch({
+                type: "setThreads",
+                workspaceId: workspace.id,
+                threads: nextSummaries,
+              });
+              latestThreadsByWorkspaceRef.current = {
+                ...latestThreadsByWorkspaceRef.current,
+                [workspace.id]: nextSummaries,
+              };
+            }
+          })();
+        }
       } catch (error) {
         onDebug?.({
           id: `${Date.now()}-client-thread-list-error`,
@@ -1193,6 +1415,7 @@ export function useThreadActions({
       getCustomName,
       onDebug,
       onThreadTitleMappingsLoaded,
+      activeThreadIdByWorkspace,
       threadActivityRef,
       threadsByWorkspace,
     ],
@@ -1400,6 +1623,15 @@ export function useThreadActions({
       if (threadId.startsWith("opencode:")) {
         const sessionId = threadId.slice("opencode:".length);
         await deleteOpenCodeSessionService(workspaceId, sessionId);
+        return;
+      }
+      if (threadId.startsWith("gemini:")) {
+        const sessionId = threadId.slice("gemini:".length);
+        const workspacePath = workspacePathsByIdRef.current[workspaceId];
+        if (!workspacePath) {
+          throw new Error("workspace not connected");
+        }
+        await deleteGeminiSessionService(workspacePath, sessionId);
         return;
       }
       await archiveThread(workspaceId, threadId);

@@ -715,6 +715,7 @@ const zhPart1 = {
     projectSessionItemUntitled: "未命名会话",
     projectSessionEngineCodex: "Codex",
     projectSessionEngineClaude: "Claude",
+    projectSessionEngineGemini: "Gemini",
     projectSessionEngineOpencode: "OpenCode",
     radarHistoryTitle: "雷达历史管理",
     radarHistoryDescription: "管理并删除雷达中的最近完成记录，支持批量操作。",
