@@ -1032,11 +1032,24 @@ export function useAppShellSections(ctx: any) {
     (input: Parameters<typeof kanbanCreateTask>[0]) => {
       const task = kanbanCreateTask(input);
       if (input.autoStart) {
-        void launchKanbanTaskExecution({
-          taskId: task.id,
-          source: "autoStart",
-          activate: false,
-        });
+        const tryLaunch = (attempt: number) => {
+          void launchKanbanTaskExecution({
+            taskId: task.id,
+            source: "autoStart",
+            activate: false,
+          }).then((result) => {
+            if (result.ok) {
+              return;
+            }
+            if (result.reason !== "task_not_found" || attempt >= 3) {
+              return;
+            }
+            window.setTimeout(() => {
+              tryLaunch(attempt + 1);
+            }, (attempt + 1) * 40);
+          });
+        };
+        tryLaunch(0);
       }
       return task;
     },
