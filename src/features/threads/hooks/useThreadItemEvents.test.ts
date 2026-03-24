@@ -330,6 +330,34 @@ describe("useThreadItemEvents", () => {
     expect(safeMessageActivity).toHaveBeenCalled();
   });
 
+  it("does not re-enable processing for gemini reasoning deltas", () => {
+    const { result, dispatch, markProcessing, safeMessageActivity } = makeOptions();
+
+    act(() => {
+      result.current.onReasoningTextDelta(
+        "ws-1",
+        "gemini:session-1",
+        "reasoning-1",
+        "先确认目录，再组织回答。",
+      );
+    });
+
+    expect(dispatch).toHaveBeenNthCalledWith(1, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "gemini:session-1",
+      engine: "gemini",
+    });
+    expect(dispatch).toHaveBeenNthCalledWith(2, {
+      type: "appendReasoningContent",
+      threadId: "gemini:session-1",
+      itemId: "reasoning-1",
+      delta: "先确认目录，再组织回答。",
+    });
+    expect(markProcessing).not.toHaveBeenCalled();
+    expect(safeMessageActivity).toHaveBeenCalled();
+  });
+
   it("skips reasoning deltas for interrupted threads", () => {
     const { result, dispatch, markProcessing, safeMessageActivity, interruptedThreadsRef } =
       makeOptions();
@@ -387,6 +415,42 @@ describe("useThreadItemEvents", () => {
 
     expect(dispatch).not.toHaveBeenCalled();
     expect(markProcessing).not.toHaveBeenCalled();
+  });
+
+  it("bypasses realtime batching for gemini agent deltas", () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem("mossx.perf.realtimeBatching", "1");
+    const { result, dispatch, markProcessing, safeMessageActivity } = makeOptions();
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: "ws-1",
+        threadId: "gemini:session-1",
+        itemId: "assistant-1",
+        delta: "第一段",
+      });
+    });
+
+    expect(dispatch).toHaveBeenNthCalledWith(1, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "gemini:session-1",
+      engine: "gemini",
+    });
+    expect(markProcessing).toHaveBeenCalledWith("gemini:session-1", true);
+    expect(dispatch).toHaveBeenNthCalledWith(2, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "gemini:session-1",
+      itemId: "assistant-1",
+      delta: "第一段",
+      hasCustomName: false,
+    });
+    expect(safeMessageActivity).toHaveBeenCalledTimes(1);
+
+    vi.runOnlyPendingTimers();
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 
   it("calls onAgentMessageCompletedExternal with correct payload", () => {

@@ -296,6 +296,134 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     );
   });
 
+  it("normalizes file URI attachments into host paths before sending", async () => {
+    const onSend = vi.fn();
+    renderAdapter({ onSend });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      onSubmit?: (
+        content: string,
+        attachments?: Array<{
+          id: string;
+          fileName: string;
+          mediaType: string;
+          data: string;
+        }>,
+      ) => void;
+    };
+
+    act(() => {
+      latest.onSubmit?.("fresh child snapshot", [
+        {
+          id: "att-2",
+          fileName: "image.png",
+          mediaType: "image/png",
+          data: "file:///tmp/a%20b.png",
+        },
+      ]);
+    });
+
+    expect(onSend).toHaveBeenCalledWith("fresh child snapshot", ["/tmp/a b.png"]);
+  });
+
+  it("recovers miswrapped data URL payload containing file URI", async () => {
+    const onSend = vi.fn();
+    renderAdapter({ onSend });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      onSubmit?: (
+        content: string,
+        attachments?: Array<{
+          id: string;
+          fileName: string;
+          mediaType: string;
+          data: string;
+        }>,
+      ) => void;
+    };
+
+    act(() => {
+      latest.onSubmit?.("fresh child snapshot", [
+        {
+          id: "att-3",
+          fileName: "image.png",
+          mediaType: "image/png",
+          data: "data:image/png;base64,file:///tmp/c%20d.png",
+        },
+      ]);
+    });
+
+    expect(onSend).toHaveBeenCalledWith("fresh child snapshot", ["/tmp/c d.png"]);
+  });
+
+  it("normalizes localhost file URI attachments into absolute host paths", async () => {
+    const onSend = vi.fn();
+    renderAdapter({ onSend });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      onSubmit?: (
+        content: string,
+        attachments?: Array<{
+          id: string;
+          fileName: string;
+          mediaType: string;
+          data: string;
+        }>,
+      ) => void;
+    };
+
+    act(() => {
+      latest.onSubmit?.("fresh child snapshot", [
+        {
+          id: "att-4",
+          fileName: "image.png",
+          mediaType: "image/png",
+          data: "file://localhost/tmp/e%20f.png",
+        },
+      ]);
+    });
+
+    expect(onSend).toHaveBeenCalledWith("fresh child snapshot", ["/tmp/e f.png"]);
+  });
+
+  it("preserves UNC-like file URI host attachments", async () => {
+    const onSend = vi.fn();
+    renderAdapter({ onSend });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      onSubmit?: (
+        content: string,
+        attachments?: Array<{
+          id: string;
+          fileName: string;
+          mediaType: string;
+          data: string;
+        }>,
+      ) => void;
+    };
+
+    act(() => {
+      latest.onSubmit?.("fresh child snapshot", [
+        {
+          id: "att-5",
+          fileName: "image.png",
+          mediaType: "image/png",
+          data: "file://server/share/folder/a%20b.png",
+        },
+      ]);
+    });
+
+    expect(onSend).toHaveBeenCalledWith("fresh child snapshot", ["//server/share/folder/a b.png"]);
+  });
+
   it('forwards dual context usage model and flag to ChatInputBox', async () => {
     renderAdapter({
       contextUsage: { used: 120_000, total: 256_000 },

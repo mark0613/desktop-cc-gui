@@ -420,6 +420,7 @@ export function useThreadActions({
   const geminiSessionCacheRef = useRef<
     Record<string, { fetchedAt: number; sessions: GeminiSessionSummary[] }>
   >({});
+  const geminiRefreshAttemptedRef = useRef<Record<string, boolean>>({});
   const threadListRequestSeqRef = useRef<Record<string, number>>({});
   const latestThreadsByWorkspaceRef = useRef(threadsByWorkspace);
   latestThreadsByWorkspaceRef.current = threadsByWorkspace;
@@ -1329,9 +1330,13 @@ export function useThreadActions({
           });
         });
 
-        const shouldRefreshGeminiSessions = hasGeminiSignal || !!cachedGemini;
+        const hasAttemptedGeminiRefresh =
+          geminiRefreshAttemptedRef.current[workspace.id] === true;
+        const shouldRefreshGeminiSessions =
+          hasGeminiSignal || !!cachedGemini || !hasAttemptedGeminiRefresh;
         if (shouldRefreshGeminiSessions) {
           void (async () => {
+            geminiRefreshAttemptedRef.current[workspace.id] = true;
             const geminiResult = await withTimeout(
               listGeminiSessionsService(workspace.path, 50),
               GEMINI_SESSION_FETCH_TIMEOUT_MS,

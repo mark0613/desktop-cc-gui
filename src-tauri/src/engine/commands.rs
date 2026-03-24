@@ -35,6 +35,9 @@ use parse_helpers::*;
 /// Maximum lifetime for an event forwarder task. Prevents orphaned tasks from
 /// leaking memory when the underlying process hangs or is killed externally.
 const EVENT_FORWARDER_TIMEOUT_SECS: u64 = 30 * 60;
+/// Gemini may emit fallback reasoning shortly after turn/completed.
+/// Keep the forwarder alive briefly so realtime reasoning is not dropped.
+const GEMINI_POST_COMPLETION_REASONING_GRACE_MS: u64 = 8_000;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -2331,8 +2334,12 @@ pub async fn engine_send_message(
                 let mut last_render_lane = GeminiRenderLane::Other;
                 let mut reasoning_run_index = 0usize;
                 let mut active_reasoning_item_id: Option<String> = None;
+                let mut post_completion_grace_deadline: Option<tokio::time::Instant> = None;
                 loop {
-                    let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
+                    let active_deadline = post_completion_grace_deadline
+                        .map(|grace| std::cmp::min(grace, deadline))
+                        .unwrap_or(deadline);
+                    let recv_result = tokio::time::timeout_at(active_deadline, receiver.recv()).await;
                     let turn_event = match recv_result {
                         Ok(Ok(event)) => event,
                         Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
@@ -2436,6 +2443,15 @@ pub async fn engine_send_message(
                     }
 
                     if is_terminal {
+                        if matches!(event, EngineEvent::TurnCompleted { .. }) {
+                            post_completion_grace_deadline = Some(
+                                tokio::time::Instant::now()
+                                    + std::time::Duration::from_millis(
+                                        GEMINI_POST_COMPLETION_REASONING_GRACE_MS,
+                                    ),
+                            );
+                            continue;
+                        }
                         break;
                     }
                 }

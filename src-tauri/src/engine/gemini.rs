@@ -113,6 +113,12 @@ impl GeminiSession {
             return None;
         }
         if trimmed.starts_with("data:") {
+            if let Some((_, data_segment)) = trimmed.split_once(',') {
+                let recovered = data_segment.trim();
+                if recovered.starts_with("file://") {
+                    return Self::normalize_file_uri_path(recovered);
+                }
+            }
             log::warn!(
                 "Gemini image attachment is data-url based; Gemini CLI needs file paths, skipping"
             );
@@ -125,20 +131,75 @@ impl GeminiSession {
             );
             return None;
         }
-        if let Some(path) = trimmed.strip_prefix("file://") {
-            let path_without_host = path.strip_prefix("localhost/").unwrap_or(path);
-            if cfg!(windows)
-                && path_without_host.starts_with('/')
-                && path_without_host
-                    .as_bytes()
-                    .get(2)
-                    .is_some_and(|value| *value == b':')
-            {
-                return Some(path_without_host[1..].to_string());
-            }
-            return Some(path_without_host.to_string());
+        if trimmed.starts_with("file://") {
+            return Self::normalize_file_uri_path(trimmed);
         }
         Some(trimmed.to_string())
+    }
+
+    fn normalize_file_uri_path(raw_uri: &str) -> Option<String> {
+        let without_scheme = raw_uri.strip_prefix("file://")?;
+        let (host, path_part) = if without_scheme.starts_with('/') {
+            ("", without_scheme.to_string())
+        } else if let Some((host, rest)) = without_scheme.split_once('/') {
+            (host, format!("/{}", rest))
+        } else {
+            (without_scheme, "/".to_string())
+        };
+
+        let decoded_path = Self::percent_decode_path(&path_part);
+        let is_local_host = host.is_empty() || host.eq_ignore_ascii_case("localhost");
+        let mut normalized = if is_local_host {
+            decoded_path
+        } else {
+            format!("//{}{}", host, decoded_path)
+        };
+
+        if cfg!(windows)
+            && is_local_host
+            && normalized.starts_with('/')
+            && Self::has_windows_drive_prefix(&normalized[1..])
+        {
+            normalized = normalized[1..].to_string();
+        }
+        Some(normalized)
+    }
+
+    fn percent_decode_path(input: &str) -> String {
+        let bytes = input.as_bytes();
+        let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+        let mut idx = 0usize;
+        while idx < bytes.len() {
+            if bytes[idx] == b'%' && idx + 2 < bytes.len() {
+                let h1 = bytes[idx + 1];
+                let h2 = bytes[idx + 2];
+                if let (Some(a), Some(b)) = (Self::hex_value(h1), Self::hex_value(h2)) {
+                    out.push((a << 4) | b);
+                    idx += 3;
+                    continue;
+                }
+            }
+            out.push(bytes[idx]);
+            idx += 1;
+        }
+        String::from_utf8_lossy(&out).into_owned()
+    }
+
+    fn hex_value(byte: u8) -> Option<u8> {
+        match byte {
+            b'0'..=b'9' => Some(byte - b'0'),
+            b'a'..=b'f' => Some(byte - b'a' + 10),
+            b'A'..=b'F' => Some(byte - b'A' + 10),
+            _ => None,
+        }
+    }
+
+    fn has_windows_drive_prefix(path: &str) -> bool {
+        let bytes = path.as_bytes();
+        bytes.len() >= 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && (bytes[2] == b'/' || bytes[2] == b'\\')
     }
 
     fn escape_image_reference(path: &str) -> String {
@@ -1300,6 +1361,34 @@ mod tests {
         let images = vec!["file:///Users/demo/a.png".to_string()];
         let prompt = GeminiSession::with_image_references("Describe", Some(images.as_slice()));
         assert_eq!(prompt, "Describe\n\n@\"/Users/demo/a.png\"");
+    }
+
+    #[test]
+    fn with_image_references_normalizes_localhost_file_uri() {
+        let images = vec!["file://localhost/Users/demo/a.png".to_string()];
+        let prompt = GeminiSession::with_image_references("Describe", Some(images.as_slice()));
+        assert_eq!(prompt, "Describe\n\n@\"/Users/demo/a.png\"");
+    }
+
+    #[test]
+    fn with_image_references_preserves_unc_host_file_uri() {
+        let images = vec!["file://server/share/folder/a%20b.png".to_string()];
+        let prompt = GeminiSession::with_image_references("Describe", Some(images.as_slice()));
+        assert_eq!(prompt, "Describe\n\n@\"//server/share/folder/a b.png\"");
+    }
+
+    #[test]
+    fn with_image_references_decodes_percent_escaped_file_uri() {
+        let images = vec!["file:///Users/demo/a%20b.png".to_string()];
+        let prompt = GeminiSession::with_image_references("Describe", Some(images.as_slice()));
+        assert_eq!(prompt, "Describe\n\n@\"/Users/demo/a b.png\"");
+    }
+
+    #[test]
+    fn with_image_references_recovers_miswrapped_data_url_file_uri() {
+        let images = vec!["data:image/png;base64,file:///Users/demo/c%20d.png".to_string()];
+        let prompt = GeminiSession::with_image_references("Describe", Some(images.as_slice()));
+        assert_eq!(prompt, "Describe\n\n@\"/Users/demo/c d.png\"");
     }
 
     #[test]

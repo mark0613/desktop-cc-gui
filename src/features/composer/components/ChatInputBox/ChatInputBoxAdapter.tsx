@@ -234,6 +234,55 @@ function isHostAbsolutePath(value: string): boolean {
   );
 }
 
+function decodePercentEncoded(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function fileUriToHostPath(value: string): string | null {
+  if (!value.toLowerCase().startsWith('file://')) {
+    return null;
+  }
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'file:') {
+      return null;
+    }
+    const host = parsed.host;
+    const isLocalHost = !host || parsed.hostname.toLowerCase() === 'localhost';
+    let pathPart = decodePercentEncoded(parsed.pathname || '');
+    if (!pathPart) {
+      return null;
+    }
+    // Windows file URI may look like "/C:/Users/demo/image.png"
+    if (/^\/[A-Za-z]:\//.test(pathPart)) {
+      pathPart = pathPart.slice(1);
+    }
+    if (isLocalHost) {
+      return pathPart;
+    }
+    // Preserve UNC-like host paths for Windows network shares.
+    return `//${host}${pathPart}`;
+  } catch {
+    // Keep a conservative fallback for malformed URIs.
+    let pathPart = value.slice('file://'.length);
+    if (
+      pathPart.startsWith('localhost/') ||
+      pathPart.startsWith('LOCALHOST/')
+    ) {
+      pathPart = `/${pathPart.slice('localhost/'.length)}`;
+    }
+    pathPart = decodePercentEncoded(pathPart);
+    if (/^\/[A-Za-z]:\//.test(pathPart)) {
+      pathPart = pathPart.slice(1);
+    }
+    return pathPart || null;
+  }
+}
+
 function attachmentToImageInput(attachment: Attachment): string | null {
   if (!attachment.mediaType.startsWith('image/')) {
     return null;
@@ -242,8 +291,20 @@ function attachmentToImageInput(attachment: Attachment): string | null {
   if (!payload) {
     return null;
   }
+  if (payload.toLowerCase().startsWith('file://')) {
+    return fileUriToHostPath(payload) ?? payload;
+  }
+  if (payload.startsWith('data:')) {
+    const commaIndex = payload.indexOf(',');
+    if (commaIndex > -1) {
+      const dataSegment = payload.slice(commaIndex + 1).trim();
+      if (dataSegment.toLowerCase().startsWith('file://')) {
+        return fileUriToHostPath(dataSegment) ?? dataSegment;
+      }
+    }
+    return payload;
+  }
   if (
-    payload.startsWith('data:') ||
     payload.startsWith('http://') ||
     payload.startsWith('https://') ||
     isHostAbsolutePath(payload)

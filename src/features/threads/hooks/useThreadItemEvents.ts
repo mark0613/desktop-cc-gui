@@ -29,6 +29,10 @@ function isClaudeThread(threadId: string) {
   return threadId.startsWith("claude:") || threadId.startsWith("claude-pending-");
 }
 
+function isGeminiThread(threadId: string) {
+  return threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-");
+}
+
 function isClaudeStreamDebugEnabled() {
   if (typeof window === "undefined") {
     return false;
@@ -217,7 +221,15 @@ export function useThreadItemEvents({
         });
         ensuredThreads?.add(operation.threadId);
       }
-      if (!markedProcessingThreads || !markedProcessingThreads.has(operation.threadId)) {
+      const isGeminiReasoningDelta =
+        isGeminiThread(operation.threadId) &&
+        (operation.kind === "reasoningSummaryDelta" ||
+          operation.kind === "reasoningSummaryBoundary" ||
+          operation.kind === "reasoningContentDelta");
+      if (
+        !isGeminiReasoningDelta &&
+        (!markedProcessingThreads || !markedProcessingThreads.has(operation.threadId))
+      ) {
         markProcessing(operation.threadId, true);
         markedProcessingThreads?.add(operation.threadId);
       }
@@ -304,6 +316,11 @@ export function useThreadItemEvents({
 
   const enqueueRealtimeDeltaOperation = useCallback(
     (operation: RealtimeDeltaOperation) => {
+      if (operation.kind === "agentDelta" && isGeminiThread(operation.threadId)) {
+        applyRealtimeDeltaOperation(operation);
+        safeMessageActivity();
+        return;
+      }
       if (!enableRealtimeBatchingRef.current) {
         applyRealtimeDeltaOperation(operation);
         safeMessageActivity();

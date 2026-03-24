@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem, WorkspaceInfo } from "../../../types";
 import {
@@ -1138,6 +1138,46 @@ describe("useThreadActions", () => {
           engineSource: "opencode",
         },
       ],
+    });
+  });
+
+  it("refreshes gemini sessions on cold start without gemini signal", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(listClaudeSessions).mockResolvedValue([]);
+    vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
+    vi.mocked(listGeminiSessions).mockResolvedValue([
+      {
+        sessionId: "ses_gemini_1",
+        firstMessage: "Gemini Hello",
+        updatedAt: 1_730_000_100_000,
+      },
+    ]);
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    await waitFor(() => {
+      expect(listGeminiSessions).toHaveBeenCalledWith("/tmp/codex", 50);
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "setThreads",
+        workspaceId: "ws-1",
+        threads: [
+          {
+            id: "gemini:ses_gemini_1",
+            name: "Gemini Hello",
+            updatedAt: 1_730_000_100_000,
+            engineSource: "gemini",
+          },
+        ],
+      });
     });
   });
 
