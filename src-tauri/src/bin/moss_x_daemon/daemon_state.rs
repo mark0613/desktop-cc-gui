@@ -1,5 +1,7 @@
 use super::*;
 
+mod git;
+
 impl DaemonState {
     pub(super) fn load(config: &DaemonConfig, event_sink: DaemonEventSink) -> Self {
         let storage_path = config.data_dir.join("workspaces.json");
@@ -308,7 +310,11 @@ impl DaemonState {
         .await
     }
 
-    pub(super) async fn connect_workspace(&self, id: String, client_version: String) -> Result<(), String> {
+    pub(super) async fn connect_workspace(
+        &self,
+        id: String,
+        client_version: String,
+    ) -> Result<(), String> {
         {
             let sessions = self.sessions.lock().await;
             if sessions.contains_key(&id) {
@@ -340,7 +346,10 @@ impl DaemonState {
         settings_core::get_app_settings_core(&self.app_settings).await
     }
 
-    pub(super) async fn update_app_settings(&self, settings: AppSettings) -> Result<AppSettings, String> {
+    pub(super) async fn update_app_settings(
+        &self,
+        settings: AppSettings,
+    ) -> Result<AppSettings, String> {
         let previous = self.app_settings.lock().await.clone();
         let updated = settings_core::update_app_settings_core(
             settings,
@@ -431,7 +440,10 @@ impl DaemonState {
         *self.active_engine.lock().await
     }
 
-    pub(super) async fn switch_engine(&self, engine_type: engine::EngineType) -> Result<(), String> {
+    pub(super) async fn switch_engine(
+        &self,
+        engine_type: engine::EngineType,
+    ) -> Result<(), String> {
         self.sync_engine_configs().await;
         let statuses = self.engine_manager.detect_engines().await;
         let installed = statuses
@@ -461,14 +473,20 @@ impl DaemonState {
             .find(|entry| entry.engine_type == engine_type)
     }
 
-    pub(super) async fn get_engine_models(&self, engine_type: engine::EngineType) -> Vec<engine::ModelInfo> {
+    pub(super) async fn get_engine_models(
+        &self,
+        engine_type: engine::EngineType,
+    ) -> Vec<engine::ModelInfo> {
         self.get_engine_status(engine_type)
             .await
             .map(|status| status.models)
             .unwrap_or_default()
     }
 
-    pub(super) async fn workspace_path_for_engine(&self, workspace_id: &str) -> Result<PathBuf, String> {
+    pub(super) async fn workspace_path_for_engine(
+        &self,
+        workspace_id: &str,
+    ) -> Result<PathBuf, String> {
         let workspaces = self.workspaces.lock().await;
         workspaces
             .get(workspace_id)
@@ -476,7 +494,6 @@ impl DaemonState {
             .ok_or_else(|| "Workspace not found".to_string())
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) async fn engine_send_message(
         &self,
         workspace_id: String,
@@ -1407,7 +1424,11 @@ impl DaemonState {
         codex_core::resume_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
-    pub(super) async fn fork_thread(&self, workspace_id: String, thread_id: String) -> Result<Value, String> {
+    pub(super) async fn fork_thread(
+        &self,
+        workspace_id: String,
+        thread_id: String,
+    ) -> Result<Value, String> {
         codex_core::fork_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
@@ -1592,7 +1613,10 @@ impl DaemonState {
         codex_core::model_list_core(&self.sessions, workspace_id).await
     }
 
-    pub(super) async fn collaboration_mode_list(&self, workspace_id: String) -> Result<Value, String> {
+    pub(super) async fn collaboration_mode_list(
+        &self,
+        workspace_id: String,
+    ) -> Result<Value, String> {
         codex_core::collaboration_mode_list_core(&self.sessions, workspace_id).await
     }
 

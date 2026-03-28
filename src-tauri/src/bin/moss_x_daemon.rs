@@ -11,6 +11,8 @@ mod codex_config;
 mod codex_home;
 #[path = "../codex/thread_mode_state.rs"]
 mod codex_thread_mode_state;
+#[path = "moss_x_daemon/daemon_state.rs"]
+mod daemon_state;
 #[path = "moss_x_daemon/engine_bridge.rs"]
 mod engine;
 #[path = "../files/io.rs"]
@@ -19,6 +21,8 @@ mod file_io;
 mod file_ops;
 #[path = "../files/policy.rs"]
 mod file_policy;
+#[path = "../git_utils.rs"]
+mod git_utils;
 #[path = "../rules.rs"]
 mod rules;
 #[path = "../shared/mod.rs"]
@@ -34,8 +38,6 @@ mod types;
 mod utils;
 #[path = "moss_x_daemon/web_service_runtime.rs"]
 mod web_service_runtime;
-#[path = "moss_x_daemon/daemon_state.rs"]
-mod daemon_state;
 #[path = "../workspaces/settings.rs"]
 mod workspace_settings;
 
@@ -97,7 +99,14 @@ use shared::{
 };
 use storage::{read_settings, read_workspaces};
 use text_encoding::decode_text_bytes;
-use types::{AppSettings, WorkspaceEntry, WorkspaceInfo, WorkspaceSettings, WorktreeSetupStatus};
+use types::{
+    AppSettings, BranchInfo, GitBranchCompareCommitSets, GitBranchListItem, GitCommitDetails,
+    GitCommitDiff, GitCommitFileChange, GitFileDiff, GitFileStatus, GitHistoryCommit,
+    GitHistoryResponse, GitHubIssue, GitHubIssuesResponse, GitHubPullRequest,
+    GitHubPullRequestComment, GitHubPullRequestDiff, GitHubPullRequestsResponse, GitLogEntry,
+    GitLogResponse, GitPrWorkflowDefaults, GitPrWorkflowResult, GitPrWorkflowStage,
+    GitPushPreviewResponse, WorkspaceEntry, WorkspaceInfo, WorkspaceSettings, WorktreeSetupStatus,
+};
 use web_service_runtime::WebServiceRuntime;
 use workspace_settings::apply_workspace_settings_update;
 
@@ -274,7 +283,6 @@ struct ExternalSpecFileResponse {
     content: String,
     truncated: bool,
 }
-
 
 fn should_always_skip(name: &str) -> bool {
     name == ".git"
@@ -1199,6 +1207,50 @@ fn parse_optional_u32(value: &Value, key: &str) -> Option<u32> {
     }
 }
 
+fn parse_optional_u64(value: &Value, key: &str) -> Option<u64> {
+    match value {
+        Value::Object(map) => map.get(key).and_then(|value| value.as_u64()),
+        _ => None,
+    }
+}
+
+fn parse_optional_usize(value: &Value, key: &str) -> Option<usize> {
+    match value {
+        Value::Object(map) => map
+            .get(key)
+            .and_then(|value| value.as_u64())
+            .and_then(|raw| {
+                if raw > usize::MAX as u64 {
+                    None
+                } else {
+                    Some(raw as usize)
+                }
+            }),
+        _ => None,
+    }
+}
+
+fn parse_optional_i64(value: &Value, key: &str) -> Option<i64> {
+    match value {
+        Value::Object(map) => map.get(key).and_then(|entry| match entry {
+            Value::Number(number) => {
+                if let Some(signed) = number.as_i64() {
+                    return Some(signed);
+                }
+                number.as_u64().and_then(|unsigned| {
+                    if unsigned > i64::MAX as u64 {
+                        None
+                    } else {
+                        Some(unsigned as i64)
+                    }
+                })
+            }
+            _ => None,
+        }),
+        _ => None,
+    }
+}
+
 fn parse_optional_port(value: &Value, key: &str) -> Result<Option<u16>, String> {
     let Some(raw) = parse_optional_u32(value, key) else {
         return Ok(None);
@@ -1648,6 +1700,389 @@ async fn handle_rpc_request(
                 )
                 .await?;
             serde_json::to_value(json!({ "ok": true })).map_err(|err| err.to_string())
+        }
+        "get_git_status" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.get_git_status(workspace_id).await
+        }
+        "list_git_roots" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let depth = parse_optional_usize(&params, "depth");
+            let roots = state.list_git_roots(workspace_id, depth).await?;
+            serde_json::to_value(roots).map_err(|err| err.to_string())
+        }
+        "get_git_diffs" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let diffs = state.get_git_diffs(workspace_id).await?;
+            serde_json::to_value(diffs).map_err(|err| err.to_string())
+        }
+        "get_git_file_full_diff" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            let diff = state.get_git_file_full_diff(workspace_id, path).await?;
+            Ok(Value::String(diff))
+        }
+        "get_git_log" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let limit = parse_optional_usize(&params, "limit");
+            let response = state.get_git_log(workspace_id, limit).await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "get_git_commit_history" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let branch = parse_optional_string(&params, "branch");
+            let query = parse_optional_string(&params, "query");
+            let author = parse_optional_string(&params, "author");
+            let date_from = parse_optional_i64(&params, "dateFrom");
+            let date_to = parse_optional_i64(&params, "dateTo");
+            let snapshot_id = parse_optional_string(&params, "snapshotId");
+            let offset = parse_optional_usize(&params, "offset").unwrap_or(0);
+            let limit = parse_optional_usize(&params, "limit").unwrap_or(100);
+            let response = state
+                .get_git_commit_history(
+                    workspace_id,
+                    branch,
+                    query,
+                    author,
+                    date_from,
+                    date_to,
+                    snapshot_id,
+                    offset,
+                    limit,
+                )
+                .await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "get_git_push_preview" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let remote = parse_string(&params, "remote")?;
+            let branch = parse_string(&params, "branch")?;
+            let limit = parse_optional_usize(&params, "limit");
+            let response = state
+                .get_git_push_preview(workspace_id, remote, branch, limit)
+                .await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "get_git_pr_workflow_defaults" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let response = state.get_git_pr_workflow_defaults(workspace_id).await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "create_git_pr_workflow" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let upstream_repo = parse_string(&params, "upstreamRepo")?;
+            let base_branch = parse_string(&params, "baseBranch")?;
+            let head_owner = parse_string(&params, "headOwner")?;
+            let head_branch = parse_string(&params, "headBranch")?;
+            let title = parse_string(&params, "title")?;
+            let body = parse_optional_string(&params, "body");
+            let comment_after_create = parse_optional_bool(&params, "commentAfterCreate");
+            let comment_body = parse_optional_string(&params, "commentBody");
+            let response = state
+                .create_git_pr_workflow(
+                    workspace_id,
+                    upstream_repo,
+                    base_branch,
+                    head_owner,
+                    head_branch,
+                    title,
+                    body,
+                    comment_after_create,
+                    comment_body,
+                )
+                .await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "resolve_git_commit_ref" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let target = parse_string(&params, "target")?;
+            let resolved = state.resolve_git_commit_ref(workspace_id, target).await?;
+            Ok(Value::String(resolved))
+        }
+        "get_git_commit_details" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let commit_hash = parse_string(&params, "commitHash")?;
+            let max_diff_lines = parse_optional_usize(&params, "maxDiffLines").unwrap_or(10_000);
+            let details = state
+                .get_git_commit_details(workspace_id, commit_hash, max_diff_lines)
+                .await?;
+            serde_json::to_value(details).map_err(|err| err.to_string())
+        }
+        "get_git_commit_diff" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let sha = parse_string(&params, "sha")?;
+            let path = parse_optional_string(&params, "path");
+            let context_lines = parse_optional_usize(&params, "contextLines");
+            let diff = state
+                .get_git_commit_diff(workspace_id, sha, path, context_lines)
+                .await?;
+            serde_json::to_value(diff).map_err(|err| err.to_string())
+        }
+        "get_git_remote" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let remote = state.get_git_remote(workspace_id).await?;
+            serde_json::to_value(remote).map_err(|err| err.to_string())
+        }
+        "stage_git_file" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            state.stage_git_file(workspace_id, path).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "stage_git_all" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.stage_git_all(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "unstage_git_file" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            state.unstage_git_file(workspace_id, path).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "revert_git_file" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            state.revert_git_file(workspace_id, path).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "revert_git_all" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.revert_git_all(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "commit_git" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let message = parse_string(&params, "message")?;
+            state.commit_git(workspace_id, message).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "push_git" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let remote = parse_optional_string(&params, "remote");
+            let branch = parse_optional_string(&params, "branch");
+            let force_with_lease = parse_optional_bool(&params, "forceWithLease");
+            let push_tags = parse_optional_bool(&params, "pushTags");
+            let run_hooks = parse_optional_bool(&params, "runHooks");
+            let push_to_gerrit = parse_optional_bool(&params, "pushToGerrit");
+            let topic = parse_optional_string(&params, "topic");
+            let reviewers = parse_optional_string(&params, "reviewers");
+            let cc = parse_optional_string(&params, "cc");
+            state
+                .push_git(
+                    workspace_id,
+                    remote,
+                    branch,
+                    force_with_lease,
+                    push_tags,
+                    run_hooks,
+                    push_to_gerrit,
+                    topic,
+                    reviewers,
+                    cc,
+                )
+                .await?;
+            Ok(json!({ "ok": true }))
+        }
+        "pull_git" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let remote = parse_optional_string(&params, "remote");
+            let branch = parse_optional_string(&params, "branch");
+            let strategy = parse_optional_string(&params, "strategy");
+            let no_commit = parse_optional_bool(&params, "noCommit");
+            let no_verify = parse_optional_bool(&params, "noVerify");
+            state
+                .pull_git(workspace_id, remote, branch, strategy, no_commit, no_verify)
+                .await?;
+            Ok(json!({ "ok": true }))
+        }
+        "sync_git" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.sync_git(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "git_pull" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.git_pull(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "git_push" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.git_push(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "git_sync" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.git_sync(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "git_fetch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let remote = parse_optional_string(&params, "remote");
+            state.git_fetch(workspace_id, remote).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "cherry_pick_commit" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let commit_hash = parse_string(&params, "commitHash")?;
+            state.cherry_pick_commit(workspace_id, commit_hash).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "revert_commit" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let commit_hash = parse_string(&params, "commitHash")?;
+            state.revert_commit(workspace_id, commit_hash).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "reset_git_commit" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let commit_hash = parse_string(&params, "commitHash")?;
+            let mode = parse_string(&params, "mode")?;
+            state
+                .reset_git_commit(workspace_id, commit_hash, mode)
+                .await?;
+            Ok(json!({ "ok": true }))
+        }
+        "get_github_issues" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let response = state.get_github_issues(workspace_id).await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "get_github_pull_requests" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let response = state.get_github_pull_requests(workspace_id).await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "get_github_pull_request_diff" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let pr_number = parse_optional_u64(&params, "prNumber")
+                .ok_or_else(|| "missing or invalid `prNumber`".to_string())?;
+            let response = state
+                .get_github_pull_request_diff(workspace_id, pr_number)
+                .await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "get_github_pull_request_comments" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let pr_number = parse_optional_u64(&params, "prNumber")
+                .ok_or_else(|| "missing or invalid `prNumber`".to_string())?;
+            let response = state
+                .get_github_pull_request_comments(workspace_id, pr_number)
+                .await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "list_git_branches" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.list_git_branches(workspace_id).await
+        }
+        "checkout_git_branch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let name = parse_string(&params, "name")?;
+            state.checkout_git_branch(workspace_id, name).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "create_git_branch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let name = parse_string(&params, "name")?;
+            state.create_git_branch(workspace_id, name).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "create_git_branch_from_branch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let name = parse_string(&params, "name")?;
+            let source_branch = parse_string(&params, "sourceBranch")?;
+            state
+                .create_git_branch_from_branch(workspace_id, name, source_branch)
+                .await?;
+            Ok(json!({ "ok": true }))
+        }
+        "create_git_branch_from_commit" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let name = parse_string(&params, "name")?;
+            let commit_hash = parse_string(&params, "commitHash")?;
+            state
+                .create_git_branch_from_commit(workspace_id, name, commit_hash)
+                .await?;
+            Ok(json!({ "ok": true }))
+        }
+        "delete_git_branch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let name = parse_string(&params, "name")?;
+            let force = parse_optional_bool(&params, "force");
+            state.delete_git_branch(workspace_id, name, force).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "rename_git_branch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let old_name = parse_string(&params, "oldName")?;
+            let new_name = parse_string(&params, "newName")?;
+            state
+                .rename_git_branch(workspace_id, old_name, new_name)
+                .await?;
+            Ok(json!({ "ok": true }))
+        }
+        "merge_git_branch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let name = parse_string(&params, "name")?;
+            state.merge_git_branch(workspace_id, name).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "rebase_git_branch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let onto_branch = parse_string(&params, "ontoBranch")?;
+            state.rebase_git_branch(workspace_id, onto_branch).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "get_git_branch_compare_commits" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let target_branch = parse_string(&params, "targetBranch")?;
+            let current_branch = parse_string(&params, "currentBranch")?;
+            let limit = parse_optional_usize(&params, "limit");
+            let response = state
+                .get_git_branch_compare_commits(workspace_id, target_branch, current_branch, limit)
+                .await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "get_git_branch_diff_between_branches" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let from_branch = parse_string(&params, "fromBranch")?;
+            let to_branch = parse_string(&params, "toBranch")?;
+            let response = state
+                .get_git_branch_diff_between_branches(workspace_id, from_branch, to_branch)
+                .await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "get_git_branch_file_diff_between_branches" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let from_branch = parse_string(&params, "fromBranch")?;
+            let to_branch = parse_string(&params, "toBranch")?;
+            let path = parse_string(&params, "path")?;
+            let response = state
+                .get_git_branch_file_diff_between_branches(
+                    workspace_id,
+                    from_branch,
+                    to_branch,
+                    path,
+                )
+                .await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "get_git_worktree_diff_against_branch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let branch = parse_string(&params, "branch")?;
+            let response = state
+                .get_git_worktree_diff_against_branch(workspace_id, branch)
+                .await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "get_git_worktree_file_diff_against_branch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let branch = parse_string(&params, "branch")?;
+            let path = parse_string(&params, "path")?;
+            let response = state
+                .get_git_worktree_file_diff_against_branch(workspace_id, branch, path)
+                .await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
         }
         "get_app_settings" => {
             let settings = state.get_app_settings().await;
