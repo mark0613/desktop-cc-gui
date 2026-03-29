@@ -1278,6 +1278,14 @@ const enPart1 = {
     anchorJumpToUser: "Go to user message {{index}}",
     anchorUserTitle: "User #{{index}}",
     showEarlierMessages: "Show {{count}} earlier messages",
+    liveControls: "Live canvas controls",
+    liveAutoFollowToggle: "Focus follow",
+    liveAutoFollowEnable: "Enable focus follow for latest output",
+    liveAutoFollowDisable: "Disable focus follow for latest output",
+    collapseMiddleStepsToggle: "Output collapse",
+    collapseMiddleStepsEnable: "Collapse intermediate output by default",
+    collapseMiddleStepsDisable: "Expand intermediate output",
+    middleStepsCollapsedHint: "{{count}} middle steps are collapsed during live mode",
   },
 
   // Composer

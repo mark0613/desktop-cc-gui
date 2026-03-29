@@ -1,5 +1,7 @@
 import React, { useRef, useCallback, useMemo, useState, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import Crosshair from 'lucide-react/dist/esm/icons/crosshair';
+import ListCollapse from 'lucide-react/dist/esm/icons/list-collapse';
 import { getFileIcon } from '../../utils/fileIcons';
 import { TokenIndicator } from './TokenIndicator';
 import type {
@@ -8,6 +10,13 @@ import type {
   SelectedAgent,
 } from './types';
 import { sanitizeSvg } from './utils/sanitize';
+import {
+  MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY,
+  MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY,
+  MESSAGES_LIVE_CONTROLS_UPDATED_EVENT,
+  readLocalBooleanFlag,
+  writeLocalBooleanFlag,
+} from '../../../messages/constants/liveCanvasControls';
 
 interface ContextBarProps {
   activeFile?: string;
@@ -72,7 +81,14 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
   const manualCompactionStartedAtRef = useRef<number>(0);
   const compactionBusyRef = useRef(false);
   const [manualCompactionPending, setManualCompactionPending] = useState(false);
+  const [liveAutoFollowEnabled, setLiveAutoFollowEnabled] = useState(() =>
+    readLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, true),
+  );
+  const [collapseLiveMiddleStepsEnabled, setCollapseLiveMiddleStepsEnabled] = useState(() =>
+    readLocalBooleanFlag(MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY, false),
+  );
   const manualCompactionMinSpinMs = 1200;
+  const showLiveCanvasControls = Boolean(isLoading && showStatusPanelToggle);
 
   const handleAttachClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -211,6 +227,55 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
   useEffect(() => {
     compactionBusyRef.current = isCompactionBusy;
   }, [isCompactionBusy]);
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key) {
+        return;
+      }
+      if (event.key === MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY) {
+        setLiveAutoFollowEnabled(readLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, true));
+        return;
+      }
+      if (event.key === MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY) {
+        setCollapseLiveMiddleStepsEnabled(
+          readLocalBooleanFlag(MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY, false),
+        );
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+  const emitLiveCanvasControlsUpdate = useCallback(
+    (detail: { liveAutoFollowEnabled?: boolean; collapseLiveMiddleStepsEnabled?: boolean }) => {
+      window.dispatchEvent(
+        new CustomEvent(MESSAGES_LIVE_CONTROLS_UPDATED_EVENT, {
+          detail,
+        }),
+      );
+    },
+    [],
+  );
+
+  const handleToggleLiveAutoFollow = useCallback(() => {
+    setLiveAutoFollowEnabled((previous) => {
+      const next = !previous;
+      writeLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, next);
+      emitLiveCanvasControlsUpdate({ liveAutoFollowEnabled: next });
+      return next;
+    });
+  }, [emitLiveCanvasControlsUpdate]);
+
+  const handleToggleCollapseLiveMiddleSteps = useCallback(() => {
+    setCollapseLiveMiddleStepsEnabled((previous) => {
+      const next = !previous;
+      writeLocalBooleanFlag(MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY, next);
+      emitLiveCanvasControlsUpdate({ collapseLiveMiddleStepsEnabled: next });
+      return next;
+    });
+  }, [emitLiveCanvasControlsUpdate]);
 
   const releaseManualCompactionPending = useCallback(async () => {
     const elapsed = Date.now() - manualCompactionStartedAtRef.current;
@@ -445,6 +510,39 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
 
       {/* Right side tools - StatusPanel toggle and Rewind button */}
       <div className="context-tools-right">
+        {showLiveCanvasControls && (
+          <div className="context-live-canvas-controls" role="group" aria-label={t('messages.liveControls')}>
+            <button
+              type="button"
+              className={`context-tool-btn context-tool-btn--labeled context-live-canvas-btn context-live-canvas-btn--focus-follow has-tooltip${liveAutoFollowEnabled ? ' is-active' : ''}`}
+              onClick={handleToggleLiveAutoFollow}
+              data-tooltip={
+                liveAutoFollowEnabled ? t('messages.liveAutoFollowDisable') : t('messages.liveAutoFollowEnable')
+              }
+              aria-pressed={liveAutoFollowEnabled}
+            >
+              <Crosshair size={13} aria-hidden />
+              <span className="context-tool-label">{t('messages.liveAutoFollowToggle')}</span>
+              <span className="context-live-canvas-dot" aria-hidden />
+            </button>
+            <button
+              type="button"
+              className={`context-tool-btn context-tool-btn--labeled context-live-canvas-btn has-tooltip${collapseLiveMiddleStepsEnabled ? ' is-active' : ''}`}
+              onClick={handleToggleCollapseLiveMiddleSteps}
+              data-tooltip={
+                collapseLiveMiddleStepsEnabled
+                  ? t('messages.collapseMiddleStepsDisable')
+                  : t('messages.collapseMiddleStepsEnable')
+              }
+              aria-pressed={collapseLiveMiddleStepsEnabled}
+            >
+              <ListCollapse size={13} aria-hidden />
+              <span className="context-tool-label">{t('messages.collapseMiddleStepsToggle')}</span>
+              <span className="context-live-canvas-dot" aria-hidden />
+            </button>
+          </div>
+        )}
+
         {/* StatusPanel expand/collapse toggle */}
         {onToggleStatusPanel && showStatusPanelToggle && (
           <button

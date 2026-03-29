@@ -153,6 +153,122 @@
   }
 }
 
+.messages-live-controls {
+  position: fixed;
+  right: calc(var(--right-panel-width, 230px) + var(--main-panel-padding) + 6px);
+  bottom: 14px;
+  z-index: 22;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  padding: 5px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-card) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 68%, transparent);
+  box-shadow:
+    0 8px 20px color-mix(in srgb, #000 16%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 14%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.messages-live-control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-card-elevated) 86%, transparent);
+  color: color-mix(in srgb, var(--text-muted) 88%, var(--text-faint));
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.messages-live-control-btn span {
+  white-space: nowrap;
+}
+
+.messages-live-control-btn svg {
+  opacity: 0.7;
+  color: color-mix(in srgb, var(--text-muted) 82%, var(--text-faint));
+  transition: color 0.16s ease, opacity 0.16s ease;
+}
+
+.messages-live-control-state-dot {
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-faint) 42%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-subtle) 74%, transparent);
+  transition: all 0.16s ease;
+}
+
+.messages-live-control-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-strong));
+  color: var(--text-primary);
+  transform: translateY(-1px) scale(1.01);
+}
+
+.messages-live-control-btn:hover svg {
+  opacity: 0.95;
+  color: color-mix(in srgb, var(--accent) 72%, var(--text-primary));
+}
+
+.messages-live-control-btn.is-active {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-card-elevated));
+  border-color: color-mix(in srgb, var(--accent) 64%, var(--border-strong));
+  color: color-mix(in srgb, var(--accent) 88%, var(--text-primary));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.messages-live-control-btn.is-active svg {
+  opacity: 1;
+  color: color-mix(in srgb, var(--accent) 92%, var(--text-primary));
+}
+
+.messages-live-control-btn.is-active .messages-live-control-state-dot {
+  background: color-mix(in srgb, var(--accent) 95%, #9ff6c1 5%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 48%, transparent),
+    0 0 8px color-mix(in srgb, var(--accent) 54%, transparent);
+}
+
+.messages-live-middle-collapsed-indicator {
+  margin: 4px 0 10px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px dashed color-mix(in srgb, var(--border-subtle) 86%, transparent);
+  background: color-mix(in srgb, var(--surface-card-muted) 78%, transparent);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .messages-live-controls {
+    right: 10px;
+    bottom: 8px;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .messages-live-control-btn {
+    padding: 5px 7px;
+    font-size: 11px;
+  }
+}
+
+.app.right-panel-collapsed .messages-live-controls {
+  right: calc(var(--main-panel-padding, 24px) + 6px);
+}
+
 .messages-empty {
   padding: 24px 0;
   max-width: 750px;

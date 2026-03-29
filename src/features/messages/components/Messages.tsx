@@ -42,6 +42,13 @@ import { buildCommandSummary } from "./toolBlocks/toolConstants";
 import { MEMORY_CONTEXT_SUMMARY_PREFIX } from "../../project-memory/utils/memoryMarkers";
 import type { PresentationProfile } from "../presentation/presentationProfile";
 import { RequestUserInputMessage } from "../../app/components/RequestUserInputMessage";
+import {
+  MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY,
+  MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY,
+  MESSAGES_LIVE_CONTROLS_UPDATED_EVENT,
+  readLocalBooleanFlag,
+  writeLocalBooleanFlag,
+} from "../constants/liveCanvasControls";
 
 
 type MessagesProps = {
@@ -1761,6 +1768,12 @@ export const Messages = memo(function Messages({
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
   const [showAllHistoryItems, setShowAllHistoryItems] = useState(false);
+  const [liveAutoFollowEnabled, setLiveAutoFollowEnabled] = useState(() =>
+    readLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, true),
+  );
+  const [collapseLiveMiddleStepsEnabled, setCollapseLiveMiddleStepsEnabled] = useState(() =>
+    readLocalBooleanFlag(MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY, false),
+  );
   const hideClaudeReasoning = activeEngine === "claude" && shouldHideClaudeReasoningModule();
   const [isSelectionFrozen, setIsSelectionFrozen] = useState(false);
   const copyTimeoutRef = useRef<number | null>(null);
@@ -1845,18 +1858,15 @@ export const Messages = memo(function Messages({
   }, []);
 
   const requestAutoScroll = useCallback(() => {
-    if (!bottomRef.current) {
+    if (!liveAutoFollowEnabled) {
       return;
     }
-    const container = containerRef.current;
-    const shouldScroll =
-      autoScrollRef.current || (container ? isNearBottom(container) : true);
-    if (!shouldScroll) {
+    if (!bottomRef.current) {
       return;
     }
     // Always use instant for programmatic scroll requests to avoid blocking input
     bottomRef.current.scrollIntoView({ behavior: "instant", block: "end" });
-  }, [isNearBottom]);
+  }, [liveAutoFollowEnabled]);
 
   useEffect(() => {
     autoScrollRef.current = true;
@@ -1884,6 +1894,73 @@ export const Messages = memo(function Messages({
       frozenItemsRef.current = null;
     }
   }, [isSelectionFrozen, items]);
+
+  useEffect(() => {
+    writeLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, liveAutoFollowEnabled);
+  }, [liveAutoFollowEnabled]);
+
+  useEffect(() => {
+    writeLocalBooleanFlag(
+      MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY,
+      collapseLiveMiddleStepsEnabled,
+    );
+  }, [collapseLiveMiddleStepsEnabled]);
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handleLiveControlsUpdated = (
+      event: Event,
+    ) => {
+      const customEvent = event as CustomEvent<{
+        liveAutoFollowEnabled?: boolean;
+        collapseLiveMiddleStepsEnabled?: boolean;
+      }>;
+      const detail = customEvent.detail;
+      if (!detail) {
+        return;
+      }
+      if (typeof detail.liveAutoFollowEnabled === "boolean") {
+        setLiveAutoFollowEnabled(detail.liveAutoFollowEnabled);
+      }
+      if (typeof detail.collapseLiveMiddleStepsEnabled === "boolean") {
+        setCollapseLiveMiddleStepsEnabled(detail.collapseLiveMiddleStepsEnabled);
+      }
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key) {
+        return;
+      }
+      if (event.key === MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY) {
+        setLiveAutoFollowEnabled(readLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, true));
+        return;
+      }
+      if (event.key === MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY) {
+        setCollapseLiveMiddleStepsEnabled(
+          readLocalBooleanFlag(MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY, false),
+        );
+      }
+    };
+    window.addEventListener(
+      MESSAGES_LIVE_CONTROLS_UPDATED_EVENT,
+      handleLiveControlsUpdated as EventListener,
+    );
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener(
+        MESSAGES_LIVE_CONTROLS_UPDATED_EVENT,
+        handleLiveControlsUpdated as EventListener,
+      );
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+  useEffect(() => {
+    if (!liveAutoFollowEnabled) {
+      return;
+    }
+    autoScrollRef.current = true;
+    requestAutoScroll();
+  }, [liveAutoFollowEnabled, requestAutoScroll]);
   useEffect(() => {
     const currentFirstId = effectiveItems[0]?.id ?? null;
     if (currentFirstId !== firstItemIdRef.current) {
@@ -2167,6 +2244,40 @@ export const Messages = memo(function Messages({
     presentationProfile,
     reasoningMetaById,
   ]);
+  const { timelineItems, collapsedMiddleStepCount } = useMemo(() => {
+    if (!isThinking || !collapseLiveMiddleStepsEnabled || visibleItems.length <= 2) {
+      return { timelineItems: visibleItems, collapsedMiddleStepCount: 0 };
+    }
+    let lastUserIndex = -1;
+    for (let index = visibleItems.length - 1; index >= 0; index -= 1) {
+      const candidate = visibleItems[index];
+      if (candidate.kind === "message" && candidate.role === "user") {
+        lastUserIndex = index;
+        break;
+      }
+    }
+    if (lastUserIndex < 0 || lastUserIndex >= visibleItems.length - 2) {
+      return { timelineItems: visibleItems, collapsedMiddleStepCount: 0 };
+    }
+    const lastIndex = visibleItems.length - 1;
+    const nextTimelineItems: ConversationItem[] = [];
+    let hiddenCount = 0;
+    for (let index = 0; index < visibleItems.length; index += 1) {
+      const item = visibleItems[index];
+      if (index <= lastUserIndex || index === lastIndex) {
+        nextTimelineItems.push(item);
+        continue;
+      }
+      if (item.kind === "message") {
+        nextTimelineItems.push(item);
+        continue;
+      }
+      hiddenCount += 1;
+    }
+    return hiddenCount > 0
+      ? { timelineItems: nextTimelineItems, collapsedMiddleStepCount: hiddenCount }
+      : { timelineItems: visibleItems, collapsedMiddleStepCount: 0 };
+  }, [collapseLiveMiddleStepsEnabled, isThinking, visibleItems]);
   useEffect(() => {
     if (activeEngine !== "claude") {
       return;
@@ -2198,16 +2309,16 @@ export const Messages = memo(function Messages({
     visibleItems,
   ]);
   const shouldCollapseHistoryItems =
-    !showAllHistoryItems && visibleItems.length > VISIBLE_MESSAGE_WINDOW;
+    !showAllHistoryItems && timelineItems.length > VISIBLE_MESSAGE_WINDOW;
   const collapsedHistoryItemCount = shouldCollapseHistoryItems
-    ? visibleItems.length - VISIBLE_MESSAGE_WINDOW
+    ? timelineItems.length - VISIBLE_MESSAGE_WINDOW
     : 0;
   const renderedItems = useMemo(
     () =>
       shouldCollapseHistoryItems
-        ? visibleItems.slice(collapsedHistoryItemCount)
-        : visibleItems,
-    [collapsedHistoryItemCount, shouldCollapseHistoryItems, visibleItems],
+        ? timelineItems.slice(collapsedHistoryItemCount)
+        : timelineItems,
+    [collapsedHistoryItemCount, shouldCollapseHistoryItems, timelineItems],
   );
   const messageAnchors = useMemo(() => {
     const messageItems = renderedItems.filter(
@@ -2262,12 +2373,14 @@ export const Messages = memo(function Messages({
     [computeActiveAnchor, hasAnchorRail, messageAnchors, threadId],
   );
   const updateAutoScroll = useCallback(() => {
-    if (!containerRef.current) {
+    const container = containerRef.current;
+    if (!container) {
       return;
     }
-    autoScrollRef.current = isNearBottom(containerRef.current);
+    const nearBottom = isNearBottom(container);
+    autoScrollRef.current = liveAutoFollowEnabled ? true : nearBottom;
     scheduleAnchorUpdate("scroll");
-  }, [isNearBottom, scheduleAnchorUpdate]);
+  }, [isNearBottom, liveAutoFollowEnabled, scheduleAnchorUpdate]);
 
   useEffect(() => {
     if (!isMessagesPerfDebugEnabled()) {
@@ -2386,8 +2499,12 @@ export const Messages = memo(function Messages({
     if (!bottomRef.current) {
       return undefined;
     }
+    if (!liveAutoFollowEnabled) {
+      return undefined;
+    }
     const container = containerRef.current;
     const shouldScroll =
+      liveAutoFollowEnabled ||
       autoScrollRef.current ||
       (container ? isNearBottom(container) : true);
     if (!shouldScroll) {
@@ -2406,7 +2523,7 @@ export const Messages = memo(function Messages({
         window.cancelAnimationFrame(raf);
       }
     };
-  }, [scrollKey, isThinking, isNearBottom]);
+  }, [scrollKey, isThinking, isNearBottom, liveAutoFollowEnabled]);
 
   const groupedEntries = useMemo(() => groupToolItems(renderedItems), [renderedItems]);
 
@@ -2613,6 +2730,11 @@ export const Messages = memo(function Messages({
               onClick={() => setShowAllHistoryItems(true)}
             >
               {t("messages.showEarlierMessages", { count: collapsedHistoryItemCount })}
+            </div>
+          )}
+          {isThinking && collapseLiveMiddleStepsEnabled && collapsedMiddleStepCount > 0 && (
+            <div className="messages-live-middle-collapsed-indicator" role="status">
+              {t("messages.middleStepsCollapsedHint", { count: collapsedMiddleStepCount })}
             </div>
           )}
           {groupedEntries.map(renderEntry)}

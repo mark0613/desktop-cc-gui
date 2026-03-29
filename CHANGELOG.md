@@ -11,9 +11,14 @@ English:
 - Harden multi-engine history-chain recovery in Web mode for more reliable cross-engine session replay
 - Enhance Session Activity with richer `search_query` tool-chain rendering and history restoration
 - Add a client icon before Home Chat title and polish the welcome-area presentation
+- Redesign Skills management into a tree-based global browser across `.claude/skills`, `.codex/skills`, `.gemini/skills`, and `.agents/skills`
+- Add in-panel editing/saving for Skills files with GitHub-style markdown/structured/code preview rendering
+- Add draggable splitter support in Skills view to resize/collapse the left file tree
 
 🔧 Improvements
 - Unify File changes and Batch icons with refined theme color palette for better visual consistency
+- Add external absolute directory/file RPC chain for Skills browsing in both local and remote daemon modes
+- Split Skills-related settings styles into a dedicated stylesheet to satisfy large-file governance threshold
 
 🐛 Fixes
 - Fix Claude Thread session switching and history chain disruption caused by screenshot messages
@@ -22,6 +27,8 @@ English:
 - Fix history-fetch lock-up for non-default projects after a single failed request
 - Align file-tree Git folder status coloring with change-path semantics
 - Fix packaged-build white screen caused by missing Web static resources
+- Fix missing Skills entries in non-default engines caused by external directory loading path mismatches
+- Fix splitter drag interrupted-state residue (cursor/user-select) in Win/macOS edge interruption scenarios
 
 中文：
 
@@ -30,9 +37,14 @@ English:
 - 加固 Web 模式多引擎历史链路恢复，提升跨引擎会话回放稳定性
 - 增强 Session Activity 的 `search_query` 工具链路展示与历史恢复能力
 - 在 Home Chat 标题前新增客户端图标，并优化欢迎区域展示
+- 重构 Skills 管理模块为树形全局浏览器，统一支持 `.claude/skills`、`.codex/skills`、`.gemini/skills`、`.agents/skills`
+- 新增 Skills 详情区就地编辑/保存能力，并接入 GitHub 风格的 Markdown/结构化/代码预览渲染
+- 新增 Skills 视图拖拽分隔条，支持左侧文件树宽度调整与折叠
 
 🔧 Improvements
 - 统一 File changes 与 Batch 图标并完善主题配色，提升视觉一致性
+- 补齐 Skills 浏览在本地与 remote daemon 模式下的绝对路径目录/文件 RPC 链路
+- 将 Skills 相关设置样式拆分为独立样式文件，满足 large-file 治理阈值
 
 🐛 Fixes
 - 修复截图消息导致 Claude Thread 会话切换和历史链路断裂的问题
@@ -41,6 +53,8 @@ English:
 - 修复非默认项目历史拉取在单次失败后锁死的问题
 - 对齐文件树 Git 文件夹状态着色与变更路径语义
 - 修复安装包缺失 Web 静态资源导致白屏路径异常
+- 修复非默认引擎 Skills 列表因外部目录加载路径不一致导致的数据缺失问题
+- 修复 Win/macOS 边界中断场景下分隔条拖拽后光标/选择状态残留问题
 
 ---
 

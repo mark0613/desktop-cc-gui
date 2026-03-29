@@ -1257,6 +1257,14 @@ const zhPart1 = {
     anchorJumpToUser: "跳转到用户消息 {{index}}",
     anchorUserTitle: "用户 #{{index}}",
     showEarlierMessages: "显示之前的 {{count}} 条消息",
+    liveControls: "实时幕布控制",
+    liveAutoFollowToggle: "焦点跟随",
+    liveAutoFollowEnable: "开启焦点跟随到最新输出",
+    liveAutoFollowDisable: "关闭焦点跟随到最新输出",
+    collapseMiddleStepsToggle: "输出折叠",
+    collapseMiddleStepsEnable: "默认折叠中间输出过程",
+    collapseMiddleStepsDisable: "展开中间输出过程",
+    middleStepsCollapsedHint: "已折叠 {{count}} 条中间步骤（实时中）",
   },
 
   // 编辑器

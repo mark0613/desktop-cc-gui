@@ -93,6 +93,146 @@
   margin-left: auto;
 }
 
+.context-live-canvas-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+  padding-right: 4px;
+  border-right: 1px solid color-mix(in srgb, var(--input-border) 74%, transparent);
+}
+
+.context-live-canvas-btn {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--input-border) 78%, transparent);
+  background: color-mix(in srgb, var(--dropdown-bg) 98%, #ffffff 2%);
+  min-height: 24px;
+  gap: 5px;
+}
+
+.context-live-canvas-btn svg {
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+.context-live-canvas-btn .context-tool-label {
+  color: var(--text-primary);
+}
+
+.context-live-canvas-dot {
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-primary) 42%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--input-border) 86%, transparent);
+}
+
+.context-live-canvas-btn:hover {
+  border-color: color-mix(in srgb, var(--text-primary) 36%, var(--input-border));
+  background: color-mix(in srgb, var(--dropdown-bg) 94%, #ffffff 6%);
+}
+
+.context-live-canvas-btn.is-active {
+  border-color: color-mix(in srgb, #166534 72%, var(--input-border));
+  background: color-mix(in srgb, #166534 16%, var(--dropdown-bg));
+  color: #166534;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #166534 34%, transparent);
+}
+
+.context-live-canvas-btn.is-active svg {
+  color: #166534;
+}
+
+.context-live-canvas-btn--focus-follow.is-active svg {
+  animation: context-live-focus-follow-spin 1.9s linear infinite;
+  transform-origin: center;
+}
+
+.context-live-canvas-btn.is-active .context-tool-label {
+  color: #166534;
+}
+
+.context-live-canvas-btn.is-active .context-live-canvas-dot {
+  background: #166534;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #166534 46%, transparent),
+    0 0 6px color-mix(in srgb, #166534 48%, transparent);
+}
+
+:root[data-theme="dark"] .context-live-canvas-btn.is-active,
+:root[data-theme="dim"] .context-live-canvas-btn.is-active {
+  border-color: color-mix(in srgb, #2f7f67 64%, var(--input-border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #1f4f3f 30%, var(--dropdown-bg)),
+      color-mix(in srgb, #163c31 24%, var(--dropdown-bg))
+    );
+  color: #cfe8de;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #2f7f67 34%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #b8e3d0 10%, transparent);
+}
+
+:root[data-theme="dark"] .context-live-canvas-btn.is-active svg,
+:root[data-theme="dim"] .context-live-canvas-btn.is-active svg,
+:root[data-theme="dark"] .context-live-canvas-btn.is-active .context-tool-label,
+:root[data-theme="dim"] .context-live-canvas-btn.is-active .context-tool-label {
+  color: #b8dece;
+}
+
+:root[data-theme="dark"] .context-live-canvas-btn.is-active .context-live-canvas-dot,
+:root[data-theme="dim"] .context-live-canvas-btn.is-active .context-live-canvas-dot {
+  background: #3aa77c;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #2f7f67 46%, transparent),
+    0 0 7px color-mix(in srgb, #3aa77c 44%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .context-live-canvas-btn.is-active {
+    border-color: color-mix(in srgb, #2f7f67 64%, var(--input-border));
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, #1f4f3f 30%, var(--dropdown-bg)),
+        color-mix(in srgb, #163c31 24%, var(--dropdown-bg))
+      );
+    color: #cfe8de;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, #2f7f67 34%, transparent),
+      inset 0 1px 0 color-mix(in srgb, #b8e3d0 10%, transparent);
+  }
+
+  :root:not([data-theme]) .context-live-canvas-btn.is-active svg,
+  :root:not([data-theme]) .context-live-canvas-btn.is-active .context-tool-label {
+    color: #b8dece;
+  }
+
+  :root:not([data-theme]) .context-live-canvas-btn.is-active .context-live-canvas-dot {
+    background: #3aa77c;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, #2f7f67 46%, transparent),
+      0 0 7px color-mix(in srgb, #3aa77c 44%, transparent);
+  }
+}
+
+@keyframes context-live-focus-follow-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-live-canvas-btn--focus-follow.is-active svg {
+    animation: none;
+  }
+}
+
 /* StatusPanel toggle button */
 .status-panel-toggle {
   position: relative;
