@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import Check from "lucide-react/dist/esm/icons/check";
@@ -7,7 +6,6 @@ import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
-import X from "lucide-react/dist/esm/icons/x";
 import { AgentIcon } from "../../../components/AgentIcon";
 import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
 import type {
@@ -43,6 +41,7 @@ import { buildCommandSummary } from "./toolBlocks/toolConstants";
 import { MEMORY_CONTEXT_SUMMARY_PREFIX } from "../../project-memory/utils/memoryMarkers";
 import type { PresentationProfile } from "../presentation/presentationProfile";
 import { RequestUserInputMessage } from "../../app/components/RequestUserInputMessage";
+import { ImageLightbox, MessageImageGrid, type MessageImage } from "./MessageMediaBlocks";
 import {
   MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY,
   MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY,
@@ -142,11 +141,6 @@ type ExploreRowProps = {
   item: Extract<ConversationItem, { kind: "explore" }>;
   isExpanded: boolean;
   onToggle: (id: string) => void;
-};
-
-type MessageImage = {
-  src: string;
-  label: string;
 };
 
 type MemoryContextSummary = {
@@ -1167,97 +1161,6 @@ function parseInjectedMemoryPrefixFromUser(
 
   return null;
 }
-
-const MessageImageGrid = memo(function MessageImageGrid({
-  images,
-  onOpen,
-  hasText,
-}: {
-  images: MessageImage[];
-  onOpen: (index: number) => void;
-  hasText: boolean;
-}) {
-  return (
-    <div
-      className={`message-image-grid${hasText ? " message-image-grid--with-text" : ""}`}
-      role="list"
-    >
-      {images.map((image, index) => (
-        <button
-          key={`${image.src}-${index}`}
-          type="button"
-          className="message-image-thumb"
-          onClick={() => onOpen(index)}
-          aria-label={`Open image ${index + 1}`}
-        >
-          <img src={image.src} alt={image.label} loading="lazy" />
-        </button>
-      ))}
-    </div>
-  );
-});
-
-const ImageLightbox = memo(function ImageLightbox({
-  images,
-  activeIndex,
-  onClose,
-}: {
-  images: MessageImage[];
-  activeIndex: number;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation();
-  const activeImage = images[activeIndex];
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
-
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, []);
-
-  if (!activeImage) {
-    return null;
-  }
-
-  return createPortal(
-    <div
-      className="message-image-lightbox"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <div
-        className="message-image-lightbox-content"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button
-          type="button"
-          className="message-image-lightbox-close"
-          onClick={onClose}
-          aria-label={t("messages.closeImagePreview")}
-        >
-          <X size={16} aria-hidden />
-        </button>
-        <img src={activeImage.src} alt={activeImage.label} />
-      </div>
-    </div>,
-    document.body,
-  );
-});
 
 function formatDurationMs(durationMs: number) {
   const durationSeconds = Math.max(0, Math.floor(durationMs / 1000));
