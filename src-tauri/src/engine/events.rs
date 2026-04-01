@@ -507,6 +507,7 @@ pub fn engine_event_to_app_server_event(
             "params": {
                 "threadId": thread_id,
                 "result": result,
+                "assistantFinalBoundary": true,
             }
         }),
         EngineEvent::TurnError { error, code, .. } => json!({

@@ -601,6 +601,7 @@ export function useThreadItemEvents({
         itemId,
         text,
         hasCustomName,
+        timestamp,
       });
       dispatch({
         type: "setThreadTimestamp",

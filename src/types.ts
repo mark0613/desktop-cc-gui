@@ -81,6 +81,9 @@ export type ConversationItem =
       kind: "message";
       role: "user" | "assistant";
       text: string;
+      isFinal?: boolean;
+      finalCompletedAt?: number;
+      finalDurationMs?: number;
       images?: string[];
       collaborationMode?: "plan" | "code" | null;
       selectedAgentName?: string | null;

@@ -16,6 +16,9 @@ type CodexHistoryLoaderOptions = {
   loadCodexSession?: (workspaceId: string, threadId: string) => Promise<unknown>;
 };
 
+type MessageItem = Extract<ConversationItem, { kind: "message" }>;
+type AssistantMessageItem = MessageItem & { role: "assistant" };
+
 function appendUniqueItems(
   target: ConversationItem[],
   seenIds: Set<string>,
@@ -30,15 +33,239 @@ function appendUniqueItems(
   });
 }
 
+type AssistantFinalMeta = {
+  isFinal: boolean;
+  finalCompletedAt?: number;
+  finalDurationMs?: number;
+};
+
+type TurnFinalMeta = {
+  turnIndex: number;
+  userAnchor: string;
+  meta: AssistantFinalMeta;
+};
+
+type RemoteTurnTarget = {
+  turnIndex: number;
+  userAnchor: string;
+  assistantIndex: number;
+};
+
+function normalizeTurnAnchorText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function isAssistantMessage(item: ConversationItem): item is AssistantMessageItem {
+  return item.kind === "message" && item.role === "assistant";
+}
+
+function hasAssistantFinalMeta(
+  item: ConversationItem,
+): item is AssistantMessageItem {
+  return isAssistantMessage(item) && (
+    Boolean(item.isFinal) ||
+    (typeof item.finalCompletedAt === "number" && item.finalCompletedAt > 0) ||
+    (typeof item.finalDurationMs === "number" && item.finalDurationMs >= 0)
+  );
+}
+
+function mergeAssistantFinalMeta(
+  message: AssistantMessageItem,
+  meta: AssistantFinalMeta,
+): AssistantMessageItem {
+  const completedAtCandidates = [
+    message.finalCompletedAt,
+    meta.finalCompletedAt,
+  ].filter((value): value is number => typeof value === "number" && value > 0);
+  const finalCompletedAt =
+    completedAtCandidates.length > 0 ? Math.max(...completedAtCandidates) : undefined;
+  const durationCandidates = [
+    message.finalDurationMs,
+    meta.finalDurationMs,
+  ].filter((value): value is number => typeof value === "number" && value >= 0);
+  const finalDurationMs =
+    durationCandidates.length > 0 ? Math.max(...durationCandidates) : undefined;
+
+  return {
+    ...message,
+    isFinal: Boolean(message.isFinal || meta.isFinal),
+    ...(typeof finalCompletedAt === "number" ? { finalCompletedAt } : {}),
+    ...(typeof finalDurationMs === "number" ? { finalDurationMs } : {}),
+  };
+}
+
+function collectFallbackTurnMeta(fallbackItems: ConversationItem[]) {
+  const byTurn = new Map<number, TurnFinalMeta>();
+  let turnIndex = -1;
+  let currentUserAnchor = "";
+
+  fallbackItems.forEach((item) => {
+    if (item.kind === "message" && item.role === "user") {
+      turnIndex += 1;
+      currentUserAnchor = normalizeTurnAnchorText(item.text);
+      return;
+    }
+    if (turnIndex < 0 || !hasAssistantFinalMeta(item)) {
+      return;
+    }
+    const existing = byTurn.get(turnIndex);
+    const merged: AssistantFinalMeta = {
+      isFinal: Boolean(existing?.meta.isFinal || item.isFinal),
+      finalCompletedAt:
+        Math.max(existing?.meta.finalCompletedAt ?? 0, item.finalCompletedAt ?? 0) || undefined,
+      finalDurationMs:
+        Math.max(existing?.meta.finalDurationMs ?? -1, item.finalDurationMs ?? -1) >= 0
+          ? Math.max(existing?.meta.finalDurationMs ?? -1, item.finalDurationMs ?? -1)
+          : undefined,
+    };
+    byTurn.set(turnIndex, {
+      turnIndex,
+      userAnchor: existing?.userAnchor || currentUserAnchor,
+      meta: merged,
+    });
+  });
+
+  return [...byTurn.values()].sort((left, right) => left.turnIndex - right.turnIndex);
+}
+
+function collectRemoteTurnTargets(historyItems: ConversationItem[]) {
+  const turnTargets = new Map<number, RemoteTurnTarget>();
+  let turnIndex = -1;
+  let currentUserAnchor = "";
+
+  historyItems.forEach((item, index) => {
+    if (item.kind === "message" && item.role === "user") {
+      turnIndex += 1;
+      currentUserAnchor = normalizeTurnAnchorText(item.text);
+      return;
+    }
+    if (turnIndex < 0 || !isAssistantMessage(item)) {
+      return;
+    }
+    turnTargets.set(turnIndex, {
+      turnIndex,
+      userAnchor: currentUserAnchor,
+      assistantIndex: index,
+    });
+  });
+
+  return [...turnTargets.values()].sort((left, right) => left.turnIndex - right.turnIndex);
+}
+
+function mapFallbackTurnsToRemoteTargets(
+  fallbackTurnMeta: TurnFinalMeta[],
+  remoteTurnTargets: RemoteTurnTarget[],
+) {
+  const mapping = new Map<number, number>();
+  const usedRemoteTurns = new Set<number>();
+
+  const remoteByAnchor = new Map<string, number[]>();
+  remoteTurnTargets.forEach((target) => {
+    if (!target.userAnchor) {
+      return;
+    }
+    const queue = remoteByAnchor.get(target.userAnchor) ?? [];
+    queue.push(target.turnIndex);
+    remoteByAnchor.set(target.userAnchor, queue);
+  });
+
+  fallbackTurnMeta.forEach((fallback) => {
+    if (!fallback.userAnchor) {
+      return;
+    }
+    const queue = remoteByAnchor.get(fallback.userAnchor);
+    const remoteTurn = queue?.shift();
+    if (typeof remoteTurn !== "number") {
+      return;
+    }
+    mapping.set(fallback.turnIndex, remoteTurn);
+    usedRemoteTurns.add(remoteTurn);
+  });
+
+  if (fallbackTurnMeta.length === remoteTurnTargets.length) {
+    fallbackTurnMeta.forEach((fallback) => {
+      if (mapping.has(fallback.turnIndex)) {
+        return;
+      }
+      const remoteByIndex = remoteTurnTargets.find(
+        (target) => target.turnIndex === fallback.turnIndex && !usedRemoteTurns.has(target.turnIndex),
+      );
+      if (!remoteByIndex) {
+        return;
+      }
+      mapping.set(fallback.turnIndex, remoteByIndex.turnIndex);
+      usedRemoteTurns.add(remoteByIndex.turnIndex);
+    });
+  }
+
+  return mapping;
+}
+
+function hydrateCodexRemoteFinalMetadataFromFallback(
+  historyItems: ConversationItem[],
+  fallbackItems: ConversationItem[],
+) {
+  if (historyItems.length === 0 || fallbackItems.length === 0) {
+    return historyItems;
+  }
+
+  const fallbackTurnMeta = collectFallbackTurnMeta(fallbackItems);
+  if (fallbackTurnMeta.length === 0) {
+    return historyItems;
+  }
+
+  const remoteTurnTargets = collectRemoteTurnTargets(historyItems);
+  if (remoteTurnTargets.length === 0) {
+    return historyItems;
+  }
+
+  const fallbackToRemoteTurnMap = mapFallbackTurnsToRemoteTargets(
+    fallbackTurnMeta,
+    remoteTurnTargets,
+  );
+  if (fallbackToRemoteTurnMap.size === 0) {
+    return historyItems;
+  }
+
+  const remoteAssistantIndexByTurn = new Map(
+    remoteTurnTargets.map((target) => [target.turnIndex, target.assistantIndex]),
+  );
+  const hydrated = [...historyItems];
+  fallbackTurnMeta.forEach((fallback) => {
+    const remoteTurnIndex = fallbackToRemoteTurnMap.get(fallback.turnIndex);
+    if (typeof remoteTurnIndex !== "number") {
+      return;
+    }
+    const assistantIndex = remoteAssistantIndexByTurn.get(remoteTurnIndex);
+    if (typeof assistantIndex !== "number") {
+      return;
+    }
+    const candidate = hydrated[assistantIndex];
+    if (!isAssistantMessage(candidate)) {
+      return;
+    }
+    hydrated[assistantIndex] = mergeAssistantFinalMeta(candidate, fallback.meta);
+  });
+
+  return hydrated;
+}
+
 function mergeCodexHistoryPreservingTurns(
   historyItems: ConversationItem[],
   fallbackItems: ConversationItem[],
 ) {
-  if (!historyItems.length) {
+  const hydratedHistoryItems = hydrateCodexRemoteFinalMetadataFromFallback(
+    historyItems,
+    fallbackItems,
+  );
+
+  if (!hydratedHistoryItems.length) {
     return fallbackItems;
   }
 
-  const remoteMessageCount = historyItems.filter((item) => item.kind === "message").length;
+  const remoteMessageCount = hydratedHistoryItems.filter(
+    (item) => item.kind === "message",
+  ).length;
   const fallbackUserTurns: ConversationItem[][] = [];
   const leadingStructuredItems: ConversationItem[] = [];
   let currentTurnBucket: ConversationItem[] | null = null;
@@ -60,7 +287,10 @@ function mergeCodexHistoryPreservingTurns(
   });
 
   if (fallbackUserTurns.length === 0 || remoteMessageCount === 0) {
-    return mergeThreadItems(historyItems, fallbackItems.filter((item) => item.kind !== "message"));
+    return mergeThreadItems(
+      hydratedHistoryItems,
+      fallbackItems.filter((item) => item.kind !== "message"),
+    );
   }
 
   const merged: ConversationItem[] = [];
@@ -69,7 +299,7 @@ function mergeCodexHistoryPreservingTurns(
 
   appendUniqueItems(merged, seenIds, leadingStructuredItems);
 
-  historyItems.forEach((item) => {
+  hydratedHistoryItems.forEach((item) => {
     appendUniqueItems(merged, seenIds, [item]);
     if (item.kind === "message" && item.role === "user") {
       const bucket = fallbackUserTurns[turnIndex] ?? [];

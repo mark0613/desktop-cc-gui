@@ -255,6 +255,7 @@ export function useThreadTurnEvents({
         interruptedThreadsRef.current.delete(targetThreadId);
         // 重置分段计数，为下一个 turn 做准备
         dispatch({ type: "resetAgentSegment", threadId: targetThreadId });
+        dispatch({ type: "markLatestAssistantMessageFinal", threadId: targetThreadId });
       });
     },
     [

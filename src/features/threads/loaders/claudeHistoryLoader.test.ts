@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type { ConversationItem } from "../../../types";
 import { parseClaudeHistoryMessages } from "./claudeHistoryLoader";
+
+type AssistantMessageItem = Extract<ConversationItem, { kind: "message" }> & {
+  role: "assistant";
+};
 
 describe("parseClaudeHistoryMessages", () => {
   it("preserves transcript-style bash output and command metadata", () => {
@@ -208,5 +213,119 @@ describe("parseClaudeHistoryMessages", () => {
       expect(parsed.questions[0].question).toBe("请选择一个项目类型");
       expect(parsed.questions[0].selectedOptions).toEqual(["Web应用"]);
     }
+  });
+
+  it("marks the last assistant message of each turn as final for history restore", () => {
+    const items = parseClaudeHistoryMessages([
+      {
+        kind: "message",
+        role: "user",
+        id: "user-1",
+        text: "Q1",
+      },
+      {
+        kind: "message",
+        role: "assistant",
+        id: "assistant-1a",
+        text: "A1-part1",
+      },
+      {
+        kind: "message",
+        role: "assistant",
+        id: "assistant-1b",
+        text: "A1-part2",
+      },
+      {
+        kind: "message",
+        role: "user",
+        id: "user-2",
+        text: "Q2",
+      },
+      {
+        kind: "message",
+        role: "assistant",
+        id: "assistant-2",
+        text: "A2",
+      },
+    ]);
+
+    const assistantItems = items.filter(
+      (item): item is AssistantMessageItem =>
+        item.kind === "message" && item.role === "assistant",
+    );
+
+    expect(assistantItems).toHaveLength(3);
+    expect(assistantItems[0]?.id).toBe("assistant-1a");
+    expect(assistantItems[0]?.isFinal).not.toBe(true);
+    expect(assistantItems[1]?.id).toBe("assistant-1b");
+    expect(assistantItems[1]?.isFinal).toBe(true);
+    expect(assistantItems[2]?.id).toBe("assistant-2");
+    expect(assistantItems[2]?.isFinal).toBe(true);
+  });
+
+  it("respects explicit assistant final flags from Claude history rows", () => {
+    const items = parseClaudeHistoryMessages([
+      {
+        kind: "message",
+        role: "user",
+        id: "user-1",
+        text: "Q1",
+      },
+      {
+        kind: "message",
+        role: "assistant",
+        id: "assistant-explicit-1",
+        text: "A1",
+        metadata: { is_final: true },
+      },
+      {
+        kind: "message",
+        role: "assistant",
+        id: "assistant-explicit-2",
+        text: "A1 follow-up",
+      },
+    ]);
+
+    const assistantItems = items.filter(
+      (item): item is AssistantMessageItem =>
+        item.kind === "message" && item.role === "assistant",
+    );
+
+    expect(assistantItems).toHaveLength(2);
+    expect(assistantItems[0]?.id).toBe("assistant-explicit-1");
+    expect(assistantItems[0]?.isFinal).toBe(true);
+    expect(assistantItems[1]?.id).toBe("assistant-explicit-2");
+    expect(assistantItems[1]?.isFinal).not.toBe(true);
+  });
+
+  it("hydrates final completion time and duration from Claude message timestamps", () => {
+    const startedAt = "2026-04-01T08:00:00.000Z";
+    const completedAt = "2026-04-01T08:00:07.000Z";
+    const items = parseClaudeHistoryMessages([
+      {
+        kind: "message",
+        role: "user",
+        id: "user-timed-1",
+        text: "Q1",
+        timestamp: startedAt,
+      },
+      {
+        kind: "message",
+        role: "assistant",
+        id: "assistant-timed-1",
+        text: "A1",
+        timestamp: completedAt,
+      },
+    ]);
+
+    const assistant = items.find(
+      (item): item is AssistantMessageItem =>
+        item.kind === "message" && item.role === "assistant",
+    );
+
+    expect(assistant).toBeTruthy();
+    expect(assistant?.isFinal).toBe(true);
+    expect(assistant?.finalCompletedAt).toBe(Date.parse(completedAt));
+    expect(assistant?.finalDurationMs).toBe(7_000);
   });
 });

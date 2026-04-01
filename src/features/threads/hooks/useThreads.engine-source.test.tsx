@@ -2,6 +2,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
+import { resumeThread } from "../../../services/tauri";
 import type { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
 import { useThreads } from "./useThreads";
 
@@ -128,5 +129,60 @@ describe("useThreads engine source", () => {
         (thread) => thread.id === "claude:session-1",
       )?.engineSource,
     ).toBe("claude");
+  });
+
+  it("refreshes loaded thread only after switch refresh window", async () => {
+    vi.useFakeTimers();
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          id: "thread-1",
+          preview: "Thread 1",
+          turns: [],
+        },
+      },
+    });
+    try {
+      const { result } = renderHook(() =>
+        useThreads({
+          activeWorkspace: workspace,
+          activeEngine: "codex",
+          onWorkspaceConnected: vi.fn(),
+        }),
+      );
+
+      act(() => {
+        result.current.setActiveThreadId("thread-1");
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(vi.mocked(resumeThread)).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        result.current.setActiveThreadId("thread-1");
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(vi.mocked(resumeThread)).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        vi.advanceTimersByTime(20_001);
+        result.current.setActiveThreadId("thread-1");
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(vi.mocked(resumeThread)).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

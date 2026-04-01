@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ConversationItem, ThreadSummary } from "../../../types";
 import { initialState, threadReducer } from "./useThreadsReducer";
 import type { ThreadState } from "./useThreadsReducer";
@@ -15,52 +15,6 @@ describe("threadReducer", () => {
     expect(threads[0]?.name).toBe("Agent 1");
     expect(next.activeThreadIdByWorkspace["ws-1"]).toBe("thread-1");
     expect(next.threadStatusById["thread-1"]?.isProcessing).toBe(false);
-  });
-
-  it("resolves raw session id to existing prefixed engine thread", () => {
-    const next = threadReducer(
-      {
-        ...initialState,
-        threadsByWorkspace: {
-          "ws-1": [
-            {
-              id: "opencode:session-xyz",
-              name: "Agent 1",
-              updatedAt: 1,
-              engineSource: "opencode",
-            },
-          ],
-        },
-      },
-      {
-        type: "ensureThread",
-        workspaceId: "ws-1",
-        threadId: "session-xyz",
-      },
-    );
-
-    expect(next.threadsByWorkspace["ws-1"]).toHaveLength(1);
-    expect(next.threadsByWorkspace["ws-1"]?.[0]?.id).toBe("opencode:session-xyz");
-    expect(next.threadStatusById["session-xyz"]).toBeUndefined();
-  });
-
-  it("updates thread engine source when requested", () => {
-    const threads: ThreadSummary[] = [
-      { id: "thread-1", name: "Agent 1", updatedAt: 1, engineSource: "codex" },
-    ];
-    const next = threadReducer(
-      {
-        ...initialState,
-        threadsByWorkspace: { "ws-1": threads },
-      },
-      {
-        type: "setThreadEngine",
-        workspaceId: "ws-1",
-        threadId: "thread-1",
-        engine: "claude",
-      },
-    );
-    expect(next.threadsByWorkspace["ws-1"]?.[0]?.engineSource).toBe("claude");
   });
 
   it("renames auto-generated thread on first user message", () => {
@@ -571,6 +525,227 @@ describe("threadReducer", () => {
 
     const items = next.itemsByThread["thread-1"] ?? [];
     expect(items.some((item) => item.id === "user-input-answer-req-1")).toBe(false);
+  });
+
+  it("marks latest assistant message as final without clearing previous turn finals", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "assistant-turn-1",
+            kind: "message",
+            role: "assistant",
+            text: "第一轮回答",
+            isFinal: true,
+          },
+          {
+            id: "user-turn-2",
+            kind: "message",
+            role: "user",
+            text: "继续",
+          },
+          {
+            id: "assistant-turn-2",
+            kind: "message",
+            role: "assistant",
+            text: "第二轮回答",
+            isFinal: false,
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "markLatestAssistantMessageFinal",
+      threadId: "thread-1",
+    });
+
+    const items = next.itemsByThread["thread-1"] ?? [];
+    const turn1 = items[0];
+    const turn2 = items[2];
+    expect(turn1?.kind).toBe("message");
+    expect(turn2?.kind).toBe("message");
+    if (turn1?.kind === "message" && turn2?.kind === "message") {
+      expect(turn1.isFinal).toBe(true);
+      expect(turn2.isFinal).toBe(true);
+      expect(typeof turn2.finalCompletedAt).toBe("number");
+    }
+  });
+
+  it("keeps state identity when latest assistant is already final", () => {
+    const frozenNow = Date.parse("2026-04-01T10:20:30.000Z");
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "done",
+            isFinal: true,
+            finalCompletedAt: frozenNow,
+            finalDurationMs: 2_000,
+          },
+        ],
+      },
+    };
+
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(frozenNow + 500);
+    try {
+      const next = threadReducer(base, {
+        type: "markLatestAssistantMessageFinal",
+        threadId: "thread-1",
+      });
+      expect(next).toBe(base);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("captures final completion time and duration from thread status", () => {
+    const frozenNow = Date.parse("2026-04-01T10:20:30.000Z");
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(frozenNow);
+    try {
+      const base: ThreadState = {
+        ...initialState,
+        threadStatusById: {
+          "thread-1": {
+            isProcessing: false,
+            hasUnread: false,
+            isReviewing: false,
+            isContextCompacting: false,
+            processingStartedAt: null,
+            lastDurationMs: 4_250,
+            heartbeatPulse: 0,
+          },
+        },
+        itemsByThread: {
+          "thread-1": [
+            {
+              id: "assistant-1",
+              kind: "message",
+              role: "assistant",
+              text: "done",
+              isFinal: false,
+            },
+          ],
+        },
+      };
+
+      const next = threadReducer(base, {
+        type: "markLatestAssistantMessageFinal",
+        threadId: "thread-1",
+      });
+
+      const finalMessage = next.itemsByThread["thread-1"]?.[0];
+      expect(finalMessage?.kind).toBe("message");
+      if (finalMessage?.kind === "message") {
+        expect(finalMessage.isFinal).toBe(true);
+        expect(finalMessage.finalCompletedAt).toBe(frozenNow);
+        expect(finalMessage.finalDurationMs).toBe(4_250);
+      }
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("preserves final metadata when a completed snapshot arrives after turn settled", () => {
+    const frozenNow = Date.parse("2026-04-01T10:20:30.000Z");
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: false,
+          hasUnread: false,
+          isReviewing: false,
+          isContextCompacting: false,
+          processingStartedAt: null,
+          lastDurationMs: 1_880,
+          heartbeatPulse: 0,
+        },
+      },
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "done",
+            isFinal: true,
+            finalCompletedAt: frozenNow,
+            finalDurationMs: 1_880,
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-1",
+      text: "done",
+      hasCustomName: false,
+    });
+
+    const message = next.itemsByThread["thread-1"]?.[0];
+    expect(message?.kind).toBe("message");
+    if (message?.kind === "message") {
+      expect(message.isFinal).toBe(true);
+      expect(message.finalCompletedAt).toBe(frozenNow);
+      expect(message.finalDurationMs).toBe(1_880);
+    }
+  });
+
+  it("clears final metadata when assistant text continues while thread is still processing", () => {
+    const frozenNow = Date.parse("2026-04-01T10:20:30.000Z");
+    const base: ThreadState = {
+      ...initialState,
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          isContextCompacting: false,
+          processingStartedAt: frozenNow - 300,
+          lastDurationMs: null,
+          heartbeatPulse: 1,
+        },
+      },
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "done",
+            isFinal: true,
+            finalCompletedAt: frozenNow,
+            finalDurationMs: 1_880,
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "assistant-1",
+      delta: " + more",
+      hasCustomName: false,
+    });
+
+    const message = next.itemsByThread["thread-1"]?.[0];
+    expect(message?.kind).toBe("message");
+    if (message?.kind === "message") {
+      expect(message.isFinal).toBe(false);
+      expect(message.finalCompletedAt).toBeUndefined();
+      expect(message.finalDurationMs).toBeUndefined();
+      expect(message.text).toBe("done + more");
+    }
   });
 
   it("renames auto-generated thread from assistant output when no user message", () => {

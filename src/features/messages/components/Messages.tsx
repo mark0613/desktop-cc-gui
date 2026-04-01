@@ -1,10 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import Bell from "lucide-react/dist/esm/icons/bell";
 import Check from "lucide-react/dist/esm/icons/check";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import Copy from "lucide-react/dist/esm/icons/copy";
+import Flag from "lucide-react/dist/esm/icons/flag";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
 import { AgentIcon } from "../../../components/AgentIcon";
 import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
@@ -38,7 +40,6 @@ import {
   SearchToolGroupBlock,
 } from "./toolBlocks";
 import { buildCommandSummary } from "./toolBlocks/toolConstants";
-import { MEMORY_CONTEXT_SUMMARY_PREFIX } from "../../project-memory/utils/memoryMarkers";
 import type { PresentationProfile } from "../presentation/presentationProfile";
 import { RequestUserInputMessage } from "../../app/components/RequestUserInputMessage";
 import { ImageLightbox, MessageImageGrid, type MessageImage } from "./MessageMediaBlocks";
@@ -50,6 +51,10 @@ import {
   writeLocalBooleanFlag,
 } from "../constants/liveCanvasControls";
 import { normalizeAgentIcon } from "../../../utils/agentIcons";
+import {
+  parseInjectedMemoryPrefixFromUser,
+  parseMemoryContextSummary,
+} from "./messagesMemoryContext";
 
 
 type MessagesProps = {
@@ -143,11 +148,6 @@ type ExploreRowProps = {
   onToggle: (id: string) => void;
 };
 
-type MemoryContextSummary = {
-  preview: string;
-  lines: string[];
-};
-
 function areMessageImagesEqual(
   previous: Extract<ConversationItem, { kind: "message" }>["images"],
   next: Extract<ConversationItem, { kind: "message" }>["images"],
@@ -174,6 +174,9 @@ function areMessageItemsEqual(
       previous.id === next.id &&
       previous.role === next.role &&
       previous.text === next.text &&
+      previous.isFinal === next.isFinal &&
+      previous.finalCompletedAt === next.finalCompletedAt &&
+      previous.finalDurationMs === next.finalDurationMs &&
       previous.selectedAgentName === next.selectedAgentName &&
       previous.selectedAgentIcon === next.selectedAgentIcon &&
       areMessageImagesEqual(previous.images, next.images)
@@ -215,12 +218,6 @@ function isSelectionInsideNode(selection: Selection | null, node: HTMLElement | 
 const SCROLL_THRESHOLD_PX = 120;
 const OPENCODE_NON_STREAMING_HINT_DELAY_MS = 12_000;
 const PARAGRAPH_BREAK_SPLIT_REGEX = /\r?\n[^\S\r\n]*\r?\n+/;
-const PROJECT_MEMORY_KIND_LINE_REGEX =
-  /^\[(?:已知问题|技术决策|项目上下文|对话记录|笔记|记忆)\]\s*/;
-const LEGACY_MEMORY_RECORD_HINT_REGEX =
-  /(?:用户输入[:：]|助手输出摘要[:：]|助手输出[:：])/;
-const PROJECT_MEMORY_XML_PREFIX_REGEX =
-  /^<project-memory\b[^>]*>([\s\S]*?)<\/project-memory>\s*/i;
 const MODE_FALLBACK_MARKER_REGEX = /User request\s*:\s*/i;
 const MODE_FALLBACK_PREFIX_REGEX =
   /^(?:collaboration mode:\s*code\.|execution policy \(default mode\):|execution policy \(plan mode\):)/i;
@@ -1057,116 +1054,26 @@ function normalizeMessageImageSrc(path: string) {
   }
 }
 
-function parseMemoryContextSummary(text: string): MemoryContextSummary | null {
-  const normalized = text.trim();
-  if (!normalized.startsWith(MEMORY_CONTEXT_SUMMARY_PREFIX)) {
-    return null;
-  }
-  const preview = normalized.slice(MEMORY_CONTEXT_SUMMARY_PREFIX.length).trim();
-  if (!preview) {
-    return null;
-  }
-  const lines = preview
-    .split(/[；\n]+/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  return {
-    preview,
-    lines: lines.length > 0 ? lines : [preview],
-  };
-}
-
-function buildMemorySummary(preview: string): MemoryContextSummary | null {
-  const normalizedPreview = preview.trim();
-  if (!normalizedPreview) {
-    return null;
-  }
-  const lines = normalizedPreview
-    .split(/[；\n]+/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  return {
-    preview: normalizedPreview,
-    lines: lines.length > 0 ? lines : [normalizedPreview],
-  };
-}
-
-function parseInjectedMemoryPrefixFromUser(
-  text: string,
-): { memorySummary: MemoryContextSummary; remainingText: string } | null {
-  const normalized = text.trimStart();
-  if (!normalized) {
-    return null;
-  }
-
-  const xmlMatch = normalized.match(PROJECT_MEMORY_XML_PREFIX_REGEX);
-  if (xmlMatch) {
-    const blockBody = (xmlMatch[1] ?? "").trim();
-    const memoryLines = blockBody
-      .split(/\r?\n+/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .filter((line) => PROJECT_MEMORY_KIND_LINE_REGEX.test(line));
-    const previewText = memoryLines.length > 0 ? memoryLines.join("；") : blockBody;
-    const memorySummary = buildMemorySummary(previewText);
-    if (!memorySummary) {
-      return null;
-    }
-    const remainingText = normalized.slice(xmlMatch[0].length).trimStart();
-    return { memorySummary, remainingText };
-  }
-
-  if (!PROJECT_MEMORY_KIND_LINE_REGEX.test(normalized)) {
-    return null;
-  }
-  if (!LEGACY_MEMORY_RECORD_HINT_REGEX.test(normalized)) {
-    return null;
-  }
-
-  const paragraphBlocks = normalized.split(PARAGRAPH_BREAK_SPLIT_REGEX);
-  if (paragraphBlocks.length >= 2) {
-    const firstBlock = (paragraphBlocks[0] ?? "").trim();
-    if (
-      PROJECT_MEMORY_KIND_LINE_REGEX.test(firstBlock) &&
-      LEGACY_MEMORY_RECORD_HINT_REGEX.test(firstBlock)
-    ) {
-      const memorySummary = buildMemorySummary(firstBlock);
-      if (!memorySummary) {
-        return null;
-      }
-      return {
-        memorySummary,
-        remainingText: paragraphBlocks.slice(1).join("\n\n").trimStart(),
-      };
-    }
-  }
-
-  const lines = normalized.split(/\r?\n/);
-  if (lines.length >= 2) {
-    const firstLine = (lines[0] ?? "").trim();
-    if (
-      PROJECT_MEMORY_KIND_LINE_REGEX.test(firstLine) &&
-      LEGACY_MEMORY_RECORD_HINT_REGEX.test(firstLine)
-    ) {
-      const memorySummary = buildMemorySummary(firstLine);
-      if (!memorySummary) {
-        return null;
-      }
-      return {
-        memorySummary,
-        remainingText: lines.slice(1).join("\n").trimStart(),
-      };
-    }
-  }
-
-  return null;
-}
-
 function formatDurationMs(durationMs: number) {
   const durationSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const durationHours = Math.floor(durationSeconds / 3600);
   const durationMinutes = Math.floor(durationSeconds / 60);
   const durationRemainder = durationSeconds % 60;
+  if (durationHours > 0) {
+    const remainderMinutes = durationMinutes % 60;
+    return `${durationHours}:${String(remainderMinutes).padStart(2, "0")}:${String(durationRemainder).padStart(2, "0")}`;
+  }
   return `${durationMinutes}:${String(durationRemainder).padStart(2, "0")}`;
+}
+
+function formatCompletedTimeMs(timestampMs: number) {
+  const date = new Date(timestampMs);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 function scrollKeyForItems(items: ConversationItem[]) {
@@ -2715,6 +2622,29 @@ export const Messages = memo(function Messages({
   }, [scrollKey, isThinking, isNearBottom, liveAutoFollowEnabled]);
 
   const groupedEntries = useMemo(() => groupToolItems(renderedItems), [renderedItems]);
+  const assistantFinalWithVisibleProcessSet = useMemo(() => {
+    const ids = new Set<string>();
+    let hasVisibleProcessItemsInTurn = false;
+    renderedItems.forEach((entry) => {
+      if (entry.kind === "message" && entry.role === "user") {
+        hasVisibleProcessItemsInTurn = false;
+        return;
+      }
+      if (entry.kind === "reasoning" || entry.kind === "tool") {
+        hasVisibleProcessItemsInTurn = true;
+        return;
+      }
+      if (
+        entry.kind === "message" &&
+        entry.role === "assistant" &&
+        entry.isFinal === true &&
+        hasVisibleProcessItemsInTurn
+      ) {
+        ids.add(entry.id);
+      }
+    });
+    return ids;
+  }, [renderedItems]);
 
   const shouldRenderUserInputNode =
     (activeEngine === "codex" || activeEngine === "claude") &&
@@ -2735,6 +2665,18 @@ export const Messages = memo(function Messages({
     if (item.kind === "message") {
       const itemRenderKey = `message:${item.id}`;
       const isCopied = copiedMessageId === item.id;
+      const shouldRenderFinalBoundary =
+        item.role === "assistant" && item.isFinal === true;
+      const shouldRenderReasoningBoundary =
+        shouldRenderFinalBoundary && assistantFinalWithVisibleProcessSet.has(item.id);
+      const finalMetaParts: string[] = [];
+      if (typeof item.finalCompletedAt === "number" && item.finalCompletedAt > 0) {
+        finalMetaParts.push(formatCompletedTimeMs(item.finalCompletedAt));
+      }
+      if (typeof item.finalDurationMs === "number" && item.finalDurationMs >= 0) {
+        finalMetaParts.push(`总耗时 ${formatDurationMs(item.finalDurationMs)}`);
+      }
+      const finalMetaText = finalMetaParts.join(" · ");
       const bindMessageNode = (node: HTMLDivElement | null) => {
         if (item.role === "user" && node) {
           messageNodeByIdRef.current.set(item.id, node);
@@ -2743,26 +2685,51 @@ export const Messages = memo(function Messages({
         messageNodeByIdRef.current.delete(item.id);
       };
       return (
-        <div key={itemRenderKey} ref={bindMessageNode} data-message-anchor-id={item.id}>
-          <MessageRow
-            item={item}
-            isStreaming={
-              activeEngine === "claude" &&
-              isThinking &&
-              item.role === "assistant" &&
-              item.id === latestAssistantMessageId
-            }
-            activeEngine={activeEngine}
-            activeCollaborationModeId={activeCollaborationModeId}
-            enableCollaborationBadge={activeEngine === "codex"}
-            presentationProfile={presentationProfile}
-            isCopied={isCopied}
-            onCopy={handleCopyMessage}
-            codeBlockCopyUseModifier={codeBlockCopyUseModifier}
-            onOpenFileLink={openFileLink}
-            onOpenFileLinkMenu={showFileLinkMenu}
-          />
-        </div>
+        <Fragment key={itemRenderKey}>
+          {shouldRenderReasoningBoundary && (
+            <div className="messages-turn-boundary messages-reasoning-boundary" role="separator">
+              <span className="messages-turn-boundary-label">
+                <span className="messages-turn-boundary-label-content">
+                  <Bell className="messages-turn-boundary-icon" size={13} aria-hidden />
+                  <span>推理过程</span>
+                </span>
+              </span>
+            </div>
+          )}
+          <div ref={bindMessageNode} data-message-anchor-id={item.id}>
+            <MessageRow
+              item={item}
+              isStreaming={
+                activeEngine === "claude" &&
+                isThinking &&
+                item.role === "assistant" &&
+                item.id === latestAssistantMessageId
+              }
+              activeEngine={activeEngine}
+              activeCollaborationModeId={activeCollaborationModeId}
+              enableCollaborationBadge={activeEngine === "codex"}
+              presentationProfile={presentationProfile}
+              isCopied={isCopied}
+              onCopy={handleCopyMessage}
+              codeBlockCopyUseModifier={codeBlockCopyUseModifier}
+              onOpenFileLink={openFileLink}
+              onOpenFileLinkMenu={showFileLinkMenu}
+            />
+          </div>
+          {shouldRenderFinalBoundary && (
+            <div className="messages-turn-boundary messages-final-boundary" role="separator">
+              <span className="messages-turn-boundary-label">
+                <span className="messages-turn-boundary-label-content">
+                  <Flag className="messages-turn-boundary-icon" size={13} aria-hidden />
+                  <span>最终消息</span>
+                </span>
+              </span>
+              {finalMetaText && (
+                <span className="messages-turn-boundary-meta">{finalMetaText}</span>
+              )}
+            </div>
+          )}
+        </Fragment>
       );
     }
     if (item.kind === "reasoning") {

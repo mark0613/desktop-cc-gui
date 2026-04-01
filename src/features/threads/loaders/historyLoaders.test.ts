@@ -88,6 +88,51 @@ describe("history loaders", () => {
     ]);
   });
 
+  it("hydrates codex final completion time and duration from turn item timestamps", async () => {
+    const startedAt = "2026-04-01T08:00:00.000Z";
+    const completedAt = "2026-04-01T08:00:07.000Z";
+    const loader = createCodexHistoryLoader({
+      workspaceId: "ws-codex-timing",
+      resumeThread: vi.fn().mockResolvedValue({
+        result: {
+          thread: {
+            turns: [
+              {
+                id: "turn-timing-1",
+                items: [
+                  {
+                    id: "msg-user-timing-1",
+                    type: "userMessage",
+                    content: [{ type: "text", text: "hello" }],
+                    timestamp: startedAt,
+                  },
+                  {
+                    id: "msg-assistant-timing-1",
+                    type: "agentMessage",
+                    text: "hi there",
+                    timestamp: completedAt,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+    });
+
+    const snapshot = await loader.load("thread-codex-timing");
+    const assistant = snapshot.items.find(
+      (item) => item.kind === "message" && item.role === "assistant",
+    );
+    expect(assistant).toEqual(
+      expect.objectContaining({
+        isFinal: true,
+        finalCompletedAt: Date.parse(completedAt),
+        finalDurationMs: 7_000,
+      }),
+    );
+  });
+
   it("loads gemini history into normalized snapshot", async () => {
     const loader = createGeminiHistoryLoader({
       workspaceId: "ws-gemini",
@@ -126,6 +171,38 @@ describe("history loaders", () => {
       expect.objectContaining({
         kind: "message",
         role: "assistant",
+      }),
+    );
+  });
+
+  it("hydrates gemini final completion time and duration from message timestamps", () => {
+    const startedAt = "2026-04-01T09:00:00.000Z";
+    const completedAt = "2026-04-01T09:00:12.000Z";
+    const items = parseGeminiHistoryMessages([
+      {
+        id: "gemini-user-timing-1",
+        kind: "message",
+        role: "user",
+        text: "hello",
+        timestamp: startedAt,
+      },
+      {
+        id: "gemini-assistant-timing-1",
+        kind: "message",
+        role: "assistant",
+        text: "done",
+        timestamp: completedAt,
+      },
+    ]);
+
+    const assistant = items.find(
+      (item) => item.kind === "message" && item.role === "assistant",
+    );
+    expect(assistant).toEqual(
+      expect.objectContaining({
+        isFinal: true,
+        finalCompletedAt: Date.parse(completedAt),
+        finalDurationMs: 12_000,
       }),
     );
   });
@@ -397,6 +474,44 @@ describe("history loaders", () => {
         role: "assistant",
         text: "Done",
       }),
+    );
+  });
+
+  it("hydrates codex local assistant final metadata from entry timestamps", () => {
+    const startedAt = "2026-04-01T16:31:34.000Z";
+    const completedAt = "2026-04-01T16:31:37.000Z";
+    const items = parseCodexSessionHistory({
+      entries: [
+        {
+          timestamp: startedAt,
+          type: "event_msg",
+          payload: {
+            type: "user_message",
+            message: "在吗",
+          },
+        },
+        {
+          timestamp: completedAt,
+          type: "event_msg",
+          payload: {
+            type: "agent_message",
+            message: "在这儿，等你派活。",
+          },
+        },
+      ],
+    });
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "message",
+          role: "assistant",
+          text: "在这儿，等你派活。",
+          isFinal: true,
+          finalCompletedAt: Date.parse(completedAt),
+          finalDurationMs: 3_000,
+        }),
+      ]),
     );
   });
 
@@ -830,6 +945,74 @@ describe("history loaders", () => {
         item.kind === "message" && item.role === "assistant",
     );
     expect(assistantMessages).toHaveLength(2);
+  });
+
+  it("hydrates codex remote final metadata from local session timestamps", async () => {
+    const startedAt = "2026-04-01T16:45:07.000Z";
+    const completedAt = "2026-04-01T16:45:17.000Z";
+    const loader = createCodexHistoryLoader({
+      workspaceId: "ws-codex-final-meta-merge",
+      resumeThread: vi.fn().mockResolvedValue({
+        result: {
+          thread: {
+            turns: [
+              {
+                id: "turn-1",
+                items: [
+                  {
+                    id: "remote-user-1",
+                    type: "userMessage",
+                    content: [{ type: "text", text: "你好" }],
+                  },
+                  {
+                    id: "remote-assistant-1",
+                    type: "agentMessage",
+                    text: "你好。要我现在帮你处理什么？",
+                    isFinal: true,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+      loadCodexSession: vi.fn().mockResolvedValue({
+        entries: [
+          {
+            timestamp: startedAt,
+            type: "event_msg",
+            payload: {
+              type: "user_message",
+              message: "你好",
+            },
+          },
+          {
+            timestamp: completedAt,
+            type: "event_msg",
+            payload: {
+              type: "agent_message",
+              message: "你好。要我现在帮你处理什么？",
+            },
+          },
+        ],
+      }),
+    });
+
+    const snapshot = await loader.load("thread-codex-final-meta-merge");
+    const assistant = snapshot.items.find(
+      (item) =>
+        item.kind === "message" &&
+        item.role === "assistant" &&
+        item.id === "remote-assistant-1",
+    );
+
+    expect(assistant).toEqual(
+      expect.objectContaining({
+        isFinal: true,
+        finalCompletedAt: Date.parse(completedAt),
+        finalDurationMs: 10_000,
+      }),
+    );
   });
 
   it("merges codex local structured fallback when resumeThread only restores messages", async () => {

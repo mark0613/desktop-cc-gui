@@ -469,6 +469,7 @@ export type ThreadAction =
       itemId: string;
       text: string;
       hasCustomName: boolean;
+      timestamp?: number;
     }
   | {
       type: "upsertItem";
@@ -477,6 +478,7 @@ export type ThreadAction =
       item: ConversationItem;
       hasCustomName?: boolean;
     }
+  | { type: "evictThreadItems"; threadIds: string[] }
   | { type: "setThreadItems"; threadId: string; items: ConversationItem[] }
   | {
       type: "appendReasoningSummary";
@@ -547,6 +549,7 @@ export type ThreadAction =
   | { type: "clearThreadPlan"; threadId: string }
   | { type: "incrementAgentSegment"; threadId: string }
   | { type: "resetAgentSegment"; threadId: string }
+  | { type: "markLatestAssistantMessageFinal"; threadId: string }
   | {
       type: "setLastAgentMessage";
       threadId: string;
@@ -716,6 +719,24 @@ function isDuplicateReviewById(
       item.state === target.state &&
       item.text.trim() === normalizedText,
   );
+}
+
+function clearAssistantFinalMetadata(
+  item: AssistantMessageItem,
+): AssistantMessageItem {
+  const {
+    finalCompletedAt: _finalCompletedAt,
+    finalDurationMs: _finalDurationMs,
+    ...rest
+  } = item;
+  return rest as AssistantMessageItem;
+}
+
+function shouldPreserveAssistantFinalMetadata(
+  item: AssistantMessageItem,
+  isThreadProcessing: boolean,
+) {
+  return item.isFinal === true && !isThreadProcessing;
 }
 
 export function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
@@ -1043,6 +1064,27 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         },
       };
     }
+    case "evictThreadItems": {
+      if (!action.threadIds.length) {
+        return state;
+      }
+      const nextItemsByThread = { ...state.itemsByThread };
+      let didChange = false;
+      action.threadIds.forEach((threadId) => {
+        if (!(threadId in nextItemsByThread)) {
+          return;
+        }
+        delete nextItemsByThread[threadId];
+        didChange = true;
+      });
+      if (!didChange) {
+        return state;
+      }
+      return {
+        ...state,
+        itemsByThread: nextItemsByThread,
+      };
+    }
     case "setThreadParent": {
       if (!action.parentId || action.parentId === action.threadId) {
         return state;
@@ -1347,6 +1389,11 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         if (!existing || !isAssistantMessageItem(existing)) {
           return state;
         }
+        const isThreadProcessing = Boolean(state.threadStatusById[action.threadId]?.isProcessing);
+        const keepFinalMetadata = shouldPreserveAssistantFinalMetadata(
+          existing,
+          isThreadProcessing,
+        );
         const nextId = shouldCanonicalizeLegacyId ? segmentedItemId : existing.id;
         const nextText = mergeAgentMessageText(existing.text, action.delta);
         if (
@@ -1356,10 +1403,14 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ) {
           return state;
         }
+        const nextBase = keepFinalMetadata
+          ? existing
+          : clearAssistantFinalMetadata(existing);
         list[index] = {
-          ...existing,
+          ...nextBase,
           id: nextId,
           text: nextText,
+          isFinal: keepFinalMetadata ? true : false,
         };
       } else {
         list.push({
@@ -1367,6 +1418,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           kind: "message",
           role: "assistant",
           text: action.delta,
+          isFinal: false,
         });
       }
       const updatedItems = prepareThreadItems(list);
@@ -1420,16 +1472,39 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             ? segmentedItemId
             : (list[index]?.id ?? segmentedItemId)
           : segmentedItemId;
-      const existingItem = index >= 0 ? list[index] : null;
-      if (
-        existingItem &&
-        existingItem.kind === "message" &&
-        existingItem.role === "assistant"
-      ) {
+      const completedAt = action.timestamp ?? Date.now();
+      const status = state.threadStatusById[action.threadId];
+      const statusDuration =
+        typeof status?.lastDurationMs === "number"
+          ? Math.max(0, status.lastDurationMs)
+          : null;
+      const derivedDuration =
+        statusDuration !== null
+          ? statusDuration
+          : status?.processingStartedAt
+            ? Math.max(0, completedAt - status.processingStartedAt)
+            : null;
+      const existingItem = index >= 0 ? list[index] : undefined;
+      if (isAssistantMessageItem(existingItem)) {
+        const isThreadProcessing = Boolean(state.threadStatusById[action.threadId]?.isProcessing);
+        const keepFinalMetadata = shouldPreserveAssistantFinalMetadata(
+          existingItem,
+          isThreadProcessing,
+        );
+        const nextBase = keepFinalMetadata
+          ? existingItem
+          : clearAssistantFinalMetadata(existingItem);
         list[index] = {
-          ...existingItem,
+          ...nextBase,
           id: targetItemId,
           text: mergeCompletedAgentText(existingItem.text, action.text),
+          isFinal: true,
+          finalCompletedAt: nextBase.finalCompletedAt ?? completedAt,
+          ...(typeof nextBase.finalDurationMs === "number"
+            ? { finalDurationMs: nextBase.finalDurationMs }
+            : derivedDuration !== null
+              ? { finalDurationMs: derivedDuration }
+              : {}),
         };
       } else {
         list.push({
@@ -1437,6 +1512,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           kind: "message",
           role: "assistant",
           text: action.text,
+          isFinal: true,
+          finalCompletedAt: completedAt,
+          ...(derivedDuration !== null ? { finalDurationMs: derivedDuration } : {}),
         });
       }
       const updatedItems = prepareThreadItems(list);
@@ -1605,6 +1683,66 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         itemsByThread: {
           ...state.itemsByThread,
           [action.threadId]: prepareThreadItems(mergedItems),
+        },
+      };
+    }
+    case "markLatestAssistantMessageFinal": {
+      const list = state.itemsByThread[action.threadId] ?? [];
+      if (list.length === 0) {
+        return state;
+      }
+      let latestAssistantIndex = -1;
+      for (let index = list.length - 1; index >= 0; index -= 1) {
+        const item = list[index];
+        if (isAssistantMessageItem(item)) {
+          latestAssistantIndex = index;
+          break;
+        }
+      }
+      if (latestAssistantIndex < 0) {
+        return state;
+      }
+      const latestAssistant = list[latestAssistantIndex];
+      if (!isAssistantMessageItem(latestAssistant)) {
+        return state;
+      }
+      const completedAt =
+        latestAssistant.finalCompletedAt ??
+        Date.now();
+      const status = state.threadStatusById[action.threadId];
+      const statusDuration =
+        typeof status?.lastDurationMs === "number"
+          ? Math.max(0, status.lastDurationMs)
+          : null;
+      const derivedDuration =
+        statusDuration !== null
+          ? statusDuration
+          : status?.processingStartedAt
+            ? Math.max(0, completedAt - status.processingStartedAt)
+            : null;
+      const durationMs =
+        typeof latestAssistant.finalDurationMs === "number"
+          ? Math.max(0, latestAssistant.finalDurationMs)
+          : derivedDuration;
+      const shouldUpdate =
+        latestAssistant.isFinal !== true ||
+        latestAssistant.finalCompletedAt !== completedAt ||
+        latestAssistant.finalDurationMs !== durationMs;
+      if (!shouldUpdate) {
+        return state;
+      }
+      const next = [...list];
+      next[latestAssistantIndex] = {
+        ...latestAssistant,
+        isFinal: true,
+        finalCompletedAt: completedAt,
+        ...(durationMs !== null ? { finalDurationMs: durationMs } : {}),
+      };
+      return {
+        ...state,
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: next,
         },
       };
     }

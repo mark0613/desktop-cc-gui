@@ -550,8 +550,152 @@ function mergeReasoningSnapshot(
   });
 }
 
+function asBooleanFlag(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1" || normalized === "yes") {
+      return true;
+    }
+    if (normalized === "false" || normalized === "0" || normalized === "no") {
+      return false;
+    }
+  }
+  return undefined;
+}
+
+function parseHistoryTimestampMs(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value < 1_000_000_000_000 ? value * 1000 : value;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim();
+  if (!normalized) {
+    return undefined;
+  }
+  const numeric = Number(normalized);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
+  }
+  const parsed = Date.parse(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+  return parsed;
+}
+
+function extractClaudeAssistantFinalFlag(message: Record<string, unknown>): boolean | undefined {
+  const metadata =
+    message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
+      ? (message.metadata as Record<string, unknown>)
+      : null;
+  const candidates: unknown[] = [
+    message.isFinal,
+    message.is_final,
+    message.final,
+    message.isFinalMessage,
+    message.is_final_message,
+  ];
+  if (metadata) {
+    candidates.push(
+      metadata.isFinal,
+      metadata.is_final,
+      metadata.final,
+      metadata.isFinalMessage,
+      metadata.is_final_message,
+    );
+  }
+  for (const candidate of candidates) {
+    const parsed = asBooleanFlag(candidate);
+    if (typeof parsed === "boolean") {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function markClaudeAssistantFinalMessages(items: ConversationItem[]) {
+  let lastAssistantIndexInTurn = -1;
+  let hasExplicitFinalAssistantInTurn = false;
+  const finalizeCurrentTurn = () => {
+    if (hasExplicitFinalAssistantInTurn || lastAssistantIndexInTurn < 0) {
+      return;
+    }
+    const lastAssistant = items[lastAssistantIndexInTurn];
+    if (!lastAssistant || lastAssistant.kind !== "message" || lastAssistant.role !== "assistant") {
+      return;
+    }
+    if (lastAssistant.isFinal === true) {
+      return;
+    }
+    items[lastAssistantIndexInTurn] = {
+      ...lastAssistant,
+      isFinal: true,
+    };
+  };
+
+  items.forEach((item, index) => {
+    if (item.kind === "message" && item.role === "user") {
+      finalizeCurrentTurn();
+      lastAssistantIndexInTurn = -1;
+      hasExplicitFinalAssistantInTurn = false;
+      return;
+    }
+    if (item.kind === "message" && item.role === "assistant") {
+      if (item.isFinal === true) {
+        hasExplicitFinalAssistantInTurn = true;
+      }
+      lastAssistantIndexInTurn = index;
+    }
+  });
+
+  finalizeCurrentTurn();
+}
+
+function hydrateClaudeAssistantFinalTiming(
+  items: ConversationItem[],
+  messageTimestampById: Map<string, number>,
+) {
+  let turnStartedAtMs: number | undefined;
+  items.forEach((item, index) => {
+    if (item.kind !== "message") {
+      return;
+    }
+    if (item.role === "user") {
+      turnStartedAtMs = messageTimestampById.get(item.id);
+      return;
+    }
+    if (item.isFinal !== true) {
+      return;
+    }
+    const completedAtMs = messageTimestampById.get(item.id);
+    const durationMs =
+      typeof completedAtMs === "number" && typeof turnStartedAtMs === "number"
+        ? Math.max(0, completedAtMs - turnStartedAtMs)
+        : undefined;
+    if (typeof completedAtMs !== "number" && typeof durationMs !== "number") {
+      return;
+    }
+    items[index] = {
+      ...item,
+      ...(typeof completedAtMs === "number"
+        ? { finalCompletedAt: completedAtMs }
+        : {}),
+      ...(typeof durationMs === "number" ? { finalDurationMs: durationMs } : {}),
+    };
+  });
+}
+
 export function parseClaudeHistoryMessages(messagesData: unknown): ConversationItem[] {
   const items: ConversationItem[] = [];
+  const messageTimestampById = new Map<string, number>();
   const toolIndexById = new Map<string, number>();
   const pendingAskToolIds: string[] = [];
   const askTemplatesByToolId = new Map<string, AskUserQuestionTemplate[]>();
@@ -629,6 +773,8 @@ export function parseClaudeHistoryMessages(messagesData: unknown): ConversationI
       const role = asString(message.role) === "user" ? "user" : "assistant";
       const text = asString(message.text ?? "");
       const images = extractImageList(message.images);
+      const itemId = asString(message.id ?? `claude-message-${items.length + 1}`);
+      const timestampMs = parseHistoryTimestampMs(message.timestamp);
       if (role === "user") {
         const pendingAskToolId = peekPendingAskTool();
         if (pendingAskToolId) {
@@ -642,12 +788,22 @@ export function parseClaudeHistoryMessages(messagesData: unknown): ConversationI
           }
         }
       }
+      const assistantFinalFlag =
+        role === "assistant"
+          ? extractClaudeAssistantFinalFlag(message)
+          : undefined;
+      if (typeof timestampMs === "number") {
+        messageTimestampById.set(itemId, timestampMs);
+      }
       items.push({
-        id: asString(message.id ?? `claude-message-${items.length + 1}`),
+        id: itemId,
         kind: "message",
         role,
         text,
         images: images.length > 0 ? images : undefined,
+        ...(typeof assistantFinalFlag === "boolean"
+          ? { isFinal: assistantFinalFlag }
+          : {}),
       });
       continue;
     }
@@ -768,6 +924,9 @@ export function parseClaudeHistoryMessages(messagesData: unknown): ConversationI
       status: "completed",
     };
   }
+
+  markClaudeAssistantFinalMessages(items);
+  hydrateClaudeAssistantFinalTiming(items, messageTimestampById);
 
   return items;
 }

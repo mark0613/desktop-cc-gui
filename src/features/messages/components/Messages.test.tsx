@@ -2614,4 +2614,186 @@ describe("Messages", () => {
     expect(container.querySelector(".working-activity")).toBeNull();
   });
 
+  it("renders final boundary without reasoning boundary when no process items exist", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "Q1",
+      },
+      {
+        id: "assistant-final-1",
+        kind: "message",
+        role: "assistant",
+        text: "A1",
+        isFinal: true,
+      },
+      {
+        id: "user-2",
+        kind: "message",
+        role: "user",
+        text: "Q2",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const finalMessageNode = container.querySelector(
+      "[data-message-anchor-id='assistant-final-1']",
+    );
+    const reasoningBoundaryNode = container.querySelector(".messages-reasoning-boundary");
+    const boundaryNode = container.querySelector(".messages-final-boundary");
+    const boundaryMetaNode = container.querySelector(
+      ".messages-final-boundary .messages-turn-boundary-meta",
+    );
+    expect(finalMessageNode).toBeTruthy();
+    expect(reasoningBoundaryNode).toBeNull();
+    expect(boundaryNode).toBeTruthy();
+    expect(boundaryMetaNode).toBeNull();
+    if (finalMessageNode && boundaryNode) {
+      expect(
+        finalMessageNode.compareDocumentPosition(boundaryNode) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+  });
+
+  it("shows reasoning boundary when visible process items exist before final message", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-process-1",
+        kind: "message",
+        role: "user",
+        text: "Q1",
+      },
+      {
+        id: "reasoning-process-1",
+        kind: "reasoning",
+        summary: "先分析",
+        content: "检查变更范围",
+      },
+      {
+        id: "assistant-process-final-1",
+        kind: "message",
+        role: "assistant",
+        text: "A1",
+        isFinal: true,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const finalMessageNode = container.querySelector(
+      "[data-message-anchor-id='assistant-process-final-1']",
+    );
+    const reasoningBoundaryNode = container.querySelector(".messages-reasoning-boundary");
+    expect(finalMessageNode).toBeTruthy();
+    expect(reasoningBoundaryNode).toBeTruthy();
+    if (finalMessageNode && reasoningBoundaryNode) {
+      expect(
+        reasoningBoundaryNode.compareDocumentPosition(finalMessageNode) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+  });
+
+  it("shows reasoning boundary when grouped tool entries exist before final message", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-tool-group-1",
+        kind: "message",
+        role: "user",
+        text: "Q1",
+      },
+      {
+        id: "tool-group-1",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "tool: read_file",
+        detail: "read",
+        status: "completed",
+      },
+      {
+        id: "tool-group-2",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "tool: read_file",
+        detail: "read",
+        status: "completed",
+      },
+      {
+        id: "assistant-tool-group-final-1",
+        kind: "message",
+        role: "assistant",
+        text: "A1",
+        isFinal: true,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const reasoningBoundaryNode = container.querySelector(".messages-reasoning-boundary");
+    expect(reasoningBoundaryNode).toBeTruthy();
+  });
+
+  it("shows completion time and duration on final boundary when metadata is available", () => {
+    const completedAt = new Date(2026, 3, 1, 10, 20, 30).getTime();
+    const items: ConversationItem[] = [
+      {
+        id: "assistant-final-meta-1",
+        kind: "message",
+        role: "assistant",
+        text: "A1",
+        isFinal: true,
+        finalCompletedAt: completedAt,
+        finalDurationMs: 12_000,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const finalMeta = container.querySelector(".messages-turn-boundary-meta");
+    expect(finalMeta?.textContent ?? "").toContain("04-01 10:20:30");
+    expect(finalMeta?.textContent ?? "").toContain("总耗时 0:12");
+  });
+
 });

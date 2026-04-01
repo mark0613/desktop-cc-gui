@@ -242,7 +242,7 @@ describe("threadItems", () => {
     }
   });
 
-  it("truncates older tool output in prepareThreadItems", () => {
+  it("keeps recent tool output untruncated while truncating older entries", () => {
     const output = "y".repeat(21000);
     const items: ConversationItem[] = Array.from({ length: 41 }, (_, index) => ({
       id: `tool-${index}`,
@@ -254,10 +254,12 @@ describe("threadItems", () => {
     }));
     const prepared = prepareThreadItems(items);
     const firstOutput = expectToolItem(prepared[0]).output;
-    const secondOutput = expectToolItem(prepared[1]).output;
+    const recentFullOutput = expectToolItem(prepared[35]).output;
+    const latestFullOutput = expectToolItem(prepared[40]).output;
     expect(firstOutput).not.toBe(output);
     expect(firstOutput?.endsWith("...")).toBe(true);
-    expect(secondOutput).toBe(output);
+    expect(recentFullOutput).toBe(output);
+    expect(latestFullOutput).toBe(output);
   });
 
   it("drops assistant review summaries that duplicate completed review items", () => {

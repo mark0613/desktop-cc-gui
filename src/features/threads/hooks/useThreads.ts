@@ -1,4 +1,4 @@
-import { useCallback, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { CustomPromptOption, DebugEntry, WorkspaceInfo } from "../../../types";
 import { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
 import { initialState, threadReducer } from "./useThreadsReducer";
@@ -43,6 +43,10 @@ const AUTO_TITLE_MAX_ATTEMPTS = 2;
 const AUTO_TITLE_PENDING_STALE_MS = 20_000;
 const MEMORY_DEBUG_FLAG_KEY = "codemoss:memory-debug";
 const THREAD_ERROR_DUPLICATE_WINDOW_MS = 8_000;
+const THREAD_SWITCH_RESUME_DELAY_MS = 24;
+const THREAD_SWITCH_LOADED_REFRESH_MS = 20_000;
+const THREAD_ITEM_CACHE_MAX = 12;
+const THREAD_ITEM_CACHE_TRIM_WATERMARK = 2;
 
 /** 回合级记忆待合并数据（输入侧采集后暂存，等输出侧压缩后融合写入） */
 type PendingMemoryCapture = {
@@ -457,6 +461,12 @@ export function useThreads({
 }: UseThreadsOptions) {
   const [state, dispatch] = useReducer(threadReducer, initialState);
   const loadedThreadsRef = useRef<Record<string, boolean>>({});
+  const threadStatusByIdRef = useRef(state.threadStatusById);
+  const loadedThreadLastRefreshAtRef = useRef<Record<string, number>>({});
+  const lazyResumeTimerByWorkspaceRef = useRef<
+    Record<string, ReturnType<typeof setTimeout> | null>
+  >({});
+  const activeThreadIdByWorkspaceRef = useRef(state.activeThreadIdByWorkspace);
   const replaceOnResumeRef = useRef<Record<string, boolean>>({});
   const pendingInterruptsRef = useRef<Set<string>>(new Set());
   const interruptedThreadsRef = useRef<Set<string>>(new Set());
@@ -543,6 +553,25 @@ export function useThreads({
       // Ignore refresh errors to avoid breaking the UI.
     }
   }, [onMessageActivity]);
+
+  useEffect(() => {
+    activeThreadIdByWorkspaceRef.current = state.activeThreadIdByWorkspace;
+  }, [state.activeThreadIdByWorkspace]);
+
+  useEffect(() => {
+    threadStatusByIdRef.current = state.threadStatusById;
+  }, [state.threadStatusById]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(lazyResumeTimerByWorkspaceRef.current).forEach((timer) => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+      });
+      lazyResumeTimerByWorkspaceRef.current = {};
+    };
+  }, []);
   const { applyCollabThreadLinks, applyCollabThreadLinksFromThread, updateThreadParent } =
     useThreadLinking({
       dispatch,
@@ -1404,12 +1433,142 @@ export function useThreads({
         return;
       }
       dispatch({ type: "setActiveThreadId", workspaceId: targetId, threadId });
+      const previousTimer = lazyResumeTimerByWorkspaceRef.current[targetId];
+      if (previousTimer) {
+        clearTimeout(previousTimer);
+        lazyResumeTimerByWorkspaceRef.current[targetId] = null;
+      }
       if (threadId) {
-        void resumeThreadForWorkspace(targetId, threadId);
+        const now = Date.now();
+        const isLoaded = Boolean(loadedThreadsRef.current[threadId]);
+        const isProcessing = Boolean(threadStatusByIdRef.current[threadId]?.isProcessing);
+        let lastRefreshAt = loadedThreadLastRefreshAtRef.current[threadId] ?? 0;
+        if (isLoaded && lastRefreshAt <= 0) {
+          lastRefreshAt = now;
+          loadedThreadLastRefreshAtRef.current[threadId] = now;
+        }
+        const shouldRefreshLoaded =
+          isLoaded && !isProcessing && now - lastRefreshAt >= THREAD_SWITCH_LOADED_REFRESH_MS;
+        const shouldScheduleResume = !isLoaded || shouldRefreshLoaded;
+        if (!shouldScheduleResume) {
+          return;
+        }
+        lazyResumeTimerByWorkspaceRef.current[targetId] = setTimeout(() => {
+          lazyResumeTimerByWorkspaceRef.current[targetId] = null;
+          const activeThreadIdForWorkspace =
+            activeThreadIdByWorkspaceRef.current[targetId] ?? null;
+          if (activeThreadIdForWorkspace !== threadId) {
+            return;
+          }
+          const loadedAtCallback = Boolean(loadedThreadsRef.current[threadId]);
+          if (!loadedAtCallback) {
+            loadedThreadLastRefreshAtRef.current[threadId] = Date.now();
+            void resumeThreadForWorkspace(targetId, threadId);
+            return;
+          }
+          const processingAtCallback = Boolean(
+            threadStatusByIdRef.current[threadId]?.isProcessing,
+          );
+          if (processingAtCallback) {
+            return;
+          }
+          const callbackLastRefreshAt = loadedThreadLastRefreshAtRef.current[threadId] ?? 0;
+          if (Date.now() - callbackLastRefreshAt < THREAD_SWITCH_LOADED_REFRESH_MS) {
+            return;
+          }
+          loadedThreadLastRefreshAtRef.current[threadId] = Date.now();
+          void resumeThreadForWorkspace(targetId, threadId, true);
+        }, THREAD_SWITCH_RESUME_DELAY_MS);
       }
     },
     [activeWorkspaceId, resumeThreadForWorkspace],
   );
+
+  useEffect(() => {
+    const loadedThreadIds = Object.entries(loadedThreadsRef.current)
+      .filter(([, isLoaded]) => isLoaded)
+      .map(([threadId]) => threadId);
+    if (loadedThreadIds.length <= THREAD_ITEM_CACHE_MAX + THREAD_ITEM_CACHE_TRIM_WATERMARK) {
+      return;
+    }
+
+    const threadWorkspaceMap = new Map<string, string>();
+    Object.entries(state.threadsByWorkspace).forEach(([workspaceId, threads]) => {
+      threads.forEach((thread) => {
+        threadWorkspaceMap.set(thread.id, workspaceId);
+      });
+    });
+
+    const protectedThreadIds = new Set<string>();
+    Object.values(state.activeThreadIdByWorkspace).forEach((threadId) => {
+      if (threadId) {
+        protectedThreadIds.add(threadId);
+      }
+    });
+    Object.entries(state.threadStatusById).forEach(([threadId, status]) => {
+      if (status?.isProcessing) {
+        protectedThreadIds.add(threadId);
+      }
+    });
+    state.userInputRequests.forEach((request) => {
+      const requestThreadId = request.params.thread_id;
+      if (requestThreadId) {
+        protectedThreadIds.add(requestThreadId);
+      }
+    });
+
+    const protectedLoadedCount = loadedThreadIds.filter((threadId) => {
+      if (protectedThreadIds.has(threadId)) {
+        return true;
+      }
+      const workspaceId = threadWorkspaceMap.get(threadId);
+      return workspaceId ? isThreadPinned(workspaceId, threadId) : false;
+    }).length;
+    const keepableSlots = Math.max(0, THREAD_ITEM_CACHE_MAX - protectedLoadedCount);
+
+    const evictableCandidates = loadedThreadIds
+      .filter((threadId) => {
+        if (protectedThreadIds.has(threadId)) {
+          return false;
+        }
+        const workspaceId = threadWorkspaceMap.get(threadId);
+        if (workspaceId && isThreadPinned(workspaceId, threadId)) {
+          return false;
+        }
+        return (state.itemsByThread[threadId]?.length ?? 0) > 0;
+      })
+      .map((threadId) => {
+        const workspaceId = threadWorkspaceMap.get(threadId) ?? "";
+        const activityTimestamp =
+          threadActivityRef.current[workspaceId]?.[threadId] ??
+          state.lastAgentMessageByThread[threadId]?.timestamp ??
+          0;
+        return { threadId, activityTimestamp };
+      })
+      .sort((left, right) => right.activityTimestamp - left.activityTimestamp);
+
+    const evictedThreadIds = evictableCandidates
+      .slice(keepableSlots)
+      .map((entry) => entry.threadId);
+    if (evictedThreadIds.length === 0) {
+      return;
+    }
+
+    evictedThreadIds.forEach((threadId) => {
+      loadedThreadsRef.current[threadId] = false;
+    });
+    dispatch({ type: "evictThreadItems", threadIds: evictedThreadIds });
+  }, [
+    isThreadPinned,
+    pinnedThreadsVersion,
+    state.activeThreadIdByWorkspace,
+    state.itemsByThread,
+    state.lastAgentMessageByThread,
+    state.threadStatusById,
+    state.threadsByWorkspace,
+    state.userInputRequests,
+    threadActivityRef,
+  ]);
 
   const removeThread = useCallback(
     async (workspaceId: string, threadId: string): Promise<ThreadDeleteResult> => {

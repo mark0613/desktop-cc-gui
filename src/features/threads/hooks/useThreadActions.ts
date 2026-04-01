@@ -87,6 +87,7 @@ const THREAD_LIST_MAX_EMPTY_PAGES_WITH_ACTIVITY = 20;
 const THREAD_LIST_MAX_TOTAL_PAGES = 40;
 const THREAD_LIST_MAX_EMPTY_PAGES_LOAD_OLDER = 10;
 const THREAD_LIST_MAX_FETCH_DURATION_MS = 1_500;
+const RELATED_THREAD_LOAD_CONCURRENCY = 2;
 const DEFAULT_CLAUDE_CONTEXT_WINDOW = 200_000;
 const GEMINI_SESSION_CACHE_TTL_MS = 60_000;
 const GEMINI_SESSION_FETCH_TIMEOUT_MS = 800;
@@ -179,6 +180,37 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
       clearTimeout(timer);
     }
   }
+}
+
+async function mapWithConcurrency<T>(
+  items: string[],
+  concurrency: number,
+  worker: (item: string) => Promise<T>,
+): Promise<T[]> {
+  if (items.length === 0) {
+    return [];
+  }
+  const normalizedConcurrency = Math.max(1, Math.floor(concurrency));
+  const results: T[] = [];
+  let cursor = 0;
+  const runWorker = async () => {
+    while (cursor < items.length) {
+      const currentIndex = cursor;
+      cursor += 1;
+      const item = items[currentIndex];
+      if (!item) {
+        continue;
+      }
+      const result = await worker(item);
+      results.push(result);
+    }
+  };
+  const workers = Array.from(
+    { length: Math.min(normalizedConcurrency, items.length) },
+    () => runWorker(),
+  );
+  await Promise.all(workers);
+  return results;
 }
 
 function normalizeComparableWorkspacePath(path: string): string {
@@ -666,51 +698,55 @@ export function useThreadActions({
               engine: "codex",
             });
           });
-          for (const relatedThreadId of relatedThreadIds) {
-            if (
-              !relatedThreadId ||
-              relatedThreadId === threadId ||
-              loadedThreadsRef.current[relatedThreadId]
-            ) {
-              continue;
-            }
-            try {
-              const relatedSnapshot = await createHistoryLoader(relatedThreadId).load(
-                relatedThreadId,
-              );
-              if (relatedSnapshot.items.length > 0) {
+          const pendingRelatedThreadIds = relatedThreadIds.filter(
+            (relatedThreadId) =>
+              Boolean(relatedThreadId) &&
+              relatedThreadId !== threadId &&
+              !loadedThreadsRef.current[relatedThreadId],
+          );
+          await mapWithConcurrency(
+            pendingRelatedThreadIds,
+            RELATED_THREAD_LOAD_CONCURRENCY,
+            async (relatedThreadId) => {
+              try {
+                const relatedSnapshot = await createHistoryLoader(relatedThreadId).load(
+                  relatedThreadId,
+                );
+                if (relatedSnapshot.items.length > 0) {
+                  dispatch({
+                    type: "setThreadItems",
+                    threadId: relatedThreadId,
+                    items: relatedSnapshot.items,
+                  });
+                }
                 dispatch({
-                  type: "setThreadItems",
+                  type: "setThreadPlan",
                   threadId: relatedThreadId,
-                  items: relatedSnapshot.items,
+                  plan: relatedSnapshot.plan,
+                });
+                restoreThreadParentLinksFromSnapshot(
+                  relatedThreadId,
+                  relatedSnapshot.items,
+                  updateThreadParent,
+                );
+                loadedThreadsRef.current[relatedThreadId] = true;
+              } catch (error) {
+                onDebug?.({
+                  id: `${Date.now()}-history-loader-related-error`,
+                  timestamp: Date.now(),
+                  source: "error",
+                  label: "thread/history related loader error",
+                  payload: {
+                    workspaceId,
+                    threadId,
+                    relatedThreadId,
+                    error: error instanceof Error ? error.message : String(error),
+                  },
                 });
               }
-              dispatch({
-                type: "setThreadPlan",
-                threadId: relatedThreadId,
-                plan: relatedSnapshot.plan,
-              });
-              restoreThreadParentLinksFromSnapshot(
-                relatedThreadId,
-                relatedSnapshot.items,
-                updateThreadParent,
-              );
-              loadedThreadsRef.current[relatedThreadId] = true;
-            } catch (error) {
-              onDebug?.({
-                id: `${Date.now()}-history-loader-related-error`,
-                timestamp: Date.now(),
-                source: "error",
-                label: "thread/history related loader error",
-                payload: {
-                  workspaceId,
-                  threadId,
-                  relatedThreadId,
-                  error: error instanceof Error ? error.message : String(error),
-                },
-              });
-            }
-          }
+              return relatedThreadId;
+            },
+          );
           snapshot.userInputQueue.forEach((request) => {
             dispatch({ type: "addUserInputRequest", request });
           });

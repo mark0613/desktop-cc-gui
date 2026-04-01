@@ -256,6 +256,7 @@ describe("useThreadItemEvents", () => {
       itemId: "assistant-1",
       text: "Done",
       hasCustomName: false,
+      timestamp: 1234,
     });
     expect(dispatch).toHaveBeenCalledWith({
       type: "setThreadTimestamp",

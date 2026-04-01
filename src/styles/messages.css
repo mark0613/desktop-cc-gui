@@ -43,6 +43,102 @@
   text-decoration: underline;
 }
 
+.messages-turn-boundary {
+  position: relative;
+  width: 100%;
+  margin: 14px 0 10px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  color: #111;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  flex-wrap: nowrap;
+}
+
+.messages-turn-boundary::before,
+.messages-turn-boundary::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 1.5px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.messages-turn-boundary::before {
+  left: 0;
+  right: 50%;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.12) 0%, rgba(0, 0, 0, 0.42) 100%);
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+}
+
+.messages-turn-boundary::after {
+  left: 50%;
+  right: 0;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.12) 100%);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.messages-turn-boundary-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--surface-messages);
+  color: #111;
+  font-weight: 600;
+  line-height: 1.2;
+  z-index: 1;
+}
+
+.messages-turn-boundary-label-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.messages-turn-boundary-icon {
+  color: #111;
+  opacity: 0.9;
+}
+
+.messages-turn-boundary-meta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  background: var(--surface-messages);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  font-size: 12px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: #111;
+  z-index: 1;
+}
+
+.messages-reasoning-boundary {
+  margin-bottom: 8px;
+}
+
+.messages-reasoning-boundary .messages-turn-boundary-label {
+  color: #111;
+}
+
+.messages-final-boundary {
+  margin-top: 10px;
+}
+
+.messages-final-boundary .messages-turn-boundary-label {
+  color: #111;
+}
+
 .main .messages {
   margin-top: calc(-1 * var(--main-topbar-height));
 }
@@ -362,7 +458,7 @@
 }
 
 .turn-complete {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 10px;
   margin: 6px 24px 12px 24px;
