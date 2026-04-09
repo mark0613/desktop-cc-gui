@@ -228,6 +228,74 @@ describe("Messages live behavior", () => {
     },
   );
 
+  it.each(["codex", "claude", "gemini"] as const)(
+    "detects ingress for %s even when chunk length is unchanged",
+    (activeEngine) => {
+      vi.useFakeTimers();
+      try {
+        const { container, rerender } = render(
+          <Messages
+            items={[
+              {
+                id: "user-stream-same-length",
+                kind: "message",
+                role: "user",
+                text: "继续输出",
+              },
+              {
+                id: "assistant-stream-same-length",
+                kind: "message",
+                role: "assistant",
+                text: "aaaa",
+              },
+            ]}
+            threadId="thread-1"
+            workspaceId="ws-1"
+            isThinking
+            processingStartedAt={Date.now() - 1_000}
+            activeEngine={activeEngine}
+            openTargets={[]}
+            selectedOpenAppId=""
+          />,
+        );
+
+        const baselineNode = container.querySelector(".working");
+        expect(baselineNode?.className ?? "").toContain("is-waiting");
+
+        rerender(
+          <Messages
+            items={[
+              {
+                id: "user-stream-same-length",
+                kind: "message",
+                role: "user",
+                text: "继续输出",
+              },
+              {
+                id: "assistant-stream-same-length",
+                kind: "message",
+                role: "assistant",
+                text: "bbbb",
+              },
+            ]}
+            threadId="thread-1"
+            workspaceId="ws-1"
+            isThinking
+            processingStartedAt={Date.now() - 1_000}
+            activeEngine={activeEngine}
+            openTargets={[]}
+            selectedOpenAppId=""
+          />,
+        );
+
+        const ingressNode = container.querySelector(".working");
+        expect(ingressNode?.className ?? "").toContain("is-ingress");
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it("disables auto-follow scrolling when live auto-follow toggle is off", () => {
     window.localStorage.setItem("mossx.messages.live.autoFollow", "0");
     const scrollSpy = vi

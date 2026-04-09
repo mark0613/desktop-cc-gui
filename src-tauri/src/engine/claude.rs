@@ -10,9 +10,13 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
+#[cfg(unix)]
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{broadcast, Mutex, Notify, RwLock};
+#[cfg(unix)]
+use tokio::time::sleep;
 
 use super::claude_message_content::{build_message_content, format_ask_user_answer};
 use super::events::EngineEvent;
@@ -91,6 +95,19 @@ pub struct ClaudeSession {
 }
 
 impl ClaudeSession {
+    fn configure_spawn_command(cmd: &mut Command) {
+        #[cfg(unix)]
+        unsafe {
+            cmd.pre_exec(|| {
+                if libc::setpgid(0, 0) == 0 {
+                    Ok(())
+                } else {
+                    Err(std::io::Error::last_os_error())
+                }
+            });
+        }
+    }
+
     fn should_use_stream_json_input(params: &SendMessageParams) -> bool {
         let has_images = params
             .images
@@ -324,6 +341,7 @@ impl ClaudeSession {
         let use_stream_json_input = Self::should_use_stream_json_input(&params);
 
         let mut cmd = self.build_command(&params, use_stream_json_input);
+        Self::configure_spawn_command(&mut cmd);
 
         // Spawn the process
         let mut child = match cmd.spawn() {
@@ -778,6 +796,51 @@ impl ClaudeSession {
                             error
                         );
                     }
+                }
+            }
+        }
+
+        #[cfg(unix)]
+        {
+            if let Some(pid) = child.id() {
+                let process_group_id = pid as libc::pid_t;
+                let terminate_status =
+                    unsafe { libc::kill(-process_group_id, libc::SIGTERM) };
+                if terminate_status != 0 {
+                    let error = std::io::Error::last_os_error();
+                    if error.raw_os_error() != Some(libc::ESRCH) {
+                        log::warn!(
+                            "[claude] killpg(SIGTERM) failed for turn={} pgid={}: {}",
+                            _turn_id,
+                            process_group_id,
+                            error
+                        );
+                    }
+                } else {
+                    sleep(Duration::from_millis(150)).await;
+                }
+
+                if matches!(child.try_wait(), Ok(Some(_))) {
+                    let _ = child.wait().await;
+                    return Ok(());
+                }
+
+                let kill_status = unsafe { libc::kill(-process_group_id, libc::SIGKILL) };
+                if kill_status != 0 {
+                    let error = std::io::Error::last_os_error();
+                    if error.raw_os_error() != Some(libc::ESRCH) {
+                        log::warn!(
+                            "[claude] killpg(SIGKILL) failed for turn={} pgid={}: {}",
+                            _turn_id,
+                            process_group_id,
+                            error
+                        );
+                    }
+                }
+
+                if matches!(child.try_wait(), Ok(Some(_))) {
+                    let _ = child.wait().await;
+                    return Ok(());
                 }
             }
         }

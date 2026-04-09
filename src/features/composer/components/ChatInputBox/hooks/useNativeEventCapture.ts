@@ -1,21 +1,40 @@
 import { useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
+import {
+  resolveShortcutPlatform,
+  type ShortcutPlatform,
+} from '../utils/undoRedoShortcut.js';
 
 interface CompletionOpenLike {
   isOpen: boolean;
 }
 
-function isPromptEnhancerShortcut(event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey'>): boolean {
-  if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+function isPromptEnhancerShortcut(
+  event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey'>,
+  platform: ShortcutPlatform = resolveShortcutPlatform(),
+): boolean {
+  if (event.altKey) {
     return false;
   }
 
-  return (
+  const isSlashKey =
     event.code === 'Slash' ||
     event.code === 'NumpadDivide' ||
     event.key === '/' ||
-    event.key === '?'
-  );
+    event.key === '?';
+  if (!isSlashKey) {
+    return false;
+  }
+
+  if (platform === 'mac') {
+    return !!event.metaKey && !event.ctrlKey;
+  }
+  if (platform === 'windows' || platform === 'linux') {
+    return !!event.ctrlKey && !event.metaKey;
+  }
+
+  // Unknown platform fallback: allow either primary modifier.
+  return !!event.metaKey || !!event.ctrlKey;
 }
 
 export interface UseNativeEventCaptureOptions {
@@ -33,6 +52,7 @@ export interface UseNativeEventCaptureOptions {
   submittedOnEnterRef: MutableRefObject<boolean>;
   handleSubmit: () => void;
   handleEnhancePrompt: () => void;
+  shortcutPlatform?: ShortcutPlatform;
 }
 
 /**
@@ -58,6 +78,7 @@ export function useNativeEventCapture({
   submittedOnEnterRef,
   handleSubmit,
   handleEnhancePrompt,
+  shortcutPlatform,
 }: UseNativeEventCaptureOptions): void {
   const sawShiftEnterRef = useRef(false);
 
@@ -77,6 +98,7 @@ export function useNativeEventCapture({
     submittedOnEnterRef,
     handleSubmit,
     handleEnhancePrompt,
+    shortcutPlatform,
   });
   latestRef.current = {
     editableRef,
@@ -93,6 +115,7 @@ export function useNativeEventCapture({
     submittedOnEnterRef,
     handleSubmit,
     handleEnhancePrompt,
+    shortcutPlatform,
   };
 
   useEffect(() => {
@@ -113,7 +136,7 @@ export function useNativeEventCapture({
       const shift = (ev as KeyboardEvent).shiftKey === true;
       sawShiftEnterRef.current = isEnterKey && shift;
 
-      if (isPromptEnhancerShortcut(ev)) {
+      if (isPromptEnhancerShortcut(ev, latest.shortcutPlatform)) {
         ev.preventDefault();
         ev.stopPropagation();
         latest.handleEnhancePrompt();

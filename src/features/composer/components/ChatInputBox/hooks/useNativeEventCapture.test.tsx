@@ -3,6 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useNativeEventCapture } from './useNativeEventCapture';
+import type { ShortcutPlatform } from '../utils/undoRedoShortcut.js';
 
 function createBeforeInputEvent(inputType: string): Event {
   const event = new Event('beforeinput', {
@@ -29,12 +30,14 @@ function Harness({
   sendShortcut,
   onSubmit,
   onEnhancePrompt = () => {},
+  platform = 'windows',
   isComposing = false,
   compositionEndedMsAgo,
 }: {
   sendShortcut: 'enter' | 'cmdEnter';
   onSubmit: () => void;
   onEnhancePrompt?: () => void;
+  platform?: ShortcutPlatform;
   isComposing?: boolean;
   compositionEndedMsAgo?: number;
 }) {
@@ -62,6 +65,7 @@ function Harness({
     submittedOnEnterRef,
     handleSubmit: onSubmit,
     handleEnhancePrompt: onEnhancePrompt,
+    shortcutPlatform: platform,
   });
 
   return <div ref={editableRef} data-testid="editable" tabIndex={0} />;
@@ -132,9 +136,16 @@ describe('useNativeEventCapture', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('triggers enhancer on Cmd+/', () => {
+  it('triggers enhancer on Cmd+/ for macOS', () => {
     const onEnhancePrompt = vi.fn();
-    render(<Harness sendShortcut="enter" onSubmit={vi.fn()} onEnhancePrompt={onEnhancePrompt} />);
+    render(
+      <Harness
+        sendShortcut="enter"
+        onSubmit={vi.fn()}
+        onEnhancePrompt={onEnhancePrompt}
+        platform="mac"
+      />
+    );
     const editable = screen.getByTestId('editable');
 
     editable.dispatchEvent(
@@ -152,7 +163,14 @@ describe('useNativeEventCapture', () => {
 
   it('triggers enhancer on Ctrl+/ for Windows', () => {
     const onEnhancePrompt = vi.fn();
-    render(<Harness sendShortcut="enter" onSubmit={vi.fn()} onEnhancePrompt={onEnhancePrompt} />);
+    render(
+      <Harness
+        sendShortcut="enter"
+        onSubmit={vi.fn()}
+        onEnhancePrompt={onEnhancePrompt}
+        platform="windows"
+      />
+    );
     const editable = screen.getByTestId('editable');
 
     editable.dispatchEvent(
@@ -166,5 +184,30 @@ describe('useNativeEventCapture', () => {
     );
 
     expect(onEnhancePrompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not trigger enhancer on Ctrl+/ for macOS', () => {
+    const onEnhancePrompt = vi.fn();
+    render(
+      <Harness
+        sendShortcut="enter"
+        onSubmit={vi.fn()}
+        onEnhancePrompt={onEnhancePrompt}
+        platform="mac"
+      />
+    );
+    const editable = screen.getByTestId('editable');
+
+    editable.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: '/',
+        code: 'Slash',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    expect(onEnhancePrompt).not.toHaveBeenCalled();
   });
 });

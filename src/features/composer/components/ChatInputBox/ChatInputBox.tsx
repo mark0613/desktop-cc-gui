@@ -998,6 +998,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       submittedOnEnterRef,
       handleSubmit,
       handleEnhancePrompt,
+      shortcutPlatform,
     });
 
     useControlledValueSync({
@@ -1034,6 +1035,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       submittedOnEnterRef,
       handleSubmit,
       handleEnhancePrompt,
+      shortcutPlatform,
     });
 
     // Paste and drop hook
