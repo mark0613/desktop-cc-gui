@@ -718,8 +718,10 @@ const WorkingIndicator = memo(function WorkingIndicator({
     reasoningLabel,
     activityLabel,
   );
+  const supportsStreamActivityPhaseFx =
+    activeEngine === "codex" || activeEngine === "claude" || activeEngine === "gemini";
   const streamPhaseClass =
-    activeEngine === "codex" && streamActivityPhase !== "idle"
+    supportsStreamActivityPhaseFx && streamActivityPhase !== "idle"
       ? ` is-${streamActivityPhase}`
       : "";
   const nonStreamingHintText = t("messages.nonStreamingHint");
@@ -1737,7 +1739,9 @@ export const Messages = memo(function Messages({
     return true;
   }, [isThinking, effectiveItems]);
   const streamActivityPhase = useStreamActivityPhase({
-    isProcessing: isThinking && activeEngine === "codex",
+    isProcessing:
+      isThinking &&
+      (activeEngine === "codex" || activeEngine === "claude" || activeEngine === "gemini"),
     items: effectiveItems,
   });
 

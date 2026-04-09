@@ -552,8 +552,12 @@ export const Composer = memo(function Composer({
 }: ComposerProps) {
   const { t } = useTranslation();
   const isCodexEngine = selectedEngine === "codex";
+  const supportsStreamActivityPhaseFx =
+    selectedEngine === "codex" ||
+    selectedEngine === "claude" ||
+    selectedEngine === "gemini";
   const streamActivityPhase = useStreamActivityPhase({
-    isProcessing: Boolean(isProcessing && isCodexEngine),
+    isProcessing: Boolean(isProcessing && supportsStreamActivityPhaseFx),
     items,
   });
   const isReviewQuickActionEngine =

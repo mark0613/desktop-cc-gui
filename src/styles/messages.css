@@ -472,6 +472,48 @@
   animation: working-spark-spin 0.58s linear infinite;
 }
 
+:root[data-theme="light"] .working.is-ingress .working-spinner {
+  border-top-color: #ff6a00;
+  border-right-color: rgba(255, 106, 0, 0.68);
+  filter: drop-shadow(0 0 8px rgba(255, 90, 0, 0.42));
+}
+
+:root[data-theme="light"] .working.is-ingress .working-spinner::before {
+  border-color: rgba(255, 106, 0, 0.62);
+}
+
+:root[data-theme="light"] .working.is-ingress .working-spinner::after {
+  background: rgba(255, 89, 0, 0.98);
+  box-shadow:
+    0 -10px 0 rgba(255, 94, 0, 0.95),
+    8px -5px 0 rgba(255, 130, 0, 0.9),
+    -7px -3px 0 rgba(255, 64, 0, 0.9),
+    6px 7px 0 rgba(255, 112, 0, 0.9),
+    -8px 6px 0 rgba(255, 148, 0, 0.92);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .working.is-ingress .working-spinner {
+    border-top-color: #ff6a00;
+    border-right-color: rgba(255, 106, 0, 0.68);
+    filter: drop-shadow(0 0 8px rgba(255, 90, 0, 0.42));
+  }
+
+  :root:not([data-theme]) .working.is-ingress .working-spinner::before {
+    border-color: rgba(255, 106, 0, 0.62);
+  }
+
+  :root:not([data-theme]) .working.is-ingress .working-spinner::after {
+    background: rgba(255, 89, 0, 0.98);
+    box-shadow:
+      0 -10px 0 rgba(255, 94, 0, 0.95),
+      8px -5px 0 rgba(255, 130, 0, 0.9),
+      -7px -3px 0 rgba(255, 64, 0, 0.9),
+      6px 7px 0 rgba(255, 112, 0, 0.9),
+      -8px 6px 0 rgba(255, 148, 0, 0.92);
+  }
+}
+
 .working-timer {
   display: inline-flex;
   align-items: center;

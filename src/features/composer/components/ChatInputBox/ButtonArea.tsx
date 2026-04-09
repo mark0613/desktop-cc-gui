@@ -140,8 +140,12 @@ export const ButtonArea = ({
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
   const isPlanModeEnabled = (selectedCollaborationModeId ?? 'code') === 'plan';
+  const supportsStreamActivityPhaseFx =
+    currentProvider === 'codex' ||
+    currentProvider === 'claude' ||
+    currentProvider === 'gemini';
   const resolvedStopButtonPhase =
-    currentProvider === 'codex' ? streamActivityPhase : 'idle';
+    supportsStreamActivityPhaseFx ? streamActivityPhase : 'idle';
 
   // Track changes to custom models in localStorage
   // When localStorage changes, updating this version number triggers useMemo recalculation

@@ -119,6 +119,44 @@
   animation: stop-button-spark-spin 0.56s linear infinite;
 }
 
+:root[data-theme="light"] .stop-button.is-ingress {
+  filter: drop-shadow(0 0 10px rgba(255, 94, 0, 0.56));
+}
+
+:root[data-theme="light"] .stop-button.is-ingress::before {
+  border-color: rgba(255, 112, 0, 0.66);
+}
+
+:root[data-theme="light"] .stop-button.is-ingress::after {
+  background: rgba(255, 97, 0, 0.98);
+  box-shadow:
+    0 -11px 0 rgba(255, 102, 0, 0.96),
+    8px -5px 0 rgba(255, 140, 0, 0.9),
+    -8px -4px 0 rgba(255, 74, 0, 0.9),
+    7px 6px 0 rgba(255, 122, 0, 0.9),
+    -9px 5px 0 rgba(255, 158, 0, 0.92);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .stop-button.is-ingress {
+    filter: drop-shadow(0 0 10px rgba(255, 94, 0, 0.56));
+  }
+
+  :root:not([data-theme]) .stop-button.is-ingress::before {
+    border-color: rgba(255, 112, 0, 0.66);
+  }
+
+  :root:not([data-theme]) .stop-button.is-ingress::after {
+    background: rgba(255, 97, 0, 0.98);
+    box-shadow:
+      0 -11px 0 rgba(255, 102, 0, 0.96),
+      8px -5px 0 rgba(255, 140, 0, 0.9),
+      -8px -4px 0 rgba(255, 74, 0, 0.9),
+      7px 6px 0 rgba(255, 122, 0, 0.9),
+      -9px 5px 0 rgba(255, 158, 0, 0.92);
+  }
+}
+
 .stop-button:hover {
   opacity: 0.9;
 }
