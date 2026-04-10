@@ -33,7 +33,7 @@ export function HomeChat({
         <header className="home-chat-hero">
           <h1 className="home-chat-title">
             <img className="home-chat-title-icon" src={appIcon} alt="" aria-hidden="true" />
-            <span>{t("homeChat.title", "MossX Agent，让你的工作更轻松")}</span>
+            <span>{t("homeChat.title", "ccgui Agent，让你的工作更轻松")}</span>
           </h1>
 
           <p className="home-chat-subtitle">

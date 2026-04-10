@@ -1,7 +1,7 @@
-export const MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY = "mossx.messages.live.autoFollow";
+export const MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY = "ccgui.messages.live.autoFollow";
 export const MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY =
-  "mossx.messages.live.collapseMiddleSteps";
-export const MESSAGES_LIVE_CONTROLS_UPDATED_EVENT = "mossx:messages-live-controls-updated";
+  "ccgui.messages.live.collapseMiddleSteps";
+export const MESSAGES_LIVE_CONTROLS_UPDATED_EVENT = "ccgui:messages-live-controls-updated";
 
 export function readLocalBooleanFlag(storageKey: string, fallbackValue: boolean): boolean {
   if (typeof window === "undefined") {

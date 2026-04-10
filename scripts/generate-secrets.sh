@@ -1,18 +1,18 @@
 #!/bin/bash
-# Generate GitHub Secrets for MossX release workflow
+# Generate GitHub Secrets for ccgui release workflow
 # Run this script and it will output the values you need to add to GitHub Secrets
 
 set -e
 
 echo "=========================================="
-echo "MossX GitHub Secrets Generator"
+echo "ccgui GitHub Secrets Generator"
 echo "=========================================="
 echo ""
 
 # Configuration
 CERT_NAME="Developer ID Application: kunpeng zhu (RLHBM56QRH)"
 P8_FILE="$HOME/Desktop/苹果开发者证书/AuthKey_26H3LYD74W.p8"
-OUTPUT_DIR="$HOME/.codemoss-secrets"
+OUTPUT_DIR="$HOME/.ccgui-secrets"
 P12_FILE="$OUTPUT_DIR/certificate.p12"
 
 mkdir -p "$OUTPUT_DIR"
@@ -104,7 +104,7 @@ echo "CODESIGN_IDENTITY:"
 echo "Developer ID Application: kunpeng zhu (RLHBM56QRH)"
 echo ""
 echo "NOTARY_PROFILE_NAME:"
-echo "MossX-Notarize"
+echo "ccgui-Notarize"
 echo ""
 echo "APPLE_TEAM_ID:"
 echo "RLHBM56QRH"

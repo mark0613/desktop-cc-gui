@@ -10,7 +10,7 @@ import {
   applyPendingClaudeMcpOutputNoticeToAgentDelta,
 } from "../utils/claudeMcpRuntimeSnapshot";
 
-const CLAUDE_STREAM_DEBUG_FLAG_KEY = "mossx.debug.claude.stream";
+const CLAUDE_STREAM_DEBUG_FLAG_KEY = "ccgui.debug.claude.stream";
 
 /**
  * Infer engine type from thread ID.

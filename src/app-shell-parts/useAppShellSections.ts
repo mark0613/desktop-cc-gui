@@ -386,6 +386,7 @@ export function useAppShellSections(ctx: any) {
                 throw new Error("Unable to resolve default workspace path.");
               }
               const preferredPaths = [
+                `${resolvedHome}/.ccgui/workspace`,
                 `${resolvedHome}/.mossx/workspace`,
                 `${resolvedHome}/.codemoss/workspace`,
               ];
@@ -420,7 +421,7 @@ export function useAppShellSections(ctx: any) {
           let defaultWorkspacePath: string;
           try {
             const resolvedHome = normalizePath(await homeDir());
-            defaultWorkspacePath = `${resolvedHome}/.codemoss/workspace`;
+            defaultWorkspacePath = `${resolvedHome}/.ccgui/workspace`;
             await ensureWorkspacePathDir(defaultWorkspacePath);
           } catch (error) {
             alertError(error);

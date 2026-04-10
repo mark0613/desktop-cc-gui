@@ -321,7 +321,7 @@ describe("SettingsView projects display", () => {
     const defaultWorkspace: WorkspaceInfo = {
       id: "ws-default",
       name: "Default Hidden Workspace",
-      path: "/Users/demo/.codemoss/workspace",
+      path: "/Users/demo/.ccgui/workspace",
       connected: true,
       settings: { sidebarCollapsed: false },
     };

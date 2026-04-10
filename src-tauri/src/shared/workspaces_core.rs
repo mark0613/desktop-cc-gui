@@ -18,8 +18,8 @@ use uuid::Uuid;
 pub(crate) const WORKTREE_SETUP_MARKERS_DIR: &str = "worktree-setup";
 pub(crate) const WORKTREE_SETUP_MARKER_EXT: &str = "ran";
 const WORKTREE_VALIDATION_ERROR_PREFIX: &str = "VALIDATION_ERROR";
-const LEGACY_BRAND_WORKSPACE_NAME: &str = "codemoss";
-const CURRENT_BRAND_WORKSPACE_NAME: &str = "mossx";
+const LEGACY_BRAND_WORKSPACE_NAMES: &[&str] = &["codemoss", "ccgui"];
+const CURRENT_BRAND_WORKSPACE_NAME: &str = "ccgui";
 
 pub(crate) fn normalize_setup_script(script: Option<String>) -> Option<String> {
     match script {
@@ -44,8 +44,9 @@ pub(crate) fn normalize_workspace_display_name(name: &str, path: &str) -> String
         .file_name()
         .and_then(|value| value.to_str())
         .unwrap_or_default();
-    if name.eq_ignore_ascii_case(LEGACY_BRAND_WORKSPACE_NAME)
-        || path_name.eq_ignore_ascii_case(LEGACY_BRAND_WORKSPACE_NAME)
+    if LEGACY_BRAND_WORKSPACE_NAMES
+        .iter()
+        .any(|legacy| name.eq_ignore_ascii_case(legacy) || path_name.eq_ignore_ascii_case(legacy))
     {
         return CURRENT_BRAND_WORKSPACE_NAME.to_string();
     }
@@ -1382,7 +1383,7 @@ mod tests {
             .expect("add file to git index");
         let tree_id = index.write_tree().expect("write git tree");
         let tree = repo.find_tree(tree_id).expect("find git tree");
-        let signature = Signature::now("MossX", "test@mossx.dev").expect("create signature");
+        let signature = Signature::now("ccgui", "test@ccgui.dev").expect("create signature");
         let commit_id = repo
             .commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])
             .expect("commit initial tree");
@@ -1403,19 +1404,19 @@ mod tests {
     fn normalize_workspace_display_name_rebrands_legacy_name() {
         assert_eq!(
             normalize_workspace_display_name("codemoss", "/Users/test/Desktop/codemoss"),
-            "mossx"
+            "ccgui"
         );
         assert_eq!(
             normalize_workspace_display_name("workspace", "/Users/test/Desktop/codemoss"),
-            "mossx"
+            "ccgui"
         );
     }
 
     #[test]
     fn workspace_name_from_path_preserves_non_legacy_workspace_names() {
         assert_eq!(
-            workspace_name_from_path("/Users/test/Desktop/mossx"),
-            "mossx"
+            workspace_name_from_path("/Users/test/Desktop/ccgui"),
+            "ccgui"
         );
         assert_eq!(
             workspace_name_from_path("/Users/test/Desktop/another-repo"),

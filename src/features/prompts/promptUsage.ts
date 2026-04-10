@@ -1,4 +1,5 @@
-const PROMPT_USAGE_STORAGE_KEY = "mossx.promptUsage.v1";
+const PROMPT_USAGE_STORAGE_KEY = "ccgui.promptUsage.v1";
+const LEGACY_PROMPT_USAGE_STORAGE_KEYS = ["mossx.promptUsage.v1"];
 const MAX_PROMPT_USAGE_RECORDS = 500;
 
 export type PromptUsageEntry = {
@@ -46,7 +47,11 @@ export function loadPromptUsage(): PromptUsageStore {
     return {};
   }
   try {
-    const raw = window.localStorage.getItem(PROMPT_USAGE_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(PROMPT_USAGE_STORAGE_KEY) ??
+      LEGACY_PROMPT_USAGE_STORAGE_KEYS.map((key) => window.localStorage.getItem(key)).find(
+        (value) => Boolean(value),
+      );
     if (!raw) {
       return {};
     }
@@ -116,4 +121,7 @@ export function clearPromptUsageForTests() {
     return;
   }
   window.localStorage.removeItem(PROMPT_USAGE_STORAGE_KEY);
+  for (const key of LEGACY_PROMPT_USAGE_STORAGE_KEYS) {
+    window.localStorage.removeItem(key);
+  }
 }

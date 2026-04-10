@@ -67,7 +67,7 @@ describe("useCustomPrompts", () => {
       .mockResolvedValueOnce([])
       .mockResolvedValue([
         {
-          path: "/tmp/workspace/.mossx/prompts/review.md",
+          path: "/tmp/workspace/.ccgui/prompts/review.md",
           name: "review",
           content: "review prompt",
           description: "代码评审",
@@ -76,7 +76,7 @@ describe("useCustomPrompts", () => {
         },
       ]);
     createPromptMock.mockResolvedValue({
-      path: "/tmp/workspace/.mossx/prompts/review.md",
+      path: "/tmp/workspace/.ccgui/prompts/review.md",
       name: "review",
       content: "review prompt",
       description: "代码评审",

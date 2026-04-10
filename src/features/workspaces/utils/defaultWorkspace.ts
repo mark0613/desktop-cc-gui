@@ -1,6 +1,8 @@
 const DEFAULT_WORKSPACE_SUFFIXES = [
+  "/.ccgui/workspace",
   "/.mossx/workspace",
   "/.codemoss/workspace",
+  "/com.zhukunpenglinyutong.ccgui/workspace",
   "/com.zhukunpenglinyutong.mossx/workspace",
   "/com.zhukunpenglinyutong.codemoss/workspace",
 ];

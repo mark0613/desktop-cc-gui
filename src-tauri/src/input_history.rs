@@ -1,12 +1,13 @@
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
+use crate::app_paths;
+
 const MAX_HISTORY_ITEMS: usize = 200;
 const MAX_COUNT_RECORDS: usize = 200;
 
 fn history_file_path() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or("Unable to resolve home directory")?;
-    Ok(home.join(".codemoss").join("inputHistory.json"))
+    app_paths::input_history_file_path()
 }
 
 fn read_history_file() -> Result<Value, String> {

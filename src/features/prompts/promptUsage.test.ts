@@ -4,6 +4,7 @@ import {
   clearPromptUsageForTests,
   getPromptHeatLevel,
   getPromptUsageEntry,
+  loadPromptUsage,
   recordPromptUsage,
 } from "./promptUsage";
 
@@ -20,6 +21,34 @@ describe("promptUsage", () => {
     expect(getPromptUsageEntry("prompt:a")).toEqual({
       count: 2,
       lastUsedAt: 200,
+    });
+  });
+
+  it("reads legacy mossx prompt usage from localStorage and rewrites it to ccgui", () => {
+    window.localStorage.setItem(
+      "mossx.promptUsage.v1",
+      JSON.stringify({
+        "prompt:legacy": {
+          count: 3,
+          lastUsedAt: 120,
+        },
+      }),
+    );
+
+    expect(loadPromptUsage()).toEqual({
+      "prompt:legacy": {
+        count: 3,
+        lastUsedAt: 120,
+      },
+    });
+
+    recordPromptUsage("prompt:legacy", 200);
+
+    expect(JSON.parse(window.localStorage.getItem("ccgui.promptUsage.v1") ?? "{}")).toEqual({
+      "prompt:legacy": {
+        count: 4,
+        lastUsedAt: 200,
+      },
     });
   });
 

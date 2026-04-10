@@ -25,7 +25,7 @@ const RUNTIME_TERMINAL_ID = "runtime-console";
 const DEFAULT_TERMINAL_COLS = 120;
 const DEFAULT_TERMINAL_ROWS = 32;
 const MAX_LOG_LINES = 5000;
-const EXIT_CODE_PATTERN = /\[CodeMoss Run\] __EXIT__:(-?\d+)/;
+const EXIT_CODE_PATTERN = /\[(?:ccgui|CodeMoss) Run\] __EXIT__:(-?\d+)/;
 const IS_WINDOWS_RUNTIME = isWindowsPlatform();
 
 export type RuntimeConsoleStatus = "idle" | "starting" | "running" | "stopped" | "error";
@@ -208,134 +208,134 @@ function buildLegacyJavaRunScript(commandOverride?: string | null) {
       return [
         "@echo off",
         "setlocal EnableExtensions EnableDelayedExpansion",
-        "set \"CODEMOSS_RUN_EXIT_CODE=0\"",
+        "set \"CCGUI_RUN_EXIT_CODE=0\"",
         "where java >nul 2>&1",
         "if errorlevel 1 (",
-        "  echo [CodeMoss Run] Java not found. Install JDK and ensure java is on PATH.",
-        "  set \"CODEMOSS_RUN_EXIT_CODE=127\"",
+        "  echo [ccgui Run] Java not found. Install JDK and ensure java is on PATH.",
+        "  set \"CCGUI_RUN_EXIT_CODE=127\"",
         ") else (",
-        "  echo [CodeMoss Run] Using custom run command from console.",
+        "  echo [ccgui Run] Using custom run command from console.",
         `  ${normalizedOverride}`,
-        "  set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"",
+        "  set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"",
         ")",
-        "echo [CodeMoss Run] __EXIT__:!CODEMOSS_RUN_EXIT_CODE!",
+        "echo [ccgui Run] __EXIT__:!CCGUI_RUN_EXIT_CODE!",
       ].join("\r\n");
     }
 
     return [
       "@echo off",
       "setlocal EnableExtensions EnableDelayedExpansion",
-      "set \"CODEMOSS_RUN_EXIT_CODE=0\"",
-      "echo [CodeMoss Run] Detecting Java launcher...",
+      "set \"CCGUI_RUN_EXIT_CODE=0\"",
+      "echo [ccgui Run] Detecting Java launcher...",
       "where java >nul 2>&1",
       "if errorlevel 1 (",
-      "  echo [CodeMoss Run] Java not found. Install JDK and ensure java is on PATH.",
-      "  set \"CODEMOSS_RUN_EXIT_CODE=127\"",
+      "  echo [ccgui Run] Java not found. Install JDK and ensure java is on PATH.",
+      "  set \"CCGUI_RUN_EXIT_CODE=127\"",
       ") else if exist \"mvnw.cmd\" if exist \"pom.xml\" (",
-      "  echo [CodeMoss Run] Using: mvnw.cmd spring-boot:run",
+      "  echo [ccgui Run] Using: mvnw.cmd spring-boot:run",
       "  call mvnw.cmd spring-boot:run",
-      "  set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"",
+      "  set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"",
       ") else if exist \"pom.xml\" (",
       "  where mvn >nul 2>&1",
       "  if errorlevel 1 (",
-      "    echo [CodeMoss Run] Maven not found. Install Maven or add mvnw.cmd to project root.",
-      "    set \"CODEMOSS_RUN_EXIT_CODE=127\"",
+      "    echo [ccgui Run] Maven not found. Install Maven or add mvnw.cmd to project root.",
+      "    set \"CCGUI_RUN_EXIT_CODE=127\"",
       "  ) else (",
-      "    echo [CodeMoss Run] Using: mvn spring-boot:run",
+      "    echo [ccgui Run] Using: mvn spring-boot:run",
       "    call mvn spring-boot:run",
-      "    set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"",
+      "    set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"",
       "  )",
       ") else if exist \"gradlew.bat\" if exist \"build.gradle\" (",
-      "  echo [CodeMoss Run] Using: gradlew.bat bootRun",
+      "  echo [ccgui Run] Using: gradlew.bat bootRun",
       "  call gradlew.bat bootRun",
-      "  set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"",
+      "  set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"",
       ") else if exist \"gradlew.bat\" if exist \"build.gradle.kts\" (",
-      "  echo [CodeMoss Run] Using: gradlew.bat bootRun",
+      "  echo [ccgui Run] Using: gradlew.bat bootRun",
       "  call gradlew.bat bootRun",
-      "  set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"",
+      "  set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"",
       ") else if exist \"build.gradle\" (",
       "  where gradle >nul 2>&1",
       "  if errorlevel 1 (",
-      "    echo [CodeMoss Run] Gradle not found. Install Gradle or add gradlew.bat to project root.",
-      "    set \"CODEMOSS_RUN_EXIT_CODE=127\"",
+      "    echo [ccgui Run] Gradle not found. Install Gradle or add gradlew.bat to project root.",
+      "    set \"CCGUI_RUN_EXIT_CODE=127\"",
       "  ) else (",
-      "    echo [CodeMoss Run] Using: gradle bootRun",
+      "    echo [ccgui Run] Using: gradle bootRun",
       "    call gradle bootRun",
-      "    set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"",
+      "    set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"",
       "  )",
       ") else if exist \"build.gradle.kts\" (",
       "  where gradle >nul 2>&1",
       "  if errorlevel 1 (",
-      "    echo [CodeMoss Run] Gradle not found. Install Gradle or add gradlew.bat to project root.",
-      "    set \"CODEMOSS_RUN_EXIT_CODE=127\"",
+      "    echo [ccgui Run] Gradle not found. Install Gradle or add gradlew.bat to project root.",
+      "    set \"CCGUI_RUN_EXIT_CODE=127\"",
       "  ) else (",
-      "    echo [CodeMoss Run] Using: gradle bootRun",
+      "    echo [ccgui Run] Using: gradle bootRun",
       "    call gradle bootRun",
-      "    set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"",
+      "    set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"",
       "  )",
       ") else (",
-      "  echo [CodeMoss Run] No Java project launcher detected in workspace root.",
-      "  echo [CodeMoss Run] Expected one of: pom.xml, build.gradle, build.gradle.kts.",
-      "  set \"CODEMOSS_RUN_EXIT_CODE=127\"",
+      "  echo [ccgui Run] No Java project launcher detected in workspace root.",
+      "  echo [ccgui Run] Expected one of: pom.xml, build.gradle, build.gradle.kts.",
+      "  set \"CCGUI_RUN_EXIT_CODE=127\"",
       ")",
-      "echo [CodeMoss Run] __EXIT__:!CODEMOSS_RUN_EXIT_CODE!",
+      "echo [ccgui Run] __EXIT__:!CCGUI_RUN_EXIT_CODE!",
     ].join("\r\n");
   }
 
   const normalizedOverride = commandOverride?.trim() ?? "";
   if (normalizedOverride) {
     return [
-      "CODEMOSS_RUN_EXIT_CODE=0",
+      "CCGUI_RUN_EXIT_CODE=0",
       "if ! command -v java >/dev/null 2>&1; then",
-      "  echo \"[CodeMoss Run] Java not found. Install JDK and ensure java is on PATH.\"",
-      "  CODEMOSS_RUN_EXIT_CODE=127",
+      "  echo \"[ccgui Run] Java not found. Install JDK and ensure java is on PATH.\"",
+      "  CCGUI_RUN_EXIT_CODE=127",
       "else",
-      "  echo \"[CodeMoss Run] Using custom run command from console.\"",
+      "  echo \"[ccgui Run] Using custom run command from console.\"",
       `  ${normalizedOverride}`,
-      "  CODEMOSS_RUN_EXIT_CODE=$?",
+      "  CCGUI_RUN_EXIT_CODE=$?",
       "fi",
-      "echo \"[CodeMoss Run] __EXIT__:${CODEMOSS_RUN_EXIT_CODE}\"",
+      "echo \"[ccgui Run] __EXIT__:${CCGUI_RUN_EXIT_CODE}\"",
     ].join("\n");
   }
 
   return [
-    "CODEMOSS_RUN_EXIT_CODE=0",
-    "echo \"[CodeMoss Run] Detecting Java launcher...\"",
+    "CCGUI_RUN_EXIT_CODE=0",
+    "echo \"[ccgui Run] Detecting Java launcher...\"",
     "if ! command -v java >/dev/null 2>&1; then",
-    "  echo \"[CodeMoss Run] Java not found. Install JDK and ensure java is on PATH.\"",
-    "  CODEMOSS_RUN_EXIT_CODE=127",
+    "  echo \"[ccgui Run] Java not found. Install JDK and ensure java is on PATH.\"",
+    "  CCGUI_RUN_EXIT_CODE=127",
     "elif [ -f \"./mvnw\" ] && [ -f \"./pom.xml\" ]; then",
-    "  echo \"[CodeMoss Run] Using: ./mvnw spring-boot:run\"",
+    "  echo \"[ccgui Run] Using: ./mvnw spring-boot:run\"",
     "  ./mvnw spring-boot:run",
-    "  CODEMOSS_RUN_EXIT_CODE=$?",
+    "  CCGUI_RUN_EXIT_CODE=$?",
     "elif [ -f \"./pom.xml\" ]; then",
     "  if command -v mvn >/dev/null 2>&1; then",
-    "    echo \"[CodeMoss Run] Using: mvn spring-boot:run\"",
+    "    echo \"[ccgui Run] Using: mvn spring-boot:run\"",
     "    mvn spring-boot:run",
-    "    CODEMOSS_RUN_EXIT_CODE=$?",
+    "    CCGUI_RUN_EXIT_CODE=$?",
     "  else",
-    "    echo \"[CodeMoss Run] Maven not found. Install Maven or add ./mvnw to project root.\"",
-    "    CODEMOSS_RUN_EXIT_CODE=127",
+    "    echo \"[ccgui Run] Maven not found. Install Maven or add ./mvnw to project root.\"",
+    "    CCGUI_RUN_EXIT_CODE=127",
     "  fi",
     "elif [ -f \"./gradlew\" ] && { [ -f \"./build.gradle\" ] || [ -f \"./build.gradle.kts\" ]; }; then",
-    "  echo \"[CodeMoss Run] Using: ./gradlew bootRun\"",
+    "  echo \"[ccgui Run] Using: ./gradlew bootRun\"",
     "  ./gradlew bootRun",
-    "  CODEMOSS_RUN_EXIT_CODE=$?",
+    "  CCGUI_RUN_EXIT_CODE=$?",
     "elif [ -f \"./build.gradle\" ] || [ -f \"./build.gradle.kts\" ]; then",
     "  if command -v gradle >/dev/null 2>&1; then",
-    "    echo \"[CodeMoss Run] Using: gradle bootRun\"",
+    "    echo \"[ccgui Run] Using: gradle bootRun\"",
     "    gradle bootRun",
-    "    CODEMOSS_RUN_EXIT_CODE=$?",
+    "    CCGUI_RUN_EXIT_CODE=$?",
     "  else",
-    "    echo \"[CodeMoss Run] Gradle not found. Install Gradle or add ./gradlew to project root.\"",
-    "    CODEMOSS_RUN_EXIT_CODE=127",
+    "    echo \"[ccgui Run] Gradle not found. Install Gradle or add ./gradlew to project root.\"",
+    "    CCGUI_RUN_EXIT_CODE=127",
     "  fi",
     "else",
-    "  echo \"[CodeMoss Run] No Java project launcher detected in workspace root.\"",
-    "  echo \"[CodeMoss Run] Expected one of: pom.xml, build.gradle, build.gradle.kts.\"",
-    "  CODEMOSS_RUN_EXIT_CODE=127",
+    "  echo \"[ccgui Run] No Java project launcher detected in workspace root.\"",
+    "  echo \"[ccgui Run] Expected one of: pom.xml, build.gradle, build.gradle.kts.\"",
+    "  CCGUI_RUN_EXIT_CODE=127",
     "fi",
-    "echo \"[CodeMoss Run] __EXIT__:${CODEMOSS_RUN_EXIT_CODE}\"",
+    "echo \"[ccgui Run] __EXIT__:${CCGUI_RUN_EXIT_CODE}\"",
   ].join("\n");
 }
 
@@ -617,7 +617,7 @@ export function useRuntimeLogSession({
     }));
     appendWorkspaceLog(
       workspaceId,
-      `\n[CodeMoss Run] Starting at ${new Date().toLocaleTimeString()}\n`,
+      `\n[ccgui Run] Starting at ${new Date().toLocaleTimeString()}\n`,
     );
     try {
       const snapshot = await runtimeLogStart(workspaceId, {
@@ -661,7 +661,7 @@ export function useRuntimeLogSession({
           }));
           appendWorkspaceLog(
             workspaceId,
-            `[CodeMoss Run] Failed to start runtime: ${fallbackMessage}\n`,
+            `[ccgui Run] Failed to start runtime: ${fallbackMessage}\n`,
           );
           return;
         }
@@ -674,7 +674,7 @@ export function useRuntimeLogSession({
       }));
       appendWorkspaceLog(
         workspaceId,
-        `[CodeMoss Run] Failed to start runtime: ${message}\n`,
+        `[ccgui Run] Failed to start runtime: ${message}\n`,
       );
     }
   }, [
@@ -707,7 +707,7 @@ export function useRuntimeLogSession({
         ...applyRuntimeSnapshot(current, snapshot, getDetectedProfiles(workspaceId)),
         status: "stopped",
       }));
-      appendWorkspaceLog(workspaceId, "[CodeMoss Run] Stopped.\n");
+      appendWorkspaceLog(workspaceId, "[ccgui Run] Stopped.\n");
     } catch (error) {
       if (isMissingCommandError(error)) {
         try {
@@ -717,7 +717,7 @@ export function useRuntimeLogSession({
             status: "stopped",
             exitCode: current.exitCode === null ? 130 : current.exitCode,
           }));
-          appendWorkspaceLog(workspaceId, "[CodeMoss Run] Stopped.\n");
+          appendWorkspaceLog(workspaceId, "[ccgui Run] Stopped.\n");
           return;
         } catch (fallbackError) {
           const fallbackMessage =
@@ -729,7 +729,7 @@ export function useRuntimeLogSession({
           }));
           appendWorkspaceLog(
             workspaceId,
-            `[CodeMoss Run] Stop failed: ${fallbackMessage}\n`,
+            `[ccgui Run] Stop failed: ${fallbackMessage}\n`,
           );
           return;
         }
@@ -742,7 +742,7 @@ export function useRuntimeLogSession({
       }));
       appendWorkspaceLog(
         workspaceId,
-        `[CodeMoss Run] Stop failed: ${message}\n`,
+        `[ccgui Run] Stop failed: ${message}\n`,
       );
     }
   }, [activeWorkspace?.id, appendWorkspaceLog, getDetectedProfiles, updateWorkspaceSession]);

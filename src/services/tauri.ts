@@ -1932,7 +1932,7 @@ export type GlobalMcpServerEntry = {
   command?: string | null;
   url?: string | null;
   argsCount: number;
-  source: "claude_json" | "codemoss_config";
+  source: "claude_json" | "ccgui_config";
 };
 
 export async function listGlobalMcpServers() {

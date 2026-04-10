@@ -1,6 +1,6 @@
 <div align="center">
 
-# MossX
+# ccgui
 
 <img width="120" alt="Image" src="./icon.png" />
 
@@ -10,11 +10,11 @@
 
 </div>
 
-**MossX** 目标群体是专业开发者，可以替代Curosr使用。专注于开发者体验，我们最终目标是打造一个100%开源透明的 **下一代VibeCoding编辑器（支持Claude Code，Codex等引擎）**
+**ccgui** 目标群体是专业开发者，可以替代Curosr使用。专注于开发者体验，我们最终目标是打造一个100%开源透明的 **下一代VibeCoding编辑器（支持Claude Code，Codex等引擎）**
 
 > 这是一个基于 [CodexMonitor](https://github.com/Dimillian/CodexMonitor) 的二开项目
 
-<img src="./docs/banner.png" alt="MossX Banner" width="800" />
+<img src="./docs/banner.png" alt="ccgui Banner" width="800" />
 
 ---
 
@@ -132,7 +132,7 @@ npm run test          # 运行前端测试
 ---
 ### 客户端下载
 
-下载地址：https://www.mossx.ai/download
+下载地址：https://github.com/zhukunpenglinyutong/ccgui/releases
 
 ---
 
@@ -146,13 +146,13 @@ npm run test          # 运行前端测试
 
 ### License
 
-[MIT](https://github.com/zhukunpenglinyutong/mossx?tab=MIT-1-ov-file)
+[MIT](https://github.com/zhukunpenglinyutong/ccgui?tab=MIT-1-ov-file)
 
 ---
 
 ## 贡献者列表
 
-感谢所有帮助 MossX 变得更好的贡献者！
+感谢所有帮助 ccgui 变得更好的贡献者！
 
 <table>
   <tr>
@@ -180,13 +180,13 @@ npm run test          # 运行前端测试
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=zhukunpenglinyutong/mossx&type=date&legend=top-left)](https://www.star-history.com/#zhukunpenglinyutong/mossx&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=zhukunpenglinyutong/ccgui&type=date&legend=top-left)](https://www.star-history.com/#zhukunpenglinyutong/ccgui&type=date&legend=top-left)
 
 <!-- LINK GROUP -->
 
-[github-contributors-shield]: https://img.shields.io/github/contributors/zhukunpenglinyutong/mossx?color=c4f042&labelColor=black&style=flat-square
-[github-forks-shield]: https://img.shields.io/github/forks/zhukunpenglinyutong/mossx?color=8ae8ff&labelColor=black&style=flat-square
-[github-issues-link]: https://github.com/zhukunpenglinyutong/mossx/issues
-[github-issues-shield]: https://img.shields.io/github/issues/zhukunpenglinyutong/mossx?color=ff80eb&labelColor=black&style=flat-square
-[github-license-link]: https://github.com/zhukunpenglinyutong/mossx/blob/main/LICENSE
-[github-stars-shield]: https://img.shields.io/github/stars/zhukunpenglinyutong/mossx?color=ffcb47&labelColor=black&style=flat-square
+[github-contributors-shield]: https://img.shields.io/github/contributors/zhukunpenglinyutong/ccgui?color=c4f042&labelColor=black&style=flat-square
+[github-forks-shield]: https://img.shields.io/github/forks/zhukunpenglinyutong/ccgui?color=8ae8ff&labelColor=black&style=flat-square
+[github-issues-link]: https://github.com/zhukunpenglinyutong/ccgui/issues
+[github-issues-shield]: https://img.shields.io/github/issues/zhukunpenglinyutong/ccgui?color=ff80eb&labelColor=black&style=flat-square
+[github-license-link]: https://github.com/zhukunpenglinyutong/ccgui/blob/main/LICENSE
+[github-stars-shield]: https://img.shields.io/github/stars/zhukunpenglinyutong/ccgui?color=ffcb47&labelColor=black&style=flat-square

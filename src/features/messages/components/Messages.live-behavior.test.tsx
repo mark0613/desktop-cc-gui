@@ -10,9 +10,9 @@ describe("Messages live behavior", () => {
   });
 
   beforeEach(() => {
-    window.localStorage.setItem("mossx.claude.hideReasoningModule", "0");
-    window.localStorage.removeItem("mossx.messages.live.autoFollow");
-    window.localStorage.removeItem("mossx.messages.live.collapseMiddleSteps");
+    window.localStorage.setItem("ccgui.claude.hideReasoningModule", "0");
+    window.localStorage.removeItem("ccgui.messages.live.autoFollow");
+    window.localStorage.removeItem("ccgui.messages.live.collapseMiddleSteps");
   });
 
   beforeAll(() => {
@@ -297,7 +297,7 @@ describe("Messages live behavior", () => {
   );
 
   it("disables auto-follow scrolling when live auto-follow toggle is off", () => {
-    window.localStorage.setItem("mossx.messages.live.autoFollow", "0");
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "0");
     const scrollSpy = vi
       .spyOn(HTMLElement.prototype, "scrollIntoView")
       .mockImplementation(() => {});
@@ -350,7 +350,7 @@ describe("Messages live behavior", () => {
   });
 
   it("keeps auto-follow working after manual scroll when enabled", async () => {
-    window.localStorage.setItem("mossx.messages.live.autoFollow", "1");
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
     const scrollSpy = vi
       .spyOn(HTMLElement.prototype, "scrollIntoView")
       .mockImplementation(() => {});
@@ -417,7 +417,7 @@ describe("Messages live behavior", () => {
   });
 
   it("collapses live middle steps when enabled", () => {
-    window.localStorage.setItem("mossx.messages.live.collapseMiddleSteps", "1");
+    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
     const items: ConversationItem[] = [
       {
         id: "user-live-collapse",
@@ -467,7 +467,7 @@ describe("Messages live behavior", () => {
   });
 
   it("collapses middle steps in history mode when enabled", () => {
-    window.localStorage.setItem("mossx.messages.live.collapseMiddleSteps", "1");
+    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
     const items: ConversationItem[] = [
       {
         id: "user-history-collapse",
@@ -515,7 +515,7 @@ describe("Messages live behavior", () => {
   });
 
   it("collapses middle steps for all previous turns in history mode", () => {
-    window.localStorage.setItem("mossx.messages.live.collapseMiddleSteps", "1");
+    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
     const items: ConversationItem[] = [
       {
         id: "user-history-turn-1",

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-app_path="${1:-src-tauri/target/release/bundle/macos/CodeMoss.app}"
+app_path="${1:-src-tauri/target/release/bundle/macos/ccgui.app}"
 identity="${CODESIGN_IDENTITY:-}"
 entitlements_path="${ENTITLEMENTS_PATH:-src-tauri/Entitlements.plist}"
 
@@ -44,8 +44,8 @@ fi
 libssl="${openssl_prefix}/lib/libssl.3.dylib"
 libcrypto="${openssl_prefix}/lib/libcrypto.3.dylib"
 frameworks_dir="${app_path}/Contents/Frameworks"
-bin_path="${app_path}/Contents/MacOS/moss-x"
-daemon_path="${app_path}/Contents/MacOS/moss_x_daemon"
+bin_path="${app_path}/Contents/MacOS/cc-gui"
+daemon_path="${app_path}/Contents/MacOS/cc_gui_daemon"
 
 if [[ ! -f "${libssl}" || ! -f "${libcrypto}" ]]; then
   echo "OpenSSL dylibs not found at ${openssl_prefix}/lib"

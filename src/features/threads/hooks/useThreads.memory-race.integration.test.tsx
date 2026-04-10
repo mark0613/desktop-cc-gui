@@ -87,7 +87,7 @@ vi.mock("../../../services/tauri", () => ({
 
 const workspace: WorkspaceInfo = {
   id: "ws-1",
-  name: "CodeMoss",
+  name: "ccgui",
   path: "/tmp/codemoss",
   connected: true,
   settings: { sidebarCollapsed: false },
@@ -141,7 +141,7 @@ describe("useThreads memory race integration", () => {
         turnId: "turn-1",
         inputText: "这是用户输入。",
         memoryId: null,
-        workspaceName: "CodeMoss",
+        workspaceName: "ccgui",
         workspacePath: "/tmp/codemoss",
         engine: "claude",
       });
@@ -189,7 +189,7 @@ describe("useThreads memory race integration", () => {
         turnId: "turn-2",
         inputText: "这是晚到的输入采集。",
         memoryId: null,
-        workspaceName: "CodeMoss",
+        workspaceName: "ccgui",
         workspacePath: "/tmp/codemoss",
         engine: "claude",
       });
@@ -230,7 +230,7 @@ describe("useThreads memory race integration", () => {
         turnId: "turn-3",
         inputText: "Please help debug this issue",
         memoryId: null,
-        workspaceName: "CodeMoss",
+        workspaceName: "ccgui",
         workspacePath: "/tmp/codemoss",
         engine: "claude",
       });
@@ -269,7 +269,7 @@ describe("useThreads memory race integration", () => {
         turnId: "turn-4",
         inputText: "Let's decide the migration strategy",
         memoryId: null,
-        workspaceName: "CodeMoss",
+        workspaceName: "ccgui",
         workspacePath: "/tmp/codemoss",
         engine: "claude",
       });
@@ -307,7 +307,7 @@ describe("useThreads memory race integration", () => {
         turnId: "turn-6",
         inputText: "This workspace uses React and TypeScript",
         memoryId: null,
-        workspaceName: "CodeMoss",
+        workspaceName: "ccgui",
         workspacePath: "/tmp/codemoss",
         engine: "claude",
       });
@@ -345,7 +345,7 @@ describe("useThreads memory race integration", () => {
         turnId: "turn-7",
         inputText: "我们随便聊聊",
         memoryId: null,
-        workspaceName: "CodeMoss",
+        workspaceName: "ccgui",
         workspacePath: "/tmp/codemoss",
         engine: "claude",
       });
@@ -391,7 +391,7 @@ describe("useThreads memory race integration", () => {
         turnId: "turn-8",
         inputText: "是和我老婆张冰冰一起回来的.我们开车没走高速",
         memoryId: null,
-        workspaceName: "CodeMoss",
+        workspaceName: "ccgui",
         workspacePath: "/tmp/codemoss",
         engine: "claude",
       });
@@ -430,7 +430,7 @@ describe("useThreads memory race integration", () => {
           turnId: "turn-5",
           inputText: "Please diagnose this production failure",
           memoryId: null,
-          workspaceName: "CodeMoss",
+          workspaceName: "ccgui",
           workspacePath: "/tmp/codemoss",
           engine: "claude",
         });

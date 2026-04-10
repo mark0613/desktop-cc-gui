@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
 
+use crate::app_paths;
+
 static FILE_LOCK: Mutex<()> = Mutex::new(());
 
 fn with_file_lock<T>(op: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
@@ -121,8 +123,7 @@ pub(crate) struct AutoCaptureInput {
 }
 
 fn storage_dir() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or("Unable to resolve home directory")?;
-    Ok(home.join(".codemoss").join("project-memory"))
+    app_paths::project_memory_dir()
 }
 
 fn settings_path() -> Result<PathBuf, String> {

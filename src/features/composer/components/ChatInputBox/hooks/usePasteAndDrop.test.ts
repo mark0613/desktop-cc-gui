@@ -130,15 +130,44 @@ describe("usePasteAndDrop path insertion", () => {
   it("inserts multi-path payload from custom drag data once", () => {
     vi.useFakeTimers();
     const harness = createHarness();
+    try {
+      const dropEvent = {
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+        dataTransfer: {
+          files: [] as File[],
+          getData: (type: string) =>
+            type === "application/x-ccgui-file-paths"
+              ? JSON.stringify(["/tmp/a.ts", "/tmp/b.ts"])
+              : "",
+        },
+      } as unknown as React.DragEvent;
+
+      act(() => {
+        harness.result.handleDrop(dropEvent);
+      });
+
+      expect(harness.editable.textContent).toContain("@/tmp/a.ts");
+      expect(harness.editable.textContent).toContain("@/tmp/b.ts");
+      expect(harness.pathMappingRef.current.get("a.ts")).toBe("/tmp/a.ts");
+      expect(harness.pathMappingRef.current.get("b.ts")).toBe("/tmp/b.ts");
+      vi.runAllTimers();
+      expect(harness.renderFileTags).toHaveBeenCalled();
+    } finally {
+      harness.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps accepting legacy codemoss drag payloads during migration", () => {
+    const harness = createHarness();
     const dropEvent = {
       preventDefault: vi.fn(),
       stopPropagation: vi.fn(),
       dataTransfer: {
         files: [] as File[],
         getData: (type: string) =>
-          type === "application/x-codemoss-file-paths"
-            ? JSON.stringify(["/tmp/a.ts", "/tmp/b.ts"])
-            : "",
+          type === "application/x-codemoss-file-paths" ? JSON.stringify(["/tmp/legacy.ts"]) : "",
       },
     } as unknown as React.DragEvent;
 
@@ -146,14 +175,8 @@ describe("usePasteAndDrop path insertion", () => {
       harness.result.handleDrop(dropEvent);
     });
 
-    expect(harness.editable.textContent).toContain("@/tmp/a.ts");
-    expect(harness.editable.textContent).toContain("@/tmp/b.ts");
-    expect(harness.pathMappingRef.current.get("a.ts")).toBe("/tmp/a.ts");
-    expect(harness.pathMappingRef.current.get("b.ts")).toBe("/tmp/b.ts");
-    vi.runAllTimers();
-    expect(harness.renderFileTags).toHaveBeenCalled();
+    expect(harness.editable.textContent).toContain("@/tmp/legacy.ts");
     harness.unmount();
-    vi.useRealTimers();
   });
 
   it("falls back to file-tree bridge paths when dataTransfer is empty", () => {

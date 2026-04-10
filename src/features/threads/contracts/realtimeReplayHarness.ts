@@ -6,7 +6,7 @@ import type { ReplayProfile, RealtimeReplayEvent } from "./realtimeReplayTypes";
 
 const ABSOLUTE_EPOCH_MS = 1_710_000_000_000;
 const FRAME_BUCKET_MS = 16;
-const FLAG_PREFIX = "mossx.perf.";
+const FLAG_PREFIX = "ccgui.perf.";
 const PROFILE_FLAG_VALUES: Record<
   ReplayProfile,
   Record<"realtimeBatching" | "reducerNoopGuard" | "incrementalDerivation" | "debugLightPath", string>

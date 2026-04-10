@@ -2,7 +2,7 @@
  * Input history store for autocomplete.
  *
  * Manages history data in memory with async persistence to
- * ~/.codemoss/inputHistory.json via Tauri commands.
+ * ~/.ccgui/inputHistory.json via Tauri commands.
  *
  * Data format is fully compatible with idea-claude-code-gui,
  * enabling data interoperability between the two applications.

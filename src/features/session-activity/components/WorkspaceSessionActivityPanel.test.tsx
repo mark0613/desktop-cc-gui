@@ -5,7 +5,7 @@ import type { WorkspaceSessionActivityViewModel } from "../types";
 import { WorkspaceSessionActivityPanel } from "./WorkspaceSessionActivityPanel";
 
 const SOLO_FOLLOW_COACH_DISMISSED_BY_WORKSPACE_STORAGE_KEY =
-  "mossx.sessionActivity.soloFollowCoachDismissedByWorkspace";
+  "ccgui.sessionActivity.soloFollowCoachDismissedByWorkspace";
 
 function dismissSoloFollowCoachForWorkspace(workspaceId: string) {
   window.localStorage.setItem(

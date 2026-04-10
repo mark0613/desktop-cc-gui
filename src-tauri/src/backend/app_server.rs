@@ -43,8 +43,8 @@ const MODE_BLOCKED_REASON_CODE_REQUEST_USER_INPUT: &str =
 const MODE_BLOCKED_REASON_CODE_PLAN_READONLY: &str = "plan_readonly_violation";
 const MODE_BLOCKED_PLAN_REASON: &str = "This operation is blocked while effective_mode=plan.";
 const MODE_BLOCKED_PLAN_SUGGESTION: &str = "Switch to Default mode and retry the write operation.";
-const LOCAL_PLAN_BLOCKER_REQUEST_PREFIX: &str = "mossx-plan-blocker:";
-const LOCAL_PLAN_APPLY_REQUEST_PREFIX: &str = "mossx-plan-apply:";
+const LOCAL_PLAN_BLOCKER_REQUEST_PREFIX: &str = "ccgui-plan-blocker:";
+const LOCAL_PLAN_APPLY_REQUEST_PREFIX: &str = "ccgui-plan-apply:";
 const PLAN_APPLY_ACTION_QUESTION_ID: &str = "plan_apply_action";
 const PLAN_BLOCKER_GENERIC_REASON: &str = "Plan 模式检测到阻断条件，需要你先确认下一步后再继续。";
 const PLAN_BLOCKER_USER_INPUT_REQUIRED_REASON: &str =
@@ -2023,8 +2023,8 @@ async fn spawn_workspace_session_once<E: EventSink>(
 
     let init_params = json!({
         "clientInfo": {
-            "name": "mossx",
-            "title": "MossX",
+            "name": "ccgui",
+            "title": "ccgui",
             "version": client_version
         },
         "capabilities": {
@@ -2872,11 +2872,11 @@ mod tests {
         let event = build_plan_blocker_user_input_event(
             "thread-1",
             Some("turn-1"),
-            "mossx-plan-blocker:1",
+            "ccgui-plan-blocker:1",
             "当前目录不是 Git 仓库，无法基于真实代码上下文继续计划。",
         );
         assert_eq!(event["method"], "item/tool/requestUserInput");
-        assert_eq!(event["id"], "mossx-plan-blocker:1");
+        assert_eq!(event["id"], "ccgui-plan-blocker:1");
         assert_eq!(event["params"]["threadId"], "thread-1");
         assert_eq!(event["params"]["turnId"], "turn-1");
         assert_eq!(
@@ -2890,7 +2890,7 @@ mod tests {
         let event = build_plan_blocker_user_input_event(
             "thread-1",
             Some("turn-1"),
-            "mossx-plan-blocker:2",
+            "ccgui-plan-blocker:2",
             "Plan 模式检测到需要你补充关键信息，继续前请先确认输入。",
         );
         assert_eq!(

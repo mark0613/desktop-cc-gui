@@ -301,7 +301,7 @@ describe("useWorkspaces.groupedWorkspaces", () => {
       {
         id: "ws-default",
         name: "workspace",
-        path: "/Users/test/.codemoss/workspace",
+        path: "/Users/test/.ccgui/workspace",
         connected: true,
         kind: "main",
         parentId: null,

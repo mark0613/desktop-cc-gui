@@ -41,7 +41,7 @@ const enPart1 = {
 
   // App
   app: {
-    title: "MossX",
+    title: "ccgui",
     subtitle: "Orchestrate agents across your local projects.",
   },
 
@@ -207,7 +207,7 @@ const enPart1 = {
 
   homeChat: {
     badge: "Workspace-aware chat home",
-    title: "MossX Agent, make work easier",
+    title: "ccgui Agent, make work easier",
     subtitle: "Start from projects, then move fast into chat, execution, and delivery.",
     promptPlaceholder:
       "Describe your goal, for example: Generate release notes for this repository and include risk checks.",
@@ -417,7 +417,7 @@ const enPart1 = {
     behaviorStreaming: "Streaming Output",
     behaviorStreamingDesc: "When enabled, responses appear word by word. Disable to show complete responses at once.",
     behaviorProxyTitle: "Network Proxy",
-    behaviorProxyDesc: "When enabled, MossX and its networked child processes prefer this proxy.",
+    behaviorProxyDesc: "When enabled, ccgui and its networked child processes prefer this proxy.",
     behaviorProxyEnabled: "Enable network proxy",
     behaviorProxyEnabledDesc: "Used by Codex, OpenCode, Git remote operations, and other network flows.",
     behaviorProxyAddress: "Proxy address",
@@ -514,7 +514,7 @@ const enPart1 = {
       enabled: "Enabled",
       disabled: "Disabled",
       sourceClaude: "Source: ~/.claude.json",
-      sourceCodemoss: "Source: ~/.codemoss/config.json",
+      sourceCcgui: "Source: ~/.ccgui/config.json",
       commandMeta: "{{command}} · args {{args}}",
       urlMeta: "URL: {{url}}",
       transportUnknown: "unknown transport",
@@ -1005,7 +1005,7 @@ const enPart1 = {
 
     // Codex section
     codexTitle: "Codex",
-    codexDescription: "Configure the Codex CLI used by MossX and validate the install.",
+    codexDescription: "Configure the Codex CLI used by ccgui and validate the install.",
     defaultCodexPath: "Default Codex path",
     codexPlaceholder: "codex",
     usePath: "Use PATH",
@@ -1060,7 +1060,7 @@ const enPart1 = {
     remoteBackendToken: "Token (optional)",
     remoteBackendHostAriaLabel: "Remote backend host",
     remoteBackendTokenAriaLabel: "Remote backend token",
-    remoteBackendDesc: "Start the daemon separately and point MossX to it (host:port + token).",
+    remoteBackendDesc: "Start the daemon separately and point ccgui to it (host:port + token).",
     webServiceTitle: "Web service",
     webServiceDescription:
       "Manage the browser-accessible Web service exposed by the daemon.",
@@ -1140,7 +1140,7 @@ const enPart1 = {
     agent: {
       title: "Agents",
       description:
-        "Manage custom agents. Data stays compatible with Claude Code GUI (~/.codemoss/agent.json).",
+        "Manage custom agents. Data stays compatible with Claude Code GUI (~/.ccgui/agent.json).",
       create: "Create",
       export: "Export",
       import: "Import",
@@ -2160,7 +2160,7 @@ const enPart1 = {
     offlineStep1: "/plugin marketplace add thedotmack/claude-mem",
     offlineStep2: "/plugin install claude-mem",
     offlineStep3: "Restart Claude Code in terminal",
-    offlineStep4: "Restart CodeMoss",
+    offlineStep4: "Restart ccgui",
   },
 
   // Time

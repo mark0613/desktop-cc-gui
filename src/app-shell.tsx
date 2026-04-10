@@ -2584,8 +2584,8 @@ export function AppShell() {
 
   useEffect(() => {
     const title = activeWorkspace
-      ? `MossX - ${activeWorkspace.name}`
-      : "MossX";
+      ? `ccgui - ${activeWorkspace.name}`
+      : "ccgui";
     void getCurrentWindow().setTitle(title).catch(() => {});
   }, [activeWorkspace]);
 

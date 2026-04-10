@@ -299,7 +299,9 @@ function extractPathCandidatesFromDataTransfer(
     return readFileTreeDragBridgePaths();
   }
 
-  const customPayload = dataTransfer.getData('application/x-codemoss-file-paths');
+  const customPayload =
+    dataTransfer.getData('application/x-ccgui-file-paths') ||
+    dataTransfer.getData('application/x-codemoss-file-paths');
   if (customPayload) {
     const paths = dedupeAndValidateFilePaths(parsePathsFromDropText(customPayload));
     if (paths.length > 0) {
@@ -335,6 +337,7 @@ function hasPathLikeDragType(
   }
   const types = Array.from(dataTransfer.types ?? []);
   return (
+    types.includes('application/x-ccgui-file-paths') ||
     types.includes('application/x-codemoss-file-paths') ||
     types.includes('text/plain') ||
     types.includes('text/uri-list')

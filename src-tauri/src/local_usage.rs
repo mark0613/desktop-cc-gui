@@ -1020,8 +1020,8 @@ fn normalize_originator_source(value: Option<String>) -> Option<String> {
         return None;
     }
     let lower = trimmed.to_ascii_lowercase();
-    if lower == "mossx" || lower == "codemoss" {
-        return Some("mossx".to_string());
+    if lower == "ccgui" || lower == "codemoss" || lower == "ccgui" {
+        return Some("ccgui".to_string());
     }
     if lower == "codex_cli_rs" {
         return Some("cli".to_string());
@@ -2374,7 +2374,7 @@ mod tests {
             day_key,
             "session-originator-meta",
             &[
-                r#"{"timestamp":"2026-01-19T12:00:00.000Z","type":"session_meta","payload":{"cwd":"/tmp/project-alpha","source":"vscode","originator":"mossx","model_provider":"openai"}}"#
+                r#"{"timestamp":"2026-01-19T12:00:00.000Z","type":"session_meta","payload":{"cwd":"/tmp/project-alpha","source":"vscode","originator":"ccgui","model_provider":"openai"}}"#
                     .to_string(),
                 r#"{"timestamp":"2026-01-19T12:00:01.000Z","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":12,"cached_input_tokens":0,"output_tokens":4}}}}"#
                     .to_string(),
@@ -2385,7 +2385,7 @@ mod tests {
             .expect("parse summary")
             .expect("summary exists");
 
-        assert_eq!(summary.source.as_deref(), Some("mossx"));
+        assert_eq!(summary.source.as_deref(), Some("ccgui"));
         assert_eq!(summary.provider.as_deref(), Some("openai"));
     }
 

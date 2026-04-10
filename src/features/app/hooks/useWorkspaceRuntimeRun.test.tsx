@@ -327,6 +327,32 @@ describe("useWorkspaceRuntimeRun", () => {
     expect(runtimeLogMarkExit).toHaveBeenCalledWith("workspace-1", 1);
   });
 
+  it("captures ccgui exit code markers from output stream", async () => {
+    const { result } = renderHook(() =>
+      useWorkspaceRuntimeRun({
+        activeWorkspace: baseWorkspace,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.onRunProject();
+    });
+
+    act(() => {
+      terminalOutputListener?.({
+        workspaceId: "workspace-1",
+        terminalId: "runtime-console",
+        data: "[ccgui Run] __EXIT__:17\n",
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.runtimeConsoleStatus).toBe("error");
+      expect(result.current.runtimeConsoleExitCode).toBe(17);
+    });
+    expect(runtimeLogMarkExit).toHaveBeenCalledWith("workspace-1", 17);
+  });
+
   it("marks runtime log as truncated when line buffer exceeds limit", async () => {
     const { result } = renderHook(() =>
       useWorkspaceRuntimeRun({

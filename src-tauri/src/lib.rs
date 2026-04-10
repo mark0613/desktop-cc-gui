@@ -18,6 +18,7 @@ fn get_pending_open_paths() -> Vec<String> {
 }
 
 mod agents;
+mod app_paths;
 mod backend;
 mod claude_commands;
 mod client_storage;
@@ -78,6 +79,9 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            if let Err(error) = app_paths::app_home_dir() {
+                log::warn!("Failed to prepare ccgui home directory: {error}");
+            }
             let state = state::AppState::load(&app.handle());
             app.manage(state);
             #[cfg(desktop)]
@@ -92,7 +96,7 @@ pub fn run() {
             // in the system browser instead of navigating the webview.
             let mut win_builder =
                 WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-                    .title("MossX")
+                    .title("ccgui")
                     .inner_size(1300.0, 800.0)
                     .min_inner_size(800.0, 600.0)
                     .devtools(true);

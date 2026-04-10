@@ -1,5 +1,5 @@
 #!/bin/bash
-# Create a DMG with drag-to-install panel for CodeMoss
+# Create a DMG with drag-to-install panel for ccgui
 #
 # Usage:
 #   ./scripts/create-dmg.sh <app_path> <output_dmg_path> [volume_name]
@@ -8,7 +8,7 @@ set -euo pipefail
 
 APP_PATH="${1:?Usage: $0 <app_path> <output_dmg_path> [volume_name]}"
 OUTPUT_DMG="${2:?Usage: $0 <app_path> <output_dmg_path> [volume_name]}"
-VOLUME_NAME="${3:-CodeMoss Installer}"
+VOLUME_NAME="${3:-ccgui Installer}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -137,10 +137,10 @@ trap cleanup EXIT
 APP_SIZE_KB=$(du -sk "$APP_PATH" | cut -f1)
 DMG_SIZE_KB=$((APP_SIZE_KB + 20480))
 
-STAGE_DIR="$(mktemp -d /tmp/mossx-dmg-stage-XXXXXX)"
+STAGE_DIR="$(mktemp -d /tmp/ccgui-dmg-stage-XXXXXX)"
 mkdir -p "$STAGE_DIR/.background"
 
-if ! copy_app_bundle "$APP_PATH" "$STAGE_DIR/CodeMoss.app"; then
+if ! copy_app_bundle "$APP_PATH" "$STAGE_DIR/ccgui.app"; then
   echo "Error: Failed to stage app bundle"
   exit 1
 fi
@@ -148,7 +148,7 @@ fi
 create_applications_alias "$STAGE_DIR"
 cp "$BG_IMAGE" "$STAGE_DIR/.background/background.png"
 
-TEMP_DMG="$(mktemp /tmp/mossx-dmg-XXXXXX).dmg"
+TEMP_DMG="$(mktemp /tmp/ccgui-dmg-XXXXXX).dmg"
 rm -f "$TEMP_DMG"
 
 echo "Creating writable DMG image..."
@@ -192,7 +192,7 @@ tell application "Finder"
     set text size of theViewOptions to 12
     set background picture of theViewOptions to file ".background:background.png"
 
-    set position of item "CodeMoss.app" of container window to {180, 170}
+    set position of item "ccgui.app" of container window to {180, 170}
     set position of item "Applications" of container window to {480, 170}
 
     close

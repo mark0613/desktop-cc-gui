@@ -4,8 +4,8 @@ export type PromptCreationRequest = {
   scope: PromptCreationScope;
 };
 
-const CUSTOM_PROMPTS_CHANGED_EVENT = "mossx:custom-prompts-changed";
-const PROMPT_CREATION_REQUEST_EVENT = "mossx:prompt-creation-request";
+const CUSTOM_PROMPTS_CHANGED_EVENT = "ccgui:custom-prompts-changed";
+const PROMPT_CREATION_REQUEST_EVENT = "ccgui:prompt-creation-request";
 
 let pendingPromptCreationRequest: PromptCreationRequest | null = null;
 

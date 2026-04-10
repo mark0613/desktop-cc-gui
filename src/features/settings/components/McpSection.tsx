@@ -308,7 +308,7 @@ export function McpSection({ activeWorkspace, activeEngine }: McpSectionProps) {
             globalServers.map((server) => {
               const sourceLabel = server.source === "claude_json"
                 ? t("settings.mcpPanel.sourceClaude")
-                : t("settings.mcpPanel.sourceCodemoss");
+                : t("settings.mcpPanel.sourceCcgui");
               const targetLabel = server.command
                 ? t("settings.mcpPanel.commandMeta", {
                     command: server.command,

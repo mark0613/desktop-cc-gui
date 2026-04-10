@@ -58,7 +58,7 @@ import {
 // Re-export the handle type for Composer to use
 export type { ChatInputBoxHandle };
 
-const STREAMING_ENABLED_STORAGE_KEY = 'mossx.composer.streaming-enabled';
+const STREAMING_ENABLED_STORAGE_KEY = 'ccgui.composer.streaming-enabled';
 const MESSAGE_QUEUE_PREVIEW_LIMIT = 120;
 const LOCAL_SETTINGS_PROVIDER_ID = '__local_settings_json__';
 const DEFAULT_CLAUDE_MODEL_ID = 'claude-sonnet-4-6';

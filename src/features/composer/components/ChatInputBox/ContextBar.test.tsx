@@ -9,8 +9,8 @@ describe("ContextBar live canvas controls visibility", () => {
   });
 
   beforeEach(() => {
-    window.localStorage.removeItem("mossx.messages.live.autoFollow");
-    window.localStorage.removeItem("mossx.messages.live.collapseMiddleSteps");
+    window.localStorage.removeItem("ccgui.messages.live.autoFollow");
+    window.localStorage.removeItem("ccgui.messages.live.collapseMiddleSteps");
   });
 
   it("shows output collapse controls in history mode when there are messages", () => {

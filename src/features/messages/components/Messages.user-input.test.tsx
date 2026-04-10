@@ -10,9 +10,9 @@ describe("Messages user input parsing", () => {
   });
 
   beforeEach(() => {
-    window.localStorage.setItem("mossx.claude.hideReasoningModule", "0");
-    window.localStorage.removeItem("mossx.messages.live.autoFollow");
-    window.localStorage.removeItem("mossx.messages.live.collapseMiddleSteps");
+    window.localStorage.setItem("ccgui.claude.hideReasoningModule", "0");
+    window.localStorage.removeItem("ccgui.messages.live.autoFollow");
+    window.localStorage.removeItem("ccgui.messages.live.collapseMiddleSteps");
   });
 
   beforeAll(() => {
@@ -28,7 +28,7 @@ describe("Messages user input parsing", () => {
         kind: "message",
         role: "user",
         text:
-          "[System] 你是 MossX 内的 Claude Code Agent。 [Skill Prompt] # Skill: tr-zh-en-jp 技能说明... [Commons Prompt] 规范... [User Input] 你好啊",
+          "[System] 你是 ccgui 内的 Claude Code Agent。 [Skill Prompt] # Skill: tr-zh-en-jp 技能说明... [Commons Prompt] 规范... [User Input] 你好啊",
       },
     ];
 
@@ -257,7 +257,7 @@ describe("Messages user input parsing", () => {
         kind: "message",
         role: "user",
         text:
-          "[System] 你是 MossX 内的 Claude Code Agent。\n" +
+          "[System] 你是 ccgui 内的 Claude Code Agent。\n" +
           "[Skill Prompt] # Skill: tr-zh-en-jp\n" +
           "[Commons Prompt] 规范...\n" +
           `[User Input] ${multilineInput}`,

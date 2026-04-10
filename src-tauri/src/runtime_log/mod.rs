@@ -409,58 +409,58 @@ fn build_detected_run_script(launcher: &RuntimeLaunchCommand) -> String {
         format!("{} {}", launcher.program, launcher.args.join(" "))
     };
     let mut lines = vec![
-        "CODEMOSS_RUN_EXIT_CODE=0".to_string(),
+        "CCGUI_RUN_EXIT_CODE=0".to_string(),
         "if ! command -v java >/dev/null 2>&1; then".to_string(),
-        "  echo \"[CodeMoss Run] Java not found. Install JDK and ensure java is on PATH.\""
+        "  echo \"[ccgui Run] Java not found. Install JDK and ensure java is on PATH.\""
             .to_string(),
-        "  CODEMOSS_RUN_EXIT_CODE=127".to_string(),
+        "  CCGUI_RUN_EXIT_CODE=127".to_string(),
         "else".to_string(),
     ];
 
     match launcher.kind {
         RuntimeLauncherKind::MavenWrapper => {
             lines.push("  if [ ! -x \"./mvnw\" ]; then".to_string());
-            lines.push("    echo \"[CodeMoss Run] ./mvnw is missing execute permission. Run: chmod +x ./mvnw\"".to_string());
-            lines.push("    CODEMOSS_RUN_EXIT_CODE=126".to_string());
+            lines.push("    echo \"[ccgui Run] ./mvnw is missing execute permission. Run: chmod +x ./mvnw\"".to_string());
+            lines.push("    CCGUI_RUN_EXIT_CODE=126".to_string());
             lines.push("  else".to_string());
-            lines.push(format!("    echo \"[CodeMoss Run] Using: {joined}\""));
+            lines.push(format!("    echo \"[ccgui Run] Using: {joined}\""));
             lines.push(format!("    {joined}"));
-            lines.push("    CODEMOSS_RUN_EXIT_CODE=$?".to_string());
+            lines.push("    CCGUI_RUN_EXIT_CODE=$?".to_string());
             lines.push("  fi".to_string());
         }
         RuntimeLauncherKind::MavenSystem => {
             lines.push("  if ! command -v mvn >/dev/null 2>&1; then".to_string());
-            lines.push("    echo \"[CodeMoss Run] Maven not found. Install Maven or add ./mvnw to project root.\"".to_string());
-            lines.push("    CODEMOSS_RUN_EXIT_CODE=127".to_string());
+            lines.push("    echo \"[ccgui Run] Maven not found. Install Maven or add ./mvnw to project root.\"".to_string());
+            lines.push("    CCGUI_RUN_EXIT_CODE=127".to_string());
             lines.push("  else".to_string());
-            lines.push(format!("    echo \"[CodeMoss Run] Using: {joined}\""));
+            lines.push(format!("    echo \"[ccgui Run] Using: {joined}\""));
             lines.push(format!("    {joined}"));
-            lines.push("    CODEMOSS_RUN_EXIT_CODE=$?".to_string());
+            lines.push("    CCGUI_RUN_EXIT_CODE=$?".to_string());
             lines.push("  fi".to_string());
         }
         RuntimeLauncherKind::GradleWrapper => {
             lines.push("  if [ ! -x \"./gradlew\" ]; then".to_string());
-            lines.push("    echo \"[CodeMoss Run] ./gradlew is missing execute permission. Run: chmod +x ./gradlew\"".to_string());
-            lines.push("    CODEMOSS_RUN_EXIT_CODE=126".to_string());
+            lines.push("    echo \"[ccgui Run] ./gradlew is missing execute permission. Run: chmod +x ./gradlew\"".to_string());
+            lines.push("    CCGUI_RUN_EXIT_CODE=126".to_string());
             lines.push("  else".to_string());
-            lines.push(format!("    echo \"[CodeMoss Run] Using: {joined}\""));
+            lines.push(format!("    echo \"[ccgui Run] Using: {joined}\""));
             lines.push(format!("    {joined}"));
-            lines.push("    CODEMOSS_RUN_EXIT_CODE=$?".to_string());
+            lines.push("    CCGUI_RUN_EXIT_CODE=$?".to_string());
             lines.push("  fi".to_string());
         }
         RuntimeLauncherKind::GradleSystem => {
             lines.push("  if ! command -v gradle >/dev/null 2>&1; then".to_string());
-            lines.push("    echo \"[CodeMoss Run] Gradle not found. Install Gradle or add ./gradlew to project root.\"".to_string());
-            lines.push("    CODEMOSS_RUN_EXIT_CODE=127".to_string());
+            lines.push("    echo \"[ccgui Run] Gradle not found. Install Gradle or add ./gradlew to project root.\"".to_string());
+            lines.push("    CCGUI_RUN_EXIT_CODE=127".to_string());
             lines.push("  else".to_string());
-            lines.push(format!("    echo \"[CodeMoss Run] Using: {joined}\""));
+            lines.push(format!("    echo \"[ccgui Run] Using: {joined}\""));
             lines.push(format!("    {joined}"));
-            lines.push("    CODEMOSS_RUN_EXIT_CODE=$?".to_string());
+            lines.push("    CCGUI_RUN_EXIT_CODE=$?".to_string());
             lines.push("  fi".to_string());
         }
     }
     lines.push("fi".to_string());
-    lines.push("echo \"[CodeMoss Run] __EXIT__:${CODEMOSS_RUN_EXIT_CODE}\"".to_string());
+    lines.push("echo \"[ccgui Run] __EXIT__:${CCGUI_RUN_EXIT_CODE}\"".to_string());
 
     lines.join("\n")
 }
@@ -475,11 +475,11 @@ fn build_detected_run_script(launcher: &RuntimeLaunchCommand) -> String {
     let mut lines = vec![
         "@echo off".to_string(),
         "setlocal EnableExtensions EnableDelayedExpansion".to_string(),
-        "set \"CODEMOSS_RUN_EXIT_CODE=0\"".to_string(),
+        "set \"CCGUI_RUN_EXIT_CODE=0\"".to_string(),
         "where java >nul 2>&1".to_string(),
         "if errorlevel 1 (".to_string(),
-        "  echo [CodeMoss Run] Java not found. Install JDK and ensure java is on PATH.".to_string(),
-        "  set \"CODEMOSS_RUN_EXIT_CODE=127\"".to_string(),
+        "  echo [ccgui Run] Java not found. Install JDK and ensure java is on PATH.".to_string(),
+        "  set \"CCGUI_RUN_EXIT_CODE=127\"".to_string(),
         ") else (".to_string(),
     ];
 
@@ -487,54 +487,54 @@ fn build_detected_run_script(launcher: &RuntimeLaunchCommand) -> String {
         RuntimeLauncherKind::MavenWrapper => {
             lines.push(format!("  if not exist \"{}\" (", launcher.program));
             lines.push(format!(
-                "    echo [CodeMoss Run] {} not found in project root.",
+                "    echo [ccgui Run] {} not found in project root.",
                 launcher.program
             ));
-            lines.push("    set \"CODEMOSS_RUN_EXIT_CODE=126\"".to_string());
+            lines.push("    set \"CCGUI_RUN_EXIT_CODE=126\"".to_string());
             lines.push("  ) else (".to_string());
-            lines.push(format!("    echo [CodeMoss Run] Using: {joined}"));
+            lines.push(format!("    echo [ccgui Run] Using: {joined}"));
             lines.push(format!("    call {joined}"));
-            lines.push("    set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
+            lines.push("    set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
             lines.push("  )".to_string());
         }
         RuntimeLauncherKind::MavenSystem => {
             lines.push("  where mvn >nul 2>&1".to_string());
             lines.push("  if errorlevel 1 (".to_string());
-            lines.push("    echo [CodeMoss Run] Maven not found. Install Maven or add mvnw.cmd to project root.".to_string());
-            lines.push("    set \"CODEMOSS_RUN_EXIT_CODE=127\"".to_string());
+            lines.push("    echo [ccgui Run] Maven not found. Install Maven or add mvnw.cmd to project root.".to_string());
+            lines.push("    set \"CCGUI_RUN_EXIT_CODE=127\"".to_string());
             lines.push("  ) else (".to_string());
-            lines.push(format!("    echo [CodeMoss Run] Using: {joined}"));
+            lines.push(format!("    echo [ccgui Run] Using: {joined}"));
             lines.push(format!("    call {joined}"));
-            lines.push("    set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
+            lines.push("    set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
             lines.push("  )".to_string());
         }
         RuntimeLauncherKind::GradleWrapper => {
             lines.push(format!("  if not exist \"{}\" (", launcher.program));
             lines.push(format!(
-                "    echo [CodeMoss Run] {} not found in project root.",
+                "    echo [ccgui Run] {} not found in project root.",
                 launcher.program
             ));
-            lines.push("    set \"CODEMOSS_RUN_EXIT_CODE=126\"".to_string());
+            lines.push("    set \"CCGUI_RUN_EXIT_CODE=126\"".to_string());
             lines.push("  ) else (".to_string());
-            lines.push(format!("    echo [CodeMoss Run] Using: {joined}"));
+            lines.push(format!("    echo [ccgui Run] Using: {joined}"));
             lines.push(format!("    call {joined}"));
-            lines.push("    set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
+            lines.push("    set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
             lines.push("  )".to_string());
         }
         RuntimeLauncherKind::GradleSystem => {
             lines.push("  where gradle >nul 2>&1".to_string());
             lines.push("  if errorlevel 1 (".to_string());
-            lines.push("    echo [CodeMoss Run] Gradle not found. Install Gradle or add gradlew.bat to project root.".to_string());
-            lines.push("    set \"CODEMOSS_RUN_EXIT_CODE=127\"".to_string());
+            lines.push("    echo [ccgui Run] Gradle not found. Install Gradle or add gradlew.bat to project root.".to_string());
+            lines.push("    set \"CCGUI_RUN_EXIT_CODE=127\"".to_string());
             lines.push("  ) else (".to_string());
-            lines.push(format!("    echo [CodeMoss Run] Using: {joined}"));
+            lines.push(format!("    echo [ccgui Run] Using: {joined}"));
             lines.push(format!("    call {joined}"));
-            lines.push("    set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
+            lines.push("    set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
             lines.push("  )".to_string());
         }
     }
     lines.push(")".to_string());
-    lines.push("echo [CodeMoss Run] __EXIT__:!CODEMOSS_RUN_EXIT_CODE!".to_string());
+    lines.push("echo [ccgui Run] __EXIT__:!CCGUI_RUN_EXIT_CODE!".to_string());
     lines.join("\r\n")
 }
 
@@ -545,29 +545,29 @@ fn build_shell_run_script(
     dependency_program: Option<&str>,
     dependency_hint: Option<&str>,
 ) -> String {
-    let mut lines = vec!["CODEMOSS_RUN_EXIT_CODE=0".to_string()];
+    let mut lines = vec!["CCGUI_RUN_EXIT_CODE=0".to_string()];
     if let Some(program) = dependency_program {
         lines.push(format!("if ! command -v {program} >/dev/null 2>&1; then"));
         lines.push(format!(
-            "  echo \"[CodeMoss Run] {}\"",
+            "  echo \"[ccgui Run] {}\"",
             dependency_hint.unwrap_or("Required command is not available on PATH.")
         ));
-        lines.push("  CODEMOSS_RUN_EXIT_CODE=127".to_string());
+        lines.push("  CCGUI_RUN_EXIT_CODE=127".to_string());
         lines.push("else".to_string());
         lines.push(format!(
-            "  echo \"[CodeMoss Run] Using {source_label}: {command}\""
+            "  echo \"[ccgui Run] Using {source_label}: {command}\""
         ));
         lines.push(format!("  {command}"));
-        lines.push("  CODEMOSS_RUN_EXIT_CODE=$?".to_string());
+        lines.push("  CCGUI_RUN_EXIT_CODE=$?".to_string());
         lines.push("fi".to_string());
     } else {
         lines.push(format!(
-            "echo \"[CodeMoss Run] Using {source_label}: {command}\""
+            "echo \"[ccgui Run] Using {source_label}: {command}\""
         ));
         lines.push(command.to_string());
-        lines.push("CODEMOSS_RUN_EXIT_CODE=$?".to_string());
+        lines.push("CCGUI_RUN_EXIT_CODE=$?".to_string());
     }
-    lines.push("echo \"[CodeMoss Run] __EXIT__:${CODEMOSS_RUN_EXIT_CODE}\"".to_string());
+    lines.push("echo \"[ccgui Run] __EXIT__:${CCGUI_RUN_EXIT_CODE}\"".to_string());
     lines.join("\n")
 }
 
@@ -586,31 +586,31 @@ fn build_shell_run_script(
     let mut lines = vec![
         "@echo off".to_string(),
         "setlocal EnableExtensions EnableDelayedExpansion".to_string(),
-        "set \"CODEMOSS_RUN_EXIT_CODE=0\"".to_string(),
+        "set \"CCGUI_RUN_EXIT_CODE=0\"".to_string(),
     ];
     if let Some(program) = dependency_program {
         lines.push(format!("where {program} >nul 2>&1"));
         lines.push("if errorlevel 1 (".to_string());
         lines.push(format!(
-            "  echo [CodeMoss Run] {}",
+            "  echo [ccgui Run] {}",
             dependency_hint.unwrap_or("Required command is not available on PATH.")
         ));
-        lines.push("  set \"CODEMOSS_RUN_EXIT_CODE=127\"".to_string());
+        lines.push("  set \"CCGUI_RUN_EXIT_CODE=127\"".to_string());
         lines.push(") else (".to_string());
         lines.push(format!(
-            "  echo [CodeMoss Run] Using {source_label}: {command}"
+            "  echo [ccgui Run] Using {source_label}: {command}"
         ));
         lines.push(format!("  {command}"));
-        lines.push("  set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
+        lines.push("  set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
         lines.push(")".to_string());
     } else {
         lines.push(format!(
-            "echo [CodeMoss Run] Using {source_label}: {command}"
+            "echo [ccgui Run] Using {source_label}: {command}"
         ));
         lines.push(command.to_string());
-        lines.push("set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
+        lines.push("set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string());
     }
-    lines.push("echo [CodeMoss Run] __EXIT__:!CODEMOSS_RUN_EXIT_CODE!".to_string());
+    lines.push("echo [ccgui Run] __EXIT__:!CCGUI_RUN_EXIT_CODE!".to_string());
     lines.join("\r\n")
 }
 
@@ -658,20 +658,20 @@ fn build_python_profile_script(command: &str) -> String {
         args
     };
     [
-        "CODEMOSS_RUN_EXIT_CODE=0".to_string(),
+        "CCGUI_RUN_EXIT_CODE=0".to_string(),
         "if command -v python3 >/dev/null 2>&1; then".to_string(),
-        format!("  echo \"[CodeMoss Run] Using detected runtime profile: python3 {executable_args}\""),
+        format!("  echo \"[ccgui Run] Using detected runtime profile: python3 {executable_args}\""),
         format!("  python3 {executable_args}"),
-        "  CODEMOSS_RUN_EXIT_CODE=$?".to_string(),
+        "  CCGUI_RUN_EXIT_CODE=$?".to_string(),
         "elif command -v python >/dev/null 2>&1; then".to_string(),
-        format!("  echo \"[CodeMoss Run] Using detected runtime profile: python {executable_args}\""),
+        format!("  echo \"[ccgui Run] Using detected runtime profile: python {executable_args}\""),
         format!("  python {executable_args}"),
-        "  CODEMOSS_RUN_EXIT_CODE=$?".to_string(),
+        "  CCGUI_RUN_EXIT_CODE=$?".to_string(),
         "else".to_string(),
-        "  echo \"[CodeMoss Run] Python not found. Install Python and ensure `python` or `python3` is available on PATH.\"".to_string(),
-        "  CODEMOSS_RUN_EXIT_CODE=127".to_string(),
+        "  echo \"[ccgui Run] Python not found. Install Python and ensure `python` or `python3` is available on PATH.\"".to_string(),
+        "  CCGUI_RUN_EXIT_CODE=127".to_string(),
         "fi".to_string(),
-        "echo \"[CodeMoss Run] __EXIT__:${CODEMOSS_RUN_EXIT_CODE}\"".to_string(),
+        "echo \"[ccgui Run] __EXIT__:${CCGUI_RUN_EXIT_CODE}\"".to_string(),
     ]
     .join("\n")
 }
@@ -687,24 +687,24 @@ fn build_python_profile_script(command: &str) -> String {
     [
         "@echo off".to_string(),
         "setlocal EnableExtensions EnableDelayedExpansion".to_string(),
-        "set \"CODEMOSS_RUN_EXIT_CODE=0\"".to_string(),
+        "set \"CCGUI_RUN_EXIT_CODE=0\"".to_string(),
         "where py >nul 2>&1".to_string(),
         "if not errorlevel 1 (".to_string(),
-        format!("  echo [CodeMoss Run] Using detected runtime profile: py -3 {executable_args}"),
+        format!("  echo [ccgui Run] Using detected runtime profile: py -3 {executable_args}"),
         format!("  call py -3 {executable_args}"),
-        "  set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string(),
+        "  set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string(),
         ") else (".to_string(),
         "  where python >nul 2>&1".to_string(),
         "  if errorlevel 1 (".to_string(),
-        "    echo [CodeMoss Run] Python not found. Install Python and ensure `py` or `python` is available on PATH.".to_string(),
-        "    set \"CODEMOSS_RUN_EXIT_CODE=127\"".to_string(),
+        "    echo [ccgui Run] Python not found. Install Python and ensure `py` or `python` is available on PATH.".to_string(),
+        "    set \"CCGUI_RUN_EXIT_CODE=127\"".to_string(),
         "  ) else (".to_string(),
-        format!("    echo [CodeMoss Run] Using detected runtime profile: python {executable_args}"),
+        format!("    echo [ccgui Run] Using detected runtime profile: python {executable_args}"),
         format!("    call python {executable_args}"),
-        "    set \"CODEMOSS_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string(),
+        "    set \"CCGUI_RUN_EXIT_CODE=!ERRORLEVEL!\"".to_string(),
         "  )".to_string(),
         ")".to_string(),
-        "echo [CodeMoss Run] __EXIT__:!CODEMOSS_RUN_EXIT_CODE!".to_string(),
+        "echo [ccgui Run] __EXIT__:!CCGUI_RUN_EXIT_CODE!".to_string(),
     ]
     .join("\r\n")
 }

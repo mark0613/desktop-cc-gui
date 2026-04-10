@@ -85,8 +85,8 @@ describe("realtime replay harness", () => {
     const previousWindow = globalWithWindow.window;
     globalWithWindow.window = { localStorage };
     try {
-      localStorage.setItem("mossx.perf.reducerNoopGuard", "1");
-      localStorage.setItem("mossx.perf.incrementalDerivation", "0");
+      localStorage.setItem("ccgui.perf.reducerNoopGuard", "1");
+      localStorage.setItem("ccgui.perf.incrementalDerivation", "0");
 
       const events = buildThreeThreadReplayEventsForMinutes(1);
       await runReplayProfile({
@@ -95,9 +95,9 @@ describe("realtime replay harness", () => {
         batchWindowMs: REALTIME_REPLAY_BATCH_WINDOW_MS,
       });
 
-      expect(localStorage.getItem("mossx.perf.reducerNoopGuard")).toBe("1");
-      expect(localStorage.getItem("mossx.perf.incrementalDerivation")).toBe("0");
-      expect(localStorage.getItem("mossx.perf.debugLightPath")).toBeNull();
+      expect(localStorage.getItem("ccgui.perf.reducerNoopGuard")).toBe("1");
+      expect(localStorage.getItem("ccgui.perf.incrementalDerivation")).toBe("0");
+      expect(localStorage.getItem("ccgui.perf.debugLightPath")).toBeNull();
     } finally {
       globalWithWindow.window = previousWindow;
     }

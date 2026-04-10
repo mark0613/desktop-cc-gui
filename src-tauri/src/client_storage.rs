@@ -6,6 +6,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
+use crate::app_paths;
+
 const ALLOWED_STORES: &[&str] = &["layout", "composer", "threads", "app", "leida"];
 const PANEL_LOCK_PASSWORD_FILENAME: &str = "pwd.txt";
 const CLIENT_STORE_LOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -13,8 +15,7 @@ const CLIENT_STORE_LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 const CLIENT_STORE_LOCK_STALE_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn client_storage_dir() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or("Unable to resolve home directory")?;
-    Ok(home.join(".codemoss").join("client"))
+    app_paths::client_storage_dir()
 }
 
 fn validate_store_name(store: &str) -> Result<(), String> {

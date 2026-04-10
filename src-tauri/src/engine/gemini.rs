@@ -14,6 +14,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, Mutex, RwLock};
 
+use crate::app_paths;
 use super::events::EngineEvent;
 use super::gemini_history::{load_gemini_session, GeminiSessionMessage};
 use super::gemini_proxy_guard::apply_dead_loopback_proxy_guard;
@@ -652,10 +653,9 @@ impl GeminiSession {
 
     fn load_vendor_runtime_config() -> GeminiVendorRuntimeConfig {
         let mut result = GeminiVendorRuntimeConfig::default();
-        let Some(home) = dirs::home_dir() else {
+        let Ok(config_path) = app_paths::config_file_path() else {
             return result;
         };
-        let config_path = home.join(".codemoss").join("config.json");
         let Ok(content) = std::fs::read_to_string(config_path) else {
             return result;
         };

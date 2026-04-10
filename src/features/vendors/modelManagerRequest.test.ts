@@ -35,7 +35,7 @@ describe("modelManagerRequest", () => {
 
   it("defaults target to claude for unsupported payload", () => {
     window.sessionStorage.setItem(
-      "mossx.vendor.model-manager-request",
+      "ccgui.vendor.model-manager-request",
       JSON.stringify({ target: "other", addMode: 0 }),
     );
 

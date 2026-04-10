@@ -2313,7 +2313,7 @@ export function SettingsView({
             {activeSection === "community" && (
               <section className="settings-section settings-about-section">
                 <div className="settings-about-name">
-                  MossX
+                  ccgui
                   {appVersion && (
                     <span className="settings-about-version">{appVersion}</span>
                   )}
@@ -2325,7 +2325,7 @@ export function SettingsView({
                   <button
                     type="button"
                     className="ghost"
-                    onClick={() => void openUrl("https://github.com/zhukunpenglinyutong/mossx")}
+                    onClick={() => void openUrl("https://github.com/zhukunpenglinyutong/ccgui")}
                   >
                     {t("about.github")}
                   </button>

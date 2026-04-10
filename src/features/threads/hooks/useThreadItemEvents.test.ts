@@ -81,7 +81,7 @@ describe("useThreadItemEvents", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    window.localStorage.removeItem("mossx.perf.realtimeBatching");
+    window.localStorage.removeItem("ccgui.perf.realtimeBatching");
     vi.mocked(buildConversationItem).mockReturnValue(convertedItem);
   });
 
@@ -461,7 +461,7 @@ describe("useThreadItemEvents", () => {
 
   it("bypasses realtime batching for gemini agent deltas", () => {
     vi.useFakeTimers();
-    window.localStorage.setItem("mossx.perf.realtimeBatching", "1");
+    window.localStorage.setItem("ccgui.perf.realtimeBatching", "1");
     const { result, dispatch, markProcessing, safeMessageActivity } = makeOptions();
 
     act(() => {
@@ -615,7 +615,7 @@ describe("useThreadItemEvents", () => {
 
   it("batches realtime deltas in one flush window while preserving operation order", () => {
     vi.useFakeTimers();
-    window.localStorage.setItem("mossx.perf.realtimeBatching", "1");
+    window.localStorage.setItem("ccgui.perf.realtimeBatching", "1");
     const { result, dispatch, markProcessing, safeMessageActivity } = makeOptions();
 
     act(() => {
@@ -684,7 +684,7 @@ describe("useThreadItemEvents", () => {
 
   it("flushes buffered realtime deltas on unmount so the last batch is not dropped", () => {
     vi.useFakeTimers();
-    window.localStorage.setItem("mossx.perf.realtimeBatching", "1");
+    window.localStorage.setItem("ccgui.perf.realtimeBatching", "1");
     const { result, dispatch, markProcessing, safeMessageActivity, unmount } = makeOptions();
 
     act(() => {

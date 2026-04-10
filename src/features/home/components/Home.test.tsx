@@ -8,7 +8,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => {
       const translations: Record<string, string> = {
-        "app.title": "MossX",
+        "app.title": "ccgui",
         "app.subtitle": "Your AI coding companion",
         "home.welcome": "Welcome",
         "home.subtitle": "What would you like to build today?",
@@ -44,7 +44,7 @@ describe("Home", () => {
           {
             message: "Ship the dashboard refresh",
             timestamp: Date.now(),
-            projectName: "MossX",
+            projectName: "ccgui",
             groupName: "Frontend",
             workspaceId: "workspace-1",
             threadId: "thread-1",
@@ -57,7 +57,7 @@ describe("Home", () => {
 
     expect(screen.getByText("Recent Conversations")).toBeTruthy();
     expect(screen.getByText("Frontend")).toBeTruthy();
-    const projectName = screen.getByText("MossX", { selector: ".home-recent-project" });
+    const projectName = screen.getByText("ccgui", { selector: ".home-recent-project" });
     expect(projectName).toBeTruthy();
     const message = screen.getByText("Ship the dashboard refresh");
     const card = message.closest("button");

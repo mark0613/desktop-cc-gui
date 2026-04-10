@@ -242,9 +242,9 @@ const AGENT_PROMPT_NAME_LINE_REGEX =
   /^(?:agent\s*name|selected\s*agent|智能体(?:名称|标题)?|agent)\s*[:：]\s*(.+)$/i;
 const AGENT_PROMPT_ICON_LINE_REGEX =
   /^(?:agent\s*icon|selected\s*agent\s*icon|智能体图标|agent\s*icon\s*id)\s*[:：]\s*(.+)$/i;
-const MESSAGES_PERF_DEBUG_FLAG_KEY = "mossx.debug.messages.perf";
-const CLAUDE_HIDE_REASONING_MODULE_FLAG_KEY = "mossx.claude.hideReasoningModule";
-const CLAUDE_RENDER_DEBUG_FLAG_KEY = "mossx.debug.claude.render";
+const MESSAGES_PERF_DEBUG_FLAG_KEY = "ccgui.debug.messages.perf";
+const CLAUDE_HIDE_REASONING_MODULE_FLAG_KEY = "ccgui.claude.hideReasoningModule";
+const CLAUDE_RENDER_DEBUG_FLAG_KEY = "ccgui.debug.claude.render";
 
 type MessageConversationItem = Extract<ConversationItem, { kind: "message" }>;
 type ReasoningConversationItem = Extract<ConversationItem, { kind: "reasoning" }>;

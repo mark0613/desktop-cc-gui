@@ -24,7 +24,7 @@ export interface HistoryItem {
 
 /**
  * Keep the stored history bounded to avoid unbounded localStorage growth.
- * Note: The actual limit is 200 in the backend (.codemoss)
+ * Note: The actual limit is 200 in the backend (.ccgui)
  */
 const MAX_HISTORY_ITEMS = 200;
 const INVISIBLE_CHARS_RE = /[\u200B-\u200D\uFEFF]/g;
@@ -137,7 +137,7 @@ export function loadHistory(): string[] {
 
 /**
  * Delete a specific history item
- * Dual-write: localStorage + .codemoss
+ * Dual-write: localStorage + .ccgui
  */
 export function deleteHistoryItem(item: string): void {
   // Write to localStorage (sync)
@@ -161,13 +161,13 @@ export function deleteHistoryItem(item: string): void {
     }
   }
 
-  // Also sync to .codemoss (async)
+  // Also sync to .ccgui (async)
   sendToJava('delete_input_history_item', item);
 }
 
 /**
  * Clear all history items
- * Dual-write: localStorage + .codemoss
+ * Dual-write: localStorage + .ccgui
  */
 export function clearAllHistory(): void {
   // Write to localStorage (sync)
@@ -181,7 +181,7 @@ export function clearAllHistory(): void {
     }
   }
 
-  // Also sync to .codemoss (async)
+  // Also sync to .ccgui (async)
   sendToJava('clear_input_history', {});
 }
 
@@ -429,7 +429,7 @@ export function useInputHistory({
     historyIndexRef.current = -1;
     draftRef.current = '';
 
-    // Also sync to .codemoss (async)
+    // Also sync to .ccgui (async)
     sendToJava('record_input_history', JSON.stringify(fragments));
   }, []);
 

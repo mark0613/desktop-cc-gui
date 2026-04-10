@@ -974,7 +974,7 @@ describe("FileTreePanel run action isolation", () => {
     fireEvent.dragStart(pkg, { dataTransfer });
 
     const payloadJson = setData.mock.calls.find(
-      (call) => call[0] === "application/x-codemoss-file-paths",
+      (call) => call[0] === "application/x-ccgui-file-paths",
     )?.[1];
     const payloadText = setData.mock.calls.find(
       (call) => call[0] === "text/plain",

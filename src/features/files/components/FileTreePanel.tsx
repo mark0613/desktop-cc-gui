@@ -1744,7 +1744,7 @@ export function FileTreePanel({
               }
               const encodedPaths = JSON.stringify(absolutePaths);
               event.dataTransfer.effectAllowed = "copy";
-              event.dataTransfer.setData("application/x-codemoss-file-paths", encodedPaths);
+              event.dataTransfer.setData("application/x-ccgui-file-paths", encodedPaths);
               event.dataTransfer.setData("text/plain", absolutePaths.join("\n"));
             }}
             onDrag={(event: DragEvent<HTMLButtonElement>) => {

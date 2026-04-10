@@ -7,4 +7,4 @@ export const KANBAN_COLUMNS: KanbanColumnDef[] = [
   { id: "done", labelKey: "kanban.columns.done", color: "#22c55e" },
 ];
 
-export const KANBAN_STORAGE_KEY = "mossx.kanban";
+export const KANBAN_STORAGE_KEY = "ccgui.kanban";

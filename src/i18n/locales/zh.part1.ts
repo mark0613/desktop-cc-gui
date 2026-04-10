@@ -41,7 +41,7 @@ const zhPart1 = {
 
   // 应用
   app: {
-    title: "MossX",
+    title: "ccgui",
     subtitle: "下一代 VibeCoding编辑器",
   },
 
@@ -207,7 +207,7 @@ const zhPart1 = {
 
   homeChat: {
     badge: "Workspace-aware chat home",
-    title: "MossX Agent，让你的工作更轻松",
+    title: "ccgui Agent，让你的工作更轻松",
     subtitle: "从项目开始，快速进入对话、执行、交付。",
     promptPlaceholder: "描述你的目标，例如：帮我为这个仓库生成一版发布说明，并附上风险检查。",
     pathResolving: "正在解析默认项目路径…",
@@ -430,7 +430,7 @@ const zhPart1 = {
     behaviorStreaming: "流式输出",
     behaviorStreamingDesc: "启用后响应将逐字显示。禁用则等待完整响应后一次性展示。",
     behaviorProxyTitle: "网络代理",
-    behaviorProxyDesc: "启用后，MossX 及其启动的联网子进程将优先使用该代理。",
+    behaviorProxyDesc: "启用后，ccgui 及其启动的联网子进程将优先使用该代理。",
     behaviorProxyEnabled: "启用网络代理",
     behaviorProxyEnabledDesc: "用于 Codex、OpenCode、Git 远程操作等联网链路。",
     behaviorProxyAddress: "代理地址",
@@ -526,7 +526,7 @@ const zhPart1 = {
       enabled: "已启用",
       disabled: "已禁用",
       sourceClaude: "来源：~/.claude.json",
-      sourceCodemoss: "来源：~/.codemoss/config.json",
+      sourceCcgui: "来源：~/.ccgui/config.json",
       commandMeta: "{{command}} · 参数 {{args}}",
       urlMeta: "URL: {{url}}",
       transportUnknown: "类型未知",
@@ -1013,7 +1013,7 @@ const zhPart1 = {
 
     // Codex 部分
     codexTitle: "Codex",
-    codexDescription: "配置 MossX 使用的 Codex CLI 并验证安装。",
+    codexDescription: "配置 ccgui 使用的 Codex CLI 并验证安装。",
     defaultCodexPath: "默认 Codex 路径",
     codexPlaceholder: "codex",
     usePath: "使用 PATH",
@@ -1053,7 +1053,7 @@ const zhPart1 = {
     remoteBackendToken: "令牌（可选）",
     remoteBackendHostAriaLabel: "远程后端主机",
     remoteBackendTokenAriaLabel: "远程后端令牌",
-    remoteBackendDesc: "单独启动守护进程并将 MossX 指向它（host:port + token）。",
+    remoteBackendDesc: "单独启动守护进程并将 ccgui 指向它（host:port + token）。",
     webServiceTitle: "Web 服务",
     webServiceDescription: "管理由 daemon 暴露的可浏览器访问 Web 服务。",
     webServicePort: "Web 端口",
@@ -1122,7 +1122,7 @@ const zhPart1 = {
     configure: "配置",
     agent: {
       title: "智能体",
-      description: "管理自定义智能体配置，数据与 Claude Code GUI 兼容（~/.codemoss/agent.json）。",
+      description: "管理自定义智能体配置，数据与 Claude Code GUI 兼容（~/.ccgui/agent.json）。",
       create: "创建",
       export: "导出",
       import: "导入",
@@ -2117,7 +2117,7 @@ const zhPart1 = {
     offlineStep1: "/plugin marketplace add thedotmack/claude-mem",
     offlineStep2: "/plugin install claude-mem",
     offlineStep3: "重启终端 Claude Code",
-    offlineStep4: "重启 CodeMoss 即可",
+    offlineStep4: "重启 ccgui 即可",
   },
 
   // 时间

@@ -1,5 +1,5 @@
 /**
- * Bridge adapter for codemoss (Tauri environment)
+ * Bridge adapter for ccgui (Tauri environment)
  * Replaces idea-claude's Java bridge with no-op implementations.
  * These functions will be connected to Tauri IPC in the future.
  */

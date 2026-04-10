@@ -37,6 +37,7 @@ use super::worktree::{
     unique_worktree_path_for_rename,
 };
 
+use crate::app_paths;
 use crate::backend::app_server::WorkspaceSession;
 use crate::codex::args::resolve_workspace_codex_args;
 use crate::codex::home::{resolve_default_codex_home, resolve_workspace_codex_home};
@@ -353,11 +354,7 @@ async fn allowed_image_preview_roots(
         roots.push(PathBuf::from(parent_path));
     }
     roots.push(app_data_dir_for_state(state)?.join("workspaces"));
-    if let Some(home_dir) = dirs::home_dir() {
-        roots.push(home_dir.join(".codemoss").join("workspace"));
-        roots.push(home_dir.join(".mossx").join("workspace"));
-        roots.push(home_dir.join(".moss-x").join("workspace"));
-    }
+    roots.extend(app_paths::workspace_root_candidates()?);
 
     let mut canonical_roots = roots
         .into_iter()
@@ -1929,7 +1926,7 @@ pub(crate) async fn open_workspace_in(
     ))
 }
 
-const DEFAULT_MACOS_APP_NAME: &str = "CodeMoss";
+const DEFAULT_MACOS_APP_NAME: &str = "ccgui";
 
 fn normalize_new_window_path(path: Option<String>) -> Option<String> {
     path.as_deref()
@@ -2183,7 +2180,7 @@ mod tests {
     #[test]
     fn build_macos_new_window_open_args_uses_workspace_path_when_provided() {
         let args = build_macos_new_window_open_args(
-            Some(Path::new("/Applications/CodeMoss.app")),
+            Some(Path::new("/Applications/ccgui.app")),
             Some("/tmp/project"),
         );
         assert_eq!(
@@ -2191,7 +2188,7 @@ mod tests {
             vec![
                 "-n".to_string(),
                 "-a".to_string(),
-                "/Applications/CodeMoss.app".to_string(),
+                "/Applications/ccgui.app".to_string(),
                 "/tmp/project".to_string(),
             ]
         );

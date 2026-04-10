@@ -84,7 +84,7 @@ function isThreadSessionMirrorEnabled() {
     return false;
   }
   try {
-    const value = window.localStorage.getItem("mossx.debug.threadSessionMirror");
+    const value = window.localStorage.getItem("ccgui.debug.threadSessionMirror");
     if (!value) {
       return false;
     }
@@ -145,7 +145,7 @@ export function useThreadEventHandlers({
   const isReasoningRawDebugEnabled = () => {
     if (import.meta.env?.DEV) {
       try {
-        const value = window.localStorage.getItem("mossx.debug.reasoning.raw");
+        const value = window.localStorage.getItem("ccgui.debug.reasoning.raw");
         if (!value) {
           return true;
         }
@@ -159,7 +159,7 @@ export function useThreadEventHandlers({
       return false;
     }
     try {
-      const value = window.localStorage.getItem("mossx.debug.reasoning.raw");
+      const value = window.localStorage.getItem("ccgui.debug.reasoning.raw");
       if (!value) {
         return false;
       }

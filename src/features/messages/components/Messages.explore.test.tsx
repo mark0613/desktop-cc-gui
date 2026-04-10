@@ -10,7 +10,7 @@ describe("Messages explore rows", () => {
   });
 
   beforeEach(() => {
-    window.localStorage.setItem("mossx.claude.hideReasoningModule", "0");
+    window.localStorage.setItem("ccgui.claude.hideReasoningModule", "0");
   });
 
   beforeAll(() => {

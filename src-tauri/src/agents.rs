@@ -4,6 +4,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::app_paths;
+
 const AGENT_EXPORT_FORMAT: &str = "claude-code-agents-export-v1";
 const MAX_IMPORT_FILE_SIZE_BYTES: u64 = 5 * 1024 * 1024;
 
@@ -109,8 +111,7 @@ fn now_millis() -> i64 {
 }
 
 fn agent_file_path() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
-    Ok(home.join(".codemoss").join("agent.json"))
+    app_paths::agent_file_path().map_err(|error| format!("Cannot determine agent path: {error}"))
 }
 
 fn read_agent_store() -> Result<AgentStore, String> {
@@ -136,7 +137,7 @@ fn write_agent_store(store: &AgentStore) -> Result<(), String> {
     let path = agent_file_path()?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create .codemoss directory: {}", e))?;
+            .map_err(|e| format!("Failed to create .ccgui directory: {}", e))?;
     }
     let content = serde_json::to_string(store)
         .map_err(|e| format!("Failed to serialize agent store: {}", e))?;

@@ -5,9 +5,9 @@ export interface VendorModelManagerRequest {
   addMode?: boolean;
 }
 
-const REQUEST_STORAGE_KEY = "mossx.vendor.model-manager-request";
+const REQUEST_STORAGE_KEY = "ccgui.vendor.model-manager-request";
 export const VENDOR_MODEL_MANAGER_REQUEST_EVENT =
-  "mossx:vendor-model-manager-request";
+  "ccgui:vendor-model-manager-request";
 
 export function requestVendorModelManager(
   request: VendorModelManagerRequest,

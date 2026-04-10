@@ -1,6 +1,6 @@
 /**
  * i18n re-export for ChatInputBox compatibility
- * Re-exports codemoss's i18n instance.
+ * Re-exports ccgui's i18n instance.
  */
 import i18n from '../../../i18n';
 

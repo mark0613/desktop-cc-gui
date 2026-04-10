@@ -1592,7 +1592,7 @@ go lang`,
         {
           type: "text",
           text:
-            "[System] 你是 MossX Agent。\n[Skill Prompt] tr-zh-en-jp\n[Commons Prompt] follow project rules\n[User Input] " +
+            "[System] 你是 ccgui Agent。\n[Skill Prompt] tr-zh-en-jp\n[Commons Prompt] follow project rules\n[User Input] " +
             rawInput,
         },
       ],

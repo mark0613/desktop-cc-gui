@@ -19,6 +19,7 @@ pub(crate) mod thread_mode_state;
 use self::args::resolve_workspace_codex_args;
 use self::home::resolve_workspace_codex_home;
 pub(crate) use crate::backend::app_server::WorkspaceSession;
+use crate::app_paths;
 use crate::backend::app_server::{
     build_codex_path_env, check_codex_installation, get_cli_debug_info, probe_codex_app_server,
     resolve_codex_launch_context, spawn_workspace_session as spawn_workspace_session_inner,
@@ -931,16 +932,16 @@ pub(crate) async fn list_global_mcp_servers() -> Result<Vec<GlobalMcpServerEntry
         }
     }
 
-    let codemoss_config_path = home.join(".codemoss").join("config.json");
-    if codemoss_config_path.exists() {
-        match read_json_file(&codemoss_config_path)
-            .and_then(|root| parse_mcp_entries_from_json_value(&root, "codemoss_config"))
+    let ccgui_config_path = app_paths::config_file_path()?;
+    if ccgui_config_path.exists() {
+        match read_json_file(&ccgui_config_path)
+            .and_then(|root| parse_mcp_entries_from_json_value(&root, "ccgui_config"))
         {
             Ok(entries) => return Ok(entries),
             Err(error) => {
                 log::warn!(
                     "[list_global_mcp_servers] Failed to parse {}: {}",
-                    codemoss_config_path.display(),
+                    ccgui_config_path.display(),
                     error
                 );
             }

@@ -10,9 +10,9 @@ describe("Messages", () => {
   });
 
   beforeEach(() => {
-    window.localStorage.setItem("mossx.claude.hideReasoningModule", "0");
-    window.localStorage.removeItem("mossx.messages.live.autoFollow");
-    window.localStorage.removeItem("mossx.messages.live.collapseMiddleSteps");
+    window.localStorage.setItem("ccgui.claude.hideReasoningModule", "0");
+    window.localStorage.removeItem("ccgui.messages.live.autoFollow");
+    window.localStorage.removeItem("ccgui.messages.live.collapseMiddleSteps");
   });
 
   beforeAll(() => {
@@ -148,7 +148,7 @@ describe("Messages", () => {
   });
 
   it("renders Claude reasoning inline by default when no legacy dock flag is set", () => {
-    window.localStorage.removeItem("mossx.claude.hideReasoningModule");
+    window.localStorage.removeItem("ccgui.claude.hideReasoningModule");
 
     const items: ConversationItem[] = [
       {
@@ -197,7 +197,7 @@ describe("Messages", () => {
   });
 
   it("keeps Claude reasoning title stable while streaming", () => {
-    window.localStorage.removeItem("mossx.claude.hideReasoningModule");
+    window.localStorage.removeItem("ccgui.claude.hideReasoningModule");
 
     const items: ConversationItem[] = [
       {
@@ -231,7 +231,7 @@ describe("Messages", () => {
   });
 
   it("keeps legacy Claude docked reasoning mode when the flag is explicitly enabled", () => {
-    window.localStorage.setItem("mossx.claude.hideReasoningModule", "1");
+    window.localStorage.setItem("ccgui.claude.hideReasoningModule", "1");
 
     const items: ConversationItem[] = [
       {
@@ -1825,7 +1825,7 @@ describe("Messages", () => {
         summary:
           "让我继续读取项目内规范文件和项目结构。现在我有了项目的概览信息。现在我对项目有了比较全面的了解。让我整理分析报告。",
         content:
-          "MossX 是一个基于 Tauri + React 的桌面应用，是 Cursor 的开源替代品，集成了多个 AI 编程引擎。现在我对项目有了比较全面的了解。让我整理分析报告。",
+          "ccgui 是一个基于 Tauri + React 的桌面应用，是 Cursor 的开源替代品，集成了多个 AI 编程引擎。现在我对项目有了比较全面的了解。让我整理分析报告。",
       },
     ];
 
@@ -2194,7 +2194,7 @@ describe("Messages", () => {
   });
 
   it("renders claude live reasoning at the bottom when dock mode is enabled", () => {
-    window.localStorage.setItem("mossx.claude.hideReasoningModule", "1");
+    window.localStorage.setItem("ccgui.claude.hideReasoningModule", "1");
     try {
       const items: ConversationItem[] = [
         {
@@ -2228,12 +2228,12 @@ describe("Messages", () => {
       expect(thinkingBlock?.textContent ?? "").toContain("先读取目录，再检查关键文件");
       expect(thinkingBlock?.nextElementSibling?.className ?? "").toContain("working");
     } finally {
-      window.localStorage.removeItem("mossx.claude.hideReasoningModule");
+      window.localStorage.removeItem("ccgui.claude.hideReasoningModule");
     }
   });
 
   it("keeps docked claude reasoning after turn completes and collapses it by default", () => {
-    window.localStorage.setItem("mossx.claude.hideReasoningModule", "1");
+    window.localStorage.setItem("ccgui.claude.hideReasoningModule", "1");
     try {
       const items: ConversationItem[] = [
         {
@@ -2293,7 +2293,7 @@ describe("Messages", () => {
       expect(reasoningDetails[0]?.getAttribute("style") ?? "").toContain("display: none");
       expect(reasoningDetails[1]?.getAttribute("style") ?? "").toContain("display: none");
     } finally {
-      window.localStorage.removeItem("mossx.claude.hideReasoningModule");
+      window.localStorage.removeItem("ccgui.claude.hideReasoningModule");
     }
   });
 

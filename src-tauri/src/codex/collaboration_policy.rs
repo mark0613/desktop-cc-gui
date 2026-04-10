@@ -2,7 +2,7 @@ use std::env;
 
 use serde_json::{json, Value};
 
-pub(crate) const COLLABORATION_POLICY_VERSION: &str = "mossx-collaboration-policy/v1";
+pub(crate) const COLLABORATION_POLICY_VERSION: &str = "ccgui-collaboration-policy/v1";
 
 const DEFAULT_EFFECTIVE_MODE: &str = "code";
 const COLLABORATION_PROFILE_ENV: &str = "MOSSX_CODEX_COLLABORATION_PROFILE";

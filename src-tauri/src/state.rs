@@ -5,6 +5,7 @@ use tauri::{AppHandle, Manager};
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 
+use crate::app_paths;
 use crate::dictation::DictationState;
 use crate::engine::EngineManager;
 use crate::shared::proxy_core;
@@ -36,6 +37,9 @@ impl AppState {
             .path()
             .app_data_dir()
             .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+        if let Err(error) = app_paths::prepare_app_data_dir(&data_dir) {
+            eprintln!("[storage] failed to prepare app data dir migration: {error}");
+        }
         let storage_path = data_dir.join("workspaces.json");
         let settings_path = data_dir.join("settings.json");
         let workspaces = read_workspaces(&storage_path).unwrap_or_default();

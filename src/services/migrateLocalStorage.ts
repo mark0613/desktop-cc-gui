@@ -1,6 +1,12 @@
 import { writeClientStoreData, getClientStoreFullSync } from "./clientStorage";
 
-const MIGRATION_FLAG = "mossx.clientStorageMigrated";
+const FILE_STORE_MIGRATION_FLAG = "ccgui.clientStorageMigrated";
+const PREFIX_MIGRATION_FLAG = "ccgui.localStoragePrefixMigrated";
+const LEGACY_FILE_STORE_MIGRATION_FLAGS = ["mossx.clientStorageMigrated"];
+const LEGACY_LOCAL_STORAGE_PREFIXES: ReadonlyArray<readonly [string, string]> = [
+  ["mossx.", "ccgui."],
+  ["codemoss:", "ccgui:"],
+];
 
 function readLocalNum(key: string): number | undefined {
   const raw = localStorage.getItem(key);
@@ -31,7 +37,7 @@ function readLocalString(key: string): string | undefined {
 }
 
 function collectPromptHistories(): Record<string, string[]> {
-  const prefix = "mossx.promptHistory.";
+  const prefix = "ccgui.promptHistory.";
   const result: Record<string, string[]> = {};
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -45,9 +51,58 @@ function collectPromptHistories(): Record<string, string[]> {
   return result;
 }
 
-export function migrateLocalStorageToFileStore(): void {
+function migrateLegacyLocalStoragePrefixes(): void {
   try {
-    if (localStorage.getItem(MIGRATION_FLAG) === "true") {
+    if (localStorage.getItem(PREFIX_MIGRATION_FLAG) === "true") {
+      return;
+    }
+  } catch {
+    return;
+  }
+
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) {
+      keys.push(key);
+    }
+  }
+
+  for (const key of keys) {
+    const raw = localStorage.getItem(key);
+    if (raw == null) {
+      continue;
+    }
+    for (const [legacyPrefix, nextPrefix] of LEGACY_LOCAL_STORAGE_PREFIXES) {
+      if (!key.startsWith(legacyPrefix)) {
+        continue;
+      }
+      const nextKey = `${nextPrefix}${key.slice(legacyPrefix.length)}`;
+      if (localStorage.getItem(nextKey) == null) {
+        localStorage.setItem(nextKey, raw);
+      }
+    }
+  }
+
+  try {
+    localStorage.setItem(PREFIX_MIGRATION_FLAG, "true");
+  } catch {
+    // best effort
+  }
+}
+
+function hasCompletedFileStoreMigration(): boolean {
+  if (localStorage.getItem(FILE_STORE_MIGRATION_FLAG) === "true") {
+    return true;
+  }
+  return LEGACY_FILE_STORE_MIGRATION_FLAGS.some((flag) => localStorage.getItem(flag) === "true");
+}
+
+export function migrateLocalStorageToFileStore(): void {
+  migrateLegacyLocalStoragePrefixes();
+
+  try {
+    if (hasCompletedFileStoreMigration()) {
       return;
     }
   } catch {
@@ -57,7 +112,7 @@ export function migrateLocalStorageToFileStore(): void {
   const existingLayout = getClientStoreFullSync("layout");
   if (existingLayout && Object.keys(existingLayout).length > 0) {
     try {
-      localStorage.setItem(MIGRATION_FLAG, "true");
+      localStorage.setItem(FILE_STORE_MIGRATION_FLAG, "true");
     } catch {
       // best effort
     }
@@ -67,27 +122,27 @@ export function migrateLocalStorageToFileStore(): void {
   // --- layout ---
   const layout: Record<string, unknown> = {};
   const layoutNumKeys: [string, string][] = [
-    ["mossx.sidebarWidth", "sidebarWidth"],
-    ["mossx.rightPanelWidth", "rightPanelWidth"],
-    ["mossx.planPanelHeight", "planPanelHeight"],
-    ["mossx.terminalPanelHeight", "terminalPanelHeight"],
-    ["mossx.debugPanelHeight", "debugPanelHeight"],
-    ["mossx.kanbanConversationWidth", "kanbanConversationWidth"],
+    ["ccgui.sidebarWidth", "sidebarWidth"],
+    ["ccgui.rightPanelWidth", "rightPanelWidth"],
+    ["ccgui.planPanelHeight", "planPanelHeight"],
+    ["ccgui.terminalPanelHeight", "terminalPanelHeight"],
+    ["ccgui.debugPanelHeight", "debugPanelHeight"],
+    ["ccgui.kanbanConversationWidth", "kanbanConversationWidth"],
   ];
   for (const [localKey, jsonKey] of layoutNumKeys) {
     const v = readLocalNum(localKey);
     if (v !== undefined) layout[jsonKey] = v;
   }
   const layoutBoolKeys: [string, string][] = [
-    ["mossx.sidebarCollapsed", "sidebarCollapsed"],
-    ["mossx.rightPanelCollapsed", "rightPanelCollapsed"],
+    ["ccgui.sidebarCollapsed", "sidebarCollapsed"],
+    ["ccgui.rightPanelCollapsed", "rightPanelCollapsed"],
     ["reduceTransparency", "reduceTransparency"],
   ];
   for (const [localKey, jsonKey] of layoutBoolKeys) {
     const v = readLocalBool(localKey);
     if (v !== undefined) layout[jsonKey] = v;
   }
-  const collapsedGroups = readLocalJson<string[]>("mossx.collapsedGroups");
+  const collapsedGroups = readLocalJson<string[]>("ccgui.collapsedGroups");
   if (collapsedGroups) layout.collapsedGroups = collapsedGroups;
 
   if (Object.keys(layout).length > 0) {
@@ -109,10 +164,10 @@ export function migrateLocalStorageToFileStore(): void {
   // --- threads ---
   const threads: Record<string, unknown> = {};
   const threadKeys: [string, string][] = [
-    ["mossx.threadLastUserActivity", "lastUserActivity"],
-    ["mossx.threadCustomNames", "customNames"],
-    ["mossx.threadAutoTitlePending", "autoTitlePending"],
-    ["mossx.pinnedThreads", "pinnedThreads"],
+    ["ccgui.threadLastUserActivity", "lastUserActivity"],
+    ["ccgui.threadCustomNames", "customNames"],
+    ["ccgui.threadAutoTitlePending", "autoTitlePending"],
+    ["ccgui.pinnedThreads", "pinnedThreads"],
   ];
   for (const [localKey, jsonKey] of threadKeys) {
     const v = readLocalJson(localKey);
@@ -124,18 +179,18 @@ export function migrateLocalStorageToFileStore(): void {
 
   // --- app ---
   const app: Record<string, unknown> = {};
-  const language = readLocalString("mossx.language");
+  const language = readLocalString("ccgui.language");
   if (language) app.language = language;
   const openApp = readLocalString("open-workspace-app");
   if (openApp) app.openWorkspaceApp = openApp;
-  const kanban = readLocalJson("mossx.kanban");
+  const kanban = readLocalJson("ccgui.kanban");
   if (kanban) app.kanban = kanban;
   if (Object.keys(app).length > 0) {
     writeClientStoreData("app", app);
   }
 
   try {
-    localStorage.setItem(MIGRATION_FLAG, "true");
+    localStorage.setItem(FILE_STORE_MIGRATION_FLAG, "true");
   } catch {
     // best effort
   }

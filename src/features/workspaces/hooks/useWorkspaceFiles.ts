@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DebugEntry, WorkspaceInfo } from "../../../types";
 import { getWorkspaceFiles } from "../../../services/tauri";
 
-const WORKSPACE_FILES_DEBUG_KEY = "mossx.debug.workspace-files";
+const WORKSPACE_FILES_DEBUG_KEY = "ccgui.debug.workspace-files";
 const WORKSPACE_FILES_SLOW_REQUEST_MS = 800;
 
 function isWorkspaceFilesDebugEnabled() {

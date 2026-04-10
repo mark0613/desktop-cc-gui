@@ -79,7 +79,7 @@ vi.mock("../../../services/tauri", () => ({
 
 const workspace: WorkspaceInfo = {
   id: "ws-1",
-  name: "CodeMoss",
+  name: "ccgui",
   path: "/tmp/codemoss",
   connected: true,
   settings: { sidebarCollapsed: false },

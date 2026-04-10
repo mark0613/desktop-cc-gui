@@ -59,14 +59,14 @@ vi.mock("../../../services/clientStorage", () => ({
 describe("useThreadMessaging", () => {
   const workspace: WorkspaceInfo = {
     id: "ws-1",
-    name: "MossX",
+    name: "ccgui",
     path: "/tmp/mossx",
     connected: true,
     settings: { sidebarCollapsed: false },
   };
   const windowsWorkspace: WorkspaceInfo = {
     id: "ws-win",
-    name: "MossX-Win",
+    name: "ccgui-Win",
     path: "C:\\repo\\mossx",
     connected: true,
     settings: { sidebarCollapsed: false },

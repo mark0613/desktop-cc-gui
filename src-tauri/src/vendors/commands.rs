@@ -7,6 +7,7 @@ use serde_json::Value;
 use tokio::process::Command;
 use tokio::time::timeout;
 
+use crate::app_paths;
 use crate::backend::app_server::build_codex_path_env;
 use crate::types::{CodexProviderConfig, ProviderConfig};
 use crate::utils::async_command;
@@ -202,7 +203,7 @@ fn apply_provider_to_claude_settings(
 
 // ==================== Config File Types ====================
 
-/// Represents the ~/.codemoss/config.json file structure shared with idea-claude-code-gui
+/// Represents the ~/.ccgui/config.json file structure shared with idea-claude-code-gui
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 struct CodemossConfig {
     #[serde(default)]
@@ -298,8 +299,7 @@ pub(crate) struct GeminiVendorPreflightResult {
 // ==================== Helpers ====================
 
 fn config_path() -> PathBuf {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    home.join(".codemoss").join("config.json")
+    app_paths::config_file_path().unwrap_or_else(|_| PathBuf::from("config.json"))
 }
 
 fn read_config() -> Result<CodemossConfig, String> {

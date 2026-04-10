@@ -1,4 +1,4 @@
-const FLAG_PREFIX = "mossx.perf.";
+const FLAG_PREFIX = "ccgui.perf.";
 
 const isTestMode = (() => {
   try {

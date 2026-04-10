@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use crate::app_paths;
 use crate::types::WorkspaceEntry;
 
 const THREAD_TITLES_VERSION: u8 = 1;
@@ -56,13 +57,8 @@ fn thread_titles_path() -> Result<PathBuf, String> {
     }
 
     #[cfg(not(test))]
-    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
-    #[cfg(not(test))]
     {
-        Ok(home
-            .join(".codemoss")
-            .join("client")
-            .join("thread_titles.json"))
+        Ok(app_paths::client_storage_dir()?.join("thread_titles.json"))
     }
 }
 

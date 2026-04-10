@@ -56,7 +56,7 @@ const ENGINE_DISPLAY_MAP: Record<
   opencode: { displayName: "OpenCode", shortName: "OpenCode" },
 };
 
-const GEMINI_VENDOR_UPDATED_EVENT = "mossx:gemini-vendor-updated";
+const GEMINI_VENDOR_UPDATED_EVENT = "ccgui:gemini-vendor-updated";
 const WEB_RUNTIME_DEFAULT_ENGINE: EngineType = "codex";
 const WEB_RUNTIME_INITIAL_STATUSES: EngineStatus[] = [
   {

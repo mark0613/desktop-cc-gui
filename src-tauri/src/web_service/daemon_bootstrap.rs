@@ -433,7 +433,7 @@ async fn resolve_or_build_daemon_binary(app: &AppHandle) -> Result<PathBuf, Stri
     }
 
     // Dev-only fallback: tauri dev usually doesn't build secondary bin targets
-    // unless explicitly requested. Build moss_x_daemon once, then retry resolve.
+    // unless explicitly requested. Build cc_gui_daemon once, then retry resolve.
     if cfg!(debug_assertions) {
         if let Some(manifest_path) = find_dev_manifest_path() {
             build_dev_daemon_binary(&manifest_path).await?;
@@ -443,7 +443,7 @@ async fn resolve_or_build_daemon_binary(app: &AppHandle) -> Result<PathBuf, Stri
         }
     }
 
-    Err("Failed to locate moss_x_daemon binary for local auto-start.".to_string())
+    Err("Failed to locate cc_gui_daemon binary for local auto-start.".to_string())
 }
 
 fn find_dev_manifest_path() -> Option<PathBuf> {
@@ -483,16 +483,16 @@ async fn build_dev_daemon_binary(manifest_path: &Path) -> Result<(), String> {
         .arg("--manifest-path")
         .arg(manifest_path)
         .arg("--bin")
-        .arg("moss_x_daemon")
+        .arg("cc_gui_daemon")
         .status()
         .await
-        .map_err(|error| format!("Failed to execute cargo build for moss_x_daemon: {error}"))?;
+        .map_err(|error| format!("Failed to execute cargo build for cc_gui_daemon: {error}"))?;
 
     if status.success() {
         Ok(())
     } else {
         Err(format!(
-            "cargo build --bin moss_x_daemon failed with status {status}"
+            "cargo build --bin cc_gui_daemon failed with status {status}"
         ))
     }
 }
@@ -507,15 +507,17 @@ fn daemon_binary_names() -> &'static [&'static str] {
     #[cfg(windows)]
     {
         &[
+            "cc_gui_daemon.exe",
             "moss_x_daemon.exe",
             "moss-x-daemon.exe",
+            "cc_gui_daemon",
             "moss_x_daemon",
             "moss-x-daemon",
         ]
     }
     #[cfg(not(windows))]
     {
-        &["moss_x_daemon", "moss-x-daemon"]
+        &["cc_gui_daemon", "moss_x_daemon", "moss-x-daemon"]
     }
 }
 

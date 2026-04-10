@@ -1,5 +1,5 @@
 /**
- * SVG icon stubs for codemoss
+ * SVG icon stubs for ccgui
  * Simplified version - returns generic icons instead of full icon set.
  * Full icon set can be copied from idea-claude-code-gui when needed.
  */

@@ -1,8 +1,8 @@
 /**
- * CSS Variables Bridge: codemoss -> ChatInputBox
+ * CSS Variables Bridge: ccgui -> ChatInputBox
  *
- * Maps codemoss theme variables to ChatInputBox's expected variables.
- * Imported BEFORE variables.css so ChatInputBox variables use codemoss theme.
+ * Maps ccgui theme variables to ChatInputBox's expected variables.
+ * Imported BEFORE variables.css so ChatInputBox variables use ccgui theme.
  */
 
 :root {
@@ -13,7 +13,7 @@
   --bg-chat: var(--surface-messages, #ffffff);
 }
 
-/* Override ChatInputBox dark theme to match codemoss */
+/* Override ChatInputBox dark theme to match ccgui */
 :root .chat-input-box,
 :root .chat-input-box-wrapper,
 [data-theme="dark"] .chat-input-box,
@@ -39,7 +39,7 @@
   --token-ring-fill: var(--accent-strong, #60a5fa);
 }
 
-/* Override ChatInputBox light theme to match codemoss */
+/* Override ChatInputBox light theme to match ccgui */
 [data-theme="light"] .chat-input-box,
 [data-theme="light"] .chat-input-box-wrapper {
   --input-bg: var(--surface-messages, #ffffff);

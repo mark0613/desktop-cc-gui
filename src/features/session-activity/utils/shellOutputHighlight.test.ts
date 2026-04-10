@@ -65,14 +65,14 @@ describe("renderShellOutputHtml", () => {
 
   it("detects markdown render mode for screenshot-like flattened report output", () => {
     const output =
-      "---#📊 项目分析报告## 项目概述|项目属性|值| |------|------|------|项目名称|Dify mem0插件本地化改造|工作区路径|/Users/chenxiangning/.codemoss/workspace|核心内容|memo0 Dify插件源码修改与打包|";
+      "---#📊 项目分析报告## 项目概述|项目属性|值| |------|------|------|项目名称|Dify mem0插件本地化改造|工作区路径|/Users/chenxiangning/.ccgui/workspace|核心内容|memo0 Dify插件源码修改与打包|";
     const meta = inferCommandOutputRenderMeta("Command", output);
     expect(meta.mode).toBe("markdown");
   });
 
   it("normalizes flattened markdown headings into multiline markdown blocks", () => {
     const output =
-      "---#📊 项目分析报告## 项目概述|项目属性|值||------|------|------|项目名称|Dify mem0插件本地化改造|工作区路径|/Users/chenxiangning/.codemoss/workspace|";
+      "---#📊 项目分析报告## 项目概述|项目属性|值||------|------|------|项目名称|Dify mem0插件本地化改造|工作区路径|/Users/chenxiangning/.ccgui/workspace|";
     const normalized = normalizeCommandMarkdownOutput(output);
     expect(normalized).toContain("# 📊 项目分析报告");
     expect(normalized).toContain("## 项目概述");
