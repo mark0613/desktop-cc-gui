@@ -208,19 +208,27 @@ export function Sidebar({
 }: SidebarProps) {
   const { t } = useTranslation();
   const quickSearchLabel = t("sidebar.quickSearch");
+  const isMac = useMemo(() => isMacPlatform(), []);
+  const quickChatShortcutLabel = useMemo(
+    () => formatShortcutForPlatform(isMac ? "cmd+j" : "ctrl+j", isMac),
+    [isMac],
+  );
+  const quickKanbanShortcutLabel = useMemo(
+    () => formatShortcutForPlatform(isMac ? "cmd+k" : "ctrl+k", isMac),
+    [isMac],
+  );
   const quickSearchShortcutLabel = useMemo(
     () => {
       const normalizedShortcut = (globalSearchShortcut ?? "")
         .trim()
         .toLowerCase()
         .replace(/\s+/g, "");
-      const isMac = isMacPlatform();
       if (!normalizedShortcut || normalizedShortcut === "cmd+o" || normalizedShortcut === "ctrl+o") {
         return formatShortcutForPlatform(isMac ? "cmd+f" : "ctrl+f", isMac);
       }
       return formatShortcutForPlatform(globalSearchShortcut, isMac);
     },
-    [globalSearchShortcut],
+    [globalSearchShortcut, isMac],
   );
 
   const [expandedWorkspaces, setExpandedWorkspaces] = useState(
@@ -931,7 +939,7 @@ export function Sidebar({
               type="button"
               className={`sidebar-primary-nav-item sidebar-primary-nav-mode-item ${appMode === "chat" ? "is-active" : ""}`}
               onClick={onOpenHomeChat}
-              title={t("sidebar.quickNewThread")}
+              title={`${t("sidebar.quickNewThread")} (${quickChatShortcutLabel})`}
               aria-label={t("sidebar.quickNewThread")}
               data-tauri-drag-region="false"
             >
@@ -940,12 +948,15 @@ export function Sidebar({
                 <path d="M10 3.25H6.25C4.59315 3.25 3.25 4.59315 3.25 6.25V13.75C3.25 15.4069 4.59315 16.75 6.25 16.75H13.75C15.4069 16.75 16.75 15.4069 16.75 13.75V10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
               </svg>
               <span className="sidebar-primary-nav-text">{t("sidebar.quickNewThread")}</span>
+              <span className="sidebar-primary-nav-shortcut" aria-hidden>
+                {quickChatShortcutLabel}
+              </span>
             </button>
             <button
               type="button"
               className={`sidebar-primary-nav-item sidebar-primary-nav-mode-item ${appMode === "kanban" ? "is-active" : ""}`}
               onClick={() => onAppModeChange("kanban")}
-              title={t("sidebar.quickAutomation")}
+              title={`${t("sidebar.quickAutomation")} (${quickKanbanShortcutLabel})`}
               aria-label={t("sidebar.quickAutomation")}
               data-tauri-drag-region="false"
             >
@@ -959,6 +970,9 @@ export function Sidebar({
                 <span className="sidebar-primary-nav-badge" aria-hidden>
                   {t("sidebar.quickAutomationBadge")}
                 </span>
+              </span>
+              <span className="sidebar-primary-nav-shortcut" aria-hidden>
+                {quickKanbanShortcutLabel}
               </span>
             </button>
             <button

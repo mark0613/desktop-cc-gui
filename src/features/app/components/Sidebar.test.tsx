@@ -162,6 +162,8 @@ describe("Sidebar", () => {
     });
     try {
       render(<Sidebar {...baseProps} />);
+      expect(screen.getByText("Ctrl+J")).toBeTruthy();
+      expect(screen.getByText("Ctrl+K")).toBeTruthy();
       expect(screen.getByText("Ctrl+F")).toBeTruthy();
     } finally {
       Object.defineProperty(window.navigator, "platform", {
