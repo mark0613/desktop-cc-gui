@@ -8,6 +8,28 @@ use tauri::{Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
 const NEW_WINDOW_ACCELERATOR: &str = "CmdOrCtrl+Shift+N";
 const RELOAD_WINDOW_ACCELERATOR: &str = "CmdOrCtrl+R";
 
+fn reload_window_accelerator() -> Option<&'static str> {
+    #[cfg(target_os = "macos")]
+    {
+        Some(RELOAD_WINDOW_ACCELERATOR)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
+}
+
+fn build_reload_window_item<R: tauri::Runtime>(
+    handle: &tauri::AppHandle<R>,
+) -> tauri::Result<MenuItem<R>> {
+    let builder = MenuItemBuilder::with_id("window_reload", "重新加载窗口");
+    let builder = match reload_window_accelerator() {
+        Some(accelerator) => builder.accelerator(accelerator),
+        None => builder,
+    };
+    builder.build(handle)
+}
+
 pub struct MenuItemRegistry<R: Runtime> {
     items: Mutex<HashMap<String, MenuItem<R>>>,
     submenus: Mutex<HashMap<String, Submenu<R>>>,
@@ -110,9 +132,9 @@ pub fn menu_update_labels<R: Runtime>(
 fn resolve_target_webview_window<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Option<tauri::WebviewWindow<R>> {
-    app.manager()
-        .get_focused_window()
-        .and_then(|window| app.get_webview_window(window.label()))
+    app.webview_windows()
+        .into_values()
+        .find(|window| window.is_focused().unwrap_or(false))
         .or_else(|| app.get_webview_window("main"))
 }
 
@@ -346,9 +368,7 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     let window_menu = {
         let minimize_item = MenuItemBuilder::with_id("window_minimize", "最小化").build(handle)?;
         let maximize_item = MenuItemBuilder::with_id("window_maximize", "最大化").build(handle)?;
-        let reload_item = MenuItemBuilder::with_id("window_reload", "重新加载窗口")
-            .accelerator(RELOAD_WINDOW_ACCELERATOR)
-            .build(handle)?;
+        let reload_item = build_reload_window_item(handle)?;
         let close_item = MenuItemBuilder::with_id("window_close", "关闭窗口").build(handle)?;
         registry.register("window_minimize", &minimize_item);
         registry.register("window_maximize", &maximize_item);
@@ -368,9 +388,7 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     };
     #[cfg(not(target_os = "linux"))]
     let window_menu = {
-        let reload_item = MenuItemBuilder::with_id("window_reload", "重新加载窗口")
-            .accelerator(RELOAD_WINDOW_ACCELERATOR)
-            .build(handle)?;
+        let reload_item = build_reload_window_item(handle)?;
         registry.register("window_reload", &reload_item);
         let submenu = SubmenuBuilder::with_id(handle, "window_menu", "窗口")
             .items(&[
@@ -514,7 +532,7 @@ fn emit_menu_event<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{menu_event_name_for_id, NEW_WINDOW_ACCELERATOR, RELOAD_WINDOW_ACCELERATOR};
+    use super::{menu_event_name_for_id, reload_window_accelerator, NEW_WINDOW_ACCELERATOR};
 
     #[test]
     fn new_window_menu_shortcut_matches_expected() {
@@ -523,7 +541,10 @@ mod tests {
 
     #[test]
     fn reload_window_menu_shortcut_matches_expected() {
-        assert_eq!(RELOAD_WINDOW_ACCELERATOR, "CmdOrCtrl+R");
+        #[cfg(target_os = "macos")]
+        assert_eq!(reload_window_accelerator(), Some("CmdOrCtrl+R"));
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(reload_window_accelerator(), None);
     }
 
     #[test]

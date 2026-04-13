@@ -25,7 +25,7 @@ pub mod status;
 // Re-exports for convenience
 pub use commands::*;
 pub use manager::EngineManager;
-pub use status::{detect_preferred_engine, resolve_engine_type};
+pub use status::resolve_engine_type;
 
 /// Supported engine types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
