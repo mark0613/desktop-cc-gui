@@ -124,7 +124,7 @@ export function useGitStatus(
         const cached = cachedStatusRef.current.get(workspaceId);
         const nextStatus = cached
           ? { ...cached, error: message }
-          : { ...emptyStatus, branchName: "unknown", error: message };
+          : { ...emptyStatus, error: message };
         setStatus(nextStatus);
       } finally {
         if (inFlightRequestIdRef.current === currentRequestId) {

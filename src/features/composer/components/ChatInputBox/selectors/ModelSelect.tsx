@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Claude, Gemini } from '@lobehub/icons';
-import openaiColorIcon from '../../../../../assets/model-icons/openai.svg';
 import xuanzhonIcon from '../../../../../assets/xuanzhong.svg';
 import { AVAILABLE_MODELS } from '../types';
 import type { ModelInfo } from '../types';
 import { STORAGE_KEYS } from '../../../types/provider';
+import { EngineIcon } from '../../../../engine/components/EngineIcon';
 
 interface ModelSelectProps {
   value: string;
@@ -82,7 +82,7 @@ const ModelIcon = ({ provider, size = 16 }: { provider?: string; size?: number }
   const imgStyle = { width: size, height: size, flexShrink: 0 } as const;
   switch (provider) {
     case 'codex':
-      return <img src={openaiColorIcon} alt="OpenAI" style={imgStyle} aria-hidden />;
+      return <EngineIcon engine="codex" size={size} style={imgStyle} />;
     case 'gemini':
       return <Gemini.Color size={size} />;
     case 'claude':

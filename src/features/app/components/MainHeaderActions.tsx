@@ -8,6 +8,7 @@ import PanelLeftOpen from "lucide-react/dist/esm/icons/panel-left-open";
 import PanelRightClose from "lucide-react/dist/esm/icons/panel-right-close";
 import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
+import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
 import type { SidebarToggleProps } from "../../layout/components/SidebarToggleControls";
 
 type MainHeaderActionsProps = {
@@ -76,68 +77,58 @@ export const MainHeaderActions = memo(function MainHeaderActions({
   return (
     <>
       {canToggleRuntimeConsole && (
-        <button
-          type="button"
+        <TooltipIconButton
           className={`ghost main-header-action${isRuntimeConsoleVisible ? " is-active" : ""}`}
           onClick={() => onToggleRuntimeConsole?.()}
           data-tauri-drag-region="false"
-          aria-label={t("files.openRunConsole")}
-          title={t("files.openRunConsole")}
+          label={t("files.openRunConsole")}
         >
           <Construction size={14} aria-hidden />
-        </button>
+        </TooltipIconButton>
       )}
       {canToggleTerminal && (
-        <button
-          type="button"
+        <TooltipIconButton
           className={`ghost main-header-action${isTerminalOpen ? " is-active" : ""}`}
           onClick={() => onToggleTerminal?.()}
           data-tauri-drag-region="false"
-          aria-label={t("common.toggleTerminalPanel")}
-          title={t("common.toggleTerminalPanel")}
+          label={t("common.toggleTerminalPanel")}
         >
           <TerminalSquare size={14} aria-hidden />
-        </button>
+        </TooltipIconButton>
       )}
       {canToggleSoloMode && (
-        <button
-          type="button"
+        <TooltipIconButton
           className={`ghost main-header-action${isSoloMode ? " is-active" : ""}`}
           onClick={() => onToggleSoloMode?.()}
           data-tauri-drag-region="false"
-          aria-label={t(isSoloMode ? "sidebar.exitSoloMode" : "sidebar.enterSoloMode")}
-          title={t(isSoloMode ? "sidebar.exitSoloMode" : "sidebar.enterSoloMode")}
+          label={t(isSoloMode ? "sidebar.exitSoloMode" : "sidebar.enterSoloMode")}
         >
           <Focus size={14} aria-hidden />
-        </button>
+        </TooltipIconButton>
       )}
       {canToggleSpecHub && (
-        <button
-          type="button"
+        <TooltipIconButton
           className={`ghost main-header-action${isSpecHubActive ? " is-active" : ""}`}
           onClick={() => onOpenSpecHub?.()}
           data-tauri-drag-region="false"
-          aria-label={t("sidebar.specHub")}
-          title={t("sidebar.specHub")}
+          label={t("sidebar.specHub")}
         >
           <LayoutDashboard size={14} aria-hidden />
-        </button>
+        </TooltipIconButton>
       )}
       {rightPanelAvailable && !isSoloMode && (
-        <button
-          type="button"
+        <TooltipIconButton
           className="ghost main-header-action"
           onClick={isCollapsed ? onExpandRightPanel : onCollapseRightPanel}
           data-tauri-drag-region="false"
-          aria-label={t(labelKey)}
-          title={t(labelKey)}
+          label={t(labelKey)}
         >
           {isCollapsed ? (
             isLayoutSwapped ? <PanelLeftOpen size={14} aria-hidden /> : <PanelRightOpen size={14} aria-hidden />
           ) : (
             isLayoutSwapped ? <PanelLeftClose size={14} aria-hidden /> : <PanelRightClose size={14} aria-hidden />
           )}
-        </button>
+        </TooltipIconButton>
       )}
     </>
   );

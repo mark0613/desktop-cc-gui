@@ -39,7 +39,13 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   ),
 }));
 
-function ComposerHarness({ selectedEngine }: { selectedEngine: EngineType }) {
+function ComposerHarness({
+  selectedEngine,
+  showStatusPanelToggleOverride,
+}: {
+  selectedEngine: EngineType;
+  showStatusPanelToggleOverride?: boolean;
+}) {
   const reviewPrompt: NonNullable<ReviewPromptState> = {
     workspace: {
       id: "ws-1",
@@ -95,6 +101,7 @@ function ComposerHarness({ selectedEngine }: { selectedEngine: EngineType }) {
       dictationEnabled={false}
       activeWorkspaceId="ws-1"
       activeThreadId="thread-1"
+      showStatusPanelToggleOverride={showStatusPanelToggleOverride}
       reviewPrompt={reviewPrompt}
       onReviewPromptClose={() => {}}
       onReviewPromptShowPreset={() => {}}
@@ -146,6 +153,21 @@ describe("Composer status panel toggle visibility", () => {
         .getByTestId("chat-input-box-adapter")
         .getAttribute("data-show-status-panel-toggle"),
     ).toBe("true");
+  });
+
+  it("hides status panel toggle when explicitly overridden off", () => {
+    render(
+      <ComposerHarness
+        selectedEngine="gemini"
+        showStatusPanelToggleOverride={false}
+      />,
+    );
+    expect(screen.queryByTestId("status-panel")).toBeNull();
+    expect(
+      screen
+        .getByTestId("chat-input-box-adapter")
+        .getAttribute("data-show-status-panel-toggle"),
+    ).toBe("false");
   });
 
   it("renders review preset prompt in ChatInputBoxAdapter flow", () => {

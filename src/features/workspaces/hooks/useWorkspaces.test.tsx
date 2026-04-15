@@ -2,6 +2,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
+import { writeClientStoreData, writeClientStoreValue } from "../../../services/clientStorage";
 import {
   addWorkspace,
   listWorkspaces,
@@ -62,6 +63,7 @@ const workspaceTwo: WorkspaceInfo = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  writeClientStoreData("threads", {});
 });
 
 describe("useWorkspaces.renameWorktree", () => {
@@ -328,5 +330,36 @@ describe("useWorkspaces.groupedWorkspaces", () => {
 
     const [section] = result.current.groupedWorkspaces;
     expect(section?.workspaces[0]?.id).toBe("ws-default");
+  });
+});
+
+describe("useWorkspaces sidebar cache", () => {
+  it("hydrates cached workspaces before live refresh resolves", async () => {
+    writeClientStoreValue("threads", "sidebarSnapshot", {
+      version: 1,
+      updatedAt: 123,
+      workspaces: [workspaceOne],
+      threadsByWorkspace: {},
+    });
+
+    let resolveList: (value: WorkspaceInfo[]) => void = () => {};
+    vi.mocked(listWorkspaces).mockReturnValue(
+      new Promise((resolve) => {
+        resolveList = resolve;
+      }),
+    );
+
+    const { result } = renderHook(() => useWorkspaces());
+
+    expect(result.current.workspaces).toEqual([workspaceOne]);
+
+    await act(async () => {
+      resolveList([workspaceTwo]);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.workspaces).toEqual([workspaceTwo]);
+    });
   });
 });

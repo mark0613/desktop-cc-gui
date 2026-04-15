@@ -1,11 +1,16 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PanelTabs } from "./PanelTabs";
 
 describe("PanelTabs", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it("renders top toolbar buttons as non-drag interactive controls", () => {
@@ -25,6 +30,19 @@ describe("PanelTabs", () => {
 
     fireEvent.click(searchButton);
     expect(onSelect).toHaveBeenCalledWith("search");
+  });
+
+  it("shows a tooltip when hovering an icon-only panel tab", async () => {
+    const onSelect = vi.fn();
+
+    render(<PanelTabs active="files" onSelect={onSelect} />);
+
+    await act(async () => {
+      fireEvent.mouseEnter(screen.getByRole("button", { name: "panels.search" }));
+      await vi.advanceTimersByTimeAsync(250);
+    });
+
+    expect(screen.getByRole("tooltip").textContent).toContain("panels.search");
   });
 
   it("marks the activity tab as live when realtime activity is flowing", () => {

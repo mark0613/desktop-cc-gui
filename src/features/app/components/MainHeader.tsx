@@ -19,6 +19,8 @@ type WorkspaceGroupSection = {
   workspaces: WorkspaceInfo[];
 };
 
+const PROJECT_DETAILS_HIDE_DELAY_MS = 600;
+
 type MainHeaderProps = {
   workspace: WorkspaceInfo;
   parentName?: string | null;
@@ -239,7 +241,7 @@ export function MainHeader({
     projectRevealHideTimerRef.current = window.setTimeout(() => {
       setProjectRevealActive(false);
       projectRevealHideTimerRef.current = null;
-    }, 220);
+    }, PROJECT_DETAILS_HIDE_DELAY_MS);
   };
   const handleProjectScopeBlur = (
     event: FocusEvent<HTMLDivElement>,
@@ -297,6 +299,16 @@ export function MainHeader({
           className={`workspace-title-line${
             showProjectMenu ? " has-project-menu" : ""
           }${isProjectDetailVisible ? " is-project-detail-visible" : ""}`}
+          onMouseEnter={() => {
+            if (showProjectMenu) {
+              showProjectDetails();
+            }
+          }}
+          onMouseLeave={() => {
+            if (showProjectMenu) {
+              scheduleHideProjectDetails();
+            }
+          }}
           onFocusCapture={() => {
             if (showProjectMenu) {
               showProjectDetails();
@@ -313,8 +325,6 @@ export function MainHeader({
             <div
               className="workspace-project-menu"
               ref={projectMenuRef}
-              onMouseEnter={showProjectDetails}
-              onMouseLeave={scheduleHideProjectDetails}
               onFocusCapture={showProjectDetails}
               onBlurCapture={handleProjectScopeBlur}
             >
@@ -711,7 +721,17 @@ export function MainHeader({
           className="main-header-session-tabs-slot"
           data-tauri-drag-region="false"
         >
-          {sessionTabsNode}
+          <div
+            className="main-header-session-tabs-interactive"
+            data-tauri-drag-region="false"
+          >
+            {sessionTabsNode}
+          </div>
+          <div
+            className="main-header-session-tabs-drag-lane"
+            data-tauri-drag-region
+            aria-hidden="true"
+          />
         </div>
       ) : null}
       <div className="main-header-actions">

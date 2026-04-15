@@ -21,6 +21,6 @@ describe("update release configuration", () => {
     const workflow = readWorkspaceFile(".github/workflows/release.yml");
 
     expect(workflow).toContain("zhukunpenglinyutong/desktop-cc-gui/releases/download");
-    expect(workflow).not.toContain("zhukunpenglinyutong/desktop-cc-gui/releases/download");
+    expect(workflow).not.toContain("zhukunpenglinyutong/ccgui/releases/download");
   });
 });

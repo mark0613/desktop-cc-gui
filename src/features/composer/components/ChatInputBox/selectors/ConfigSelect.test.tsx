@@ -13,6 +13,22 @@ vi.mock('../../../../../assets/model-icons/openai.svg', () => ({
 }));
 
 describe('ConfigSelect usage entry', () => {
+  it('hides the provider switch entry inside the config menu', async () => {
+    const { container } = render(
+      <ConfigSelect
+        currentProvider="claude"
+        onProviderChange={() => {}}
+        providerVersions={{ claude: '2.1.81' }}
+      />,
+    );
+
+    fireEvent.click(container.querySelector('.config-button') as HTMLElement);
+
+    await waitFor(() => {
+      expect(container.textContent).not.toContain('Claude Code (2.1.81)');
+    });
+  });
+
   it('shows speed only for codex, while review quick entry is visible for codex and claude', async () => {
     const { container, rerender } = render(
       <ConfigSelect

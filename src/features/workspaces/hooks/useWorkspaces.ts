@@ -24,6 +24,10 @@ import {
   updateWorkspaceCodexBin as updateWorkspaceCodexBinService,
   updateWorkspaceSettings as updateWorkspaceSettingsService,
 } from "../../../services/tauri";
+import {
+  loadSidebarSnapshot,
+  saveSidebarSnapshotWorkspaces,
+} from "../../threads/utils/sidebarSnapshot";
 import { isDefaultWorkspacePath } from "../utils/defaultWorkspace";
 import { isWindowsPlatform } from "../../../utils/platform";
 
@@ -102,9 +106,14 @@ function normalizeWorkspacePathForComparison(path: string) {
 
 export function useWorkspaces(options: UseWorkspacesOptions = {}) {
   const { t } = useTranslation();
-  const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>(
+    () => loadSidebarSnapshot()?.workspaces ?? [],
+  );
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(() => {
+    const cached = loadSidebarSnapshot()?.workspaces ?? [];
+    return cached.length > 0;
+  });
   const [deletingWorktreeIds, setDeletingWorktreeIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -133,6 +142,10 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
   useEffect(() => {
     void refreshWorkspaces();
   }, [refreshWorkspaces]);
+
+  useEffect(() => {
+    saveSidebarSnapshotWorkspaces(workspaces);
+  }, [workspaces]);
 
   useEffect(() => {
     const next = new Map<string, WorkspaceSettings>();

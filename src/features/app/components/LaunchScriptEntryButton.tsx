@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
 import type { LaunchScriptEntry, LaunchScriptIconId } from "../../../types";
 import { LaunchScriptIconPicker } from "./LaunchScriptIconPicker";
 import { getLaunchScriptIcon, getLaunchScriptIconLabel } from "../utils/launchScriptIcons";
@@ -70,8 +71,7 @@ export function LaunchScriptEntryButton({
   return (
     <div className="launch-script-menu" ref={popoverRef}>
       <div className="launch-script-buttons">
-        <button
-          type="button"
+        <TooltipIconButton
           className="ghost main-header-action launch-script-run"
           onClick={onRun}
           onContextMenu={(event) => {
@@ -79,11 +79,10 @@ export function LaunchScriptEntryButton({
             onOpenEditor();
           }}
           data-tauri-drag-region="false"
-          aria-label={entry.label?.trim() || iconLabel}
-          title={entry.label?.trim() || iconLabel}
+          label={entry.label?.trim() || iconLabel}
         >
           <Icon size={14} aria-hidden />
-        </button>
+        </TooltipIconButton>
       </div>
       {editorOpen && (
         <div

@@ -23,6 +23,14 @@ const diffViewerCss = readFileSync(
   "utf8",
 );
 
+function getCssRuleBlock(css: string, selector: string): string {
+  const escapedSelector = selector
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\s+/g, "\\s+");
+  const match = css.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`));
+  return match?.[1] ?? "";
+}
+
 describe("layout swapped platform guard", () => {
   it("scopes swapped structure selectors to desktop layout", () => {
     expect(baseCss).toContain(".app.layout-desktop.layout-swapped {");
@@ -60,6 +68,51 @@ describe("layout swapped platform guard", () => {
     );
   });
 
+  it("keeps sidebar titlebar controls above the drag strip on macOS", () => {
+    expect(baseCss).toContain(".drag-strip {");
+    expect(baseCss).toContain("z-index: 2;");
+    expect(sidebarCss).toContain(".sidebar-topbar-placeholder {");
+    expect(sidebarCss).toContain("position: relative;");
+    expect(sidebarCss).toContain("z-index: 3;");
+    expect(sidebarCss).toContain(".sidebar-topbar-content {");
+    expect(sidebarCss).toContain("-webkit-app-region: no-drag;");
+  });
+
+  it("keeps the floating homepage sidebar restore control icon-only", () => {
+    const floatingRule = getCssRuleBlock(
+      baseCss,
+      ".titlebar-sidebar-toggle .main-header-action:not(.open-app-action):not(.open-app-toggle)",
+    );
+    expect(floatingRule).toContain("border: none;");
+    expect(floatingRule).toContain("background: transparent;");
+    expect(floatingRule).toContain("box-shadow: none;");
+  });
+
+  it("keeps the floating homepage sidebar restore control on the shared titlebar inset anchor", () => {
+    const leftAnchorRule = getCssRuleBlock(
+      baseCss,
+      ".titlebar-toggle-left",
+    );
+    const rightAnchorRule = getCssRuleBlock(
+      baseCss,
+      ".titlebar-toggle-right",
+    );
+    expect(leftAnchorRule).toContain("var(--titlebar-inset-left, 0px)");
+    expect(rightAnchorRule).toContain("right: 10px;");
+    expect(baseCss).not.toContain(".titlebar-sidebar-toggle.titlebar-toggle-left {");
+    expect(baseCss).not.toContain(".titlebar-sidebar-toggle.titlebar-toggle-right {");
+  });
+
+  it("keeps the expanded sidebar titlebar toggle icon-only", () => {
+    const expandedRule = getCssRuleBlock(
+      sidebarCss,
+      ".sidebar-titlebar-toggle .main-header-action:not(.open-app-action):not(.open-app-toggle)",
+    );
+    expect(expandedRule).toContain("border: none;");
+    expect(expandedRule).toContain("background: transparent;");
+    expect(expandedRule).toContain("box-shadow: none;");
+  });
+
   it("keeps swapped-only overlay anchoring isolated from default mode", () => {
     expect(mainCss).toContain(
       ".app.layout-desktop.layout-swapped .workspace-branch-dropdown {",
@@ -86,17 +139,14 @@ describe("layout swapped platform guard", () => {
     );
     expect(sidebarCss).toContain("order: 0;");
     expect(sidebarCss).toContain(
-      ".app.layout-desktop.layout-swapped .sidebar-primary-nav .sidebar-primary-nav-item > .sidebar-primary-nav-text-with-badge {",
+      ".app.layout-desktop.layout-swapped .sidebar-primary-nav .sidebar-primary-nav-item > .sidebar-primary-nav-text {",
     );
-    expect(sidebarCss).toContain("justify-content: flex-start;");
+    expect(sidebarCss).toContain("order: 1;");
     expect(sidebarCss).toContain(
       ".app.layout-desktop.layout-swapped .sidebar-primary-nav .sidebar-primary-nav-item > .sidebar-primary-nav-shortcut {",
     );
     expect(sidebarCss).toContain("order: 2;");
     expect(sidebarCss).toContain("margin-left: auto;");
     expect(sidebarCss).toContain("margin-right: 0;");
-    expect(sidebarCss).not.toContain(
-      ".app.layout-desktop.layout-swapped .sidebar-primary-nav .sidebar-primary-nav-text,",
-    );
   });
 });

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
 import { openWorkspaceIn } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import type { OpenAppTarget } from "../../../types";
@@ -81,6 +82,7 @@ export function OpenAppMenu({
     resolvedOpenTargets.find((target) => target.id === resolvedOpenAppId) ??
     resolvedOpenTargets[0] ??
     fallbackTarget;
+  const selectedOpenLabel = `Open in ${selectedOpenTarget.label}`;
 
   const reportOpenError = (error: unknown, target: OpenTarget) => {
     const message = error instanceof Error ? error.message : String(error);
@@ -158,15 +160,13 @@ export function OpenAppMenu({
   if (iconOnly) {
     return (
       <div className="open-app-menu is-icon-only" ref={openMenuRef}>
-        <button
-          type="button"
+        <TooltipIconButton
           className="ghost main-header-action open-app-fusion-trigger"
           onClick={() => setOpenMenuOpen((prev) => !prev)}
           data-tauri-drag-region="false"
           aria-haspopup="menu"
           aria-expanded={openMenuOpen}
-          aria-label={`Open in ${selectedOpenTarget.label}`}
-          title={`Open in ${selectedOpenTarget.label}`}
+          label={selectedOpenLabel}
         >
           <img
             className="open-app-icon open-app-fusion-icon"
@@ -175,7 +175,7 @@ export function OpenAppMenu({
             aria-hidden
           />
           <ChevronDown size={14} aria-hidden />
-        </button>
+        </TooltipIconButton>
         {openMenuOpen && (
           <div className="open-app-secondary-group popover-surface" role="menu">
             {resolvedOpenTargets.map((target) => (
@@ -208,8 +208,8 @@ export function OpenAppMenu({
           className={`ghost main-header-action open-app-action${iconOnly ? " is-icon-only" : ""}`}
           onClick={handleOpen}
           data-tauri-drag-region="false"
-          aria-label={`Open in ${selectedOpenTarget.label}`}
-          title={`Open in ${selectedOpenTarget.label}`}
+          aria-label={selectedOpenLabel}
+          title={selectedOpenLabel}
         >
           {iconOnly ? (
             <img

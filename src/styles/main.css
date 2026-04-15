@@ -120,6 +120,22 @@ body[data-panel-resizing="true"] .main {
   -webkit-app-region: no-drag;
 }
 
+.main-header-session-tabs-interactive {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.main-header-session-tabs-drag-lane {
+  flex: 1 1 auto;
+  min-width: 12px;
+  align-self: stretch;
+  -webkit-app-region: drag;
+}
+
 .main-header-actions {
   display: flex;
   align-items: center;
@@ -650,7 +666,7 @@ body[data-panel-resizing="true"] .main {
 .topbar-session-tabs {
   display: inline-flex;
   align-items: stretch;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -697,6 +713,10 @@ body[data-panel-resizing="true"] .main {
   justify-content: center;
   flex: 0 0 auto;
   color: inherit;
+}
+
+.topbar-shared-session-icon {
+  color: #f59e0b;
 }
 
 .topbar-session-tab-label {

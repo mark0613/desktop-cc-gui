@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import Play from "lucide-react/dist/esm/icons/play";
+import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
 import type { LaunchScriptIconId } from "../../../types";
 import { LaunchScriptIconPicker } from "./LaunchScriptIconPicker";
 import { DEFAULT_LAUNCH_SCRIPT_ICON } from "../utils/launchScriptIcons";
@@ -57,6 +58,9 @@ export function LaunchScriptButton({
   const { t } = useTranslation();
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const hasLaunchScript = Boolean(launchScript?.trim());
+  const triggerLabel = hasLaunchScript
+    ? t("composer.runLaunchScript")
+    : t("composer.setLaunchScript");
 
   useEffect(() => {
     if (!editorOpen) {
@@ -85,8 +89,7 @@ export function LaunchScriptButton({
   return (
     <div className="launch-script-menu" ref={popoverRef}>
       <div className="launch-script-buttons">
-        <button
-          type="button"
+        <TooltipIconButton
           className="ghost main-header-action launch-script-run"
           onClick={onRun}
           onContextMenu={(event) => {
@@ -94,11 +97,10 @@ export function LaunchScriptButton({
             onOpenEditor();
           }}
           data-tauri-drag-region="false"
-          aria-label={hasLaunchScript ? t("composer.runLaunchScript") : t("composer.setLaunchScript")}
-          title={hasLaunchScript ? t("composer.runLaunchScript") : t("composer.setLaunchScript")}
+          label={triggerLabel}
         >
           <Play size={14} aria-hidden />
-        </button>
+        </TooltipIconButton>
       </div>
       {editorOpen && (
         <div

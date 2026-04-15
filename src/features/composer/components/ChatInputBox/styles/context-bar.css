@@ -424,8 +424,8 @@
   padding: 2px 0;
   cursor: default;
   position: relative;
-  --codex-token-fill: #10a37f;
-  --codex-token-track: rgba(16, 163, 127, 0.28);
+  --codex-token-fill: var(--codex-context-accent, #10a37f);
+  --codex-token-track: var(--codex-context-accent-track, rgba(16, 163, 127, 0.28));
 }
 
 .context-dual-usage::before {
@@ -476,7 +476,7 @@
   background: linear-gradient(
     90deg,
     var(--codex-token-fill) 0%,
-    rgba(16, 163, 127, 0.36) 100%
+    color-mix(in srgb, var(--codex-token-fill) 36%, transparent) 100%
   );
 }
 

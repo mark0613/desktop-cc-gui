@@ -99,4 +99,17 @@ describe("MainHeader topbar session tabs integration", () => {
       expect(onSelectThread).toHaveBeenCalledWith("w2", "t1");
     },
   );
+
+  it("keeps draggable blank lanes around the topbar session tabs", () => {
+    renderHeaderWithWidth(1280);
+
+    const slot = document.querySelector(".main-header-session-tabs-slot");
+    expect(slot?.getAttribute("data-tauri-drag-region")).toBe("false");
+
+    const interactive = document.querySelector(".main-header-session-tabs-interactive");
+    expect(interactive?.getAttribute("data-tauri-drag-region")).toBe("false");
+
+    const dragLane = document.querySelector(".main-header-session-tabs-drag-lane");
+    expect(dragLane?.hasAttribute("data-tauri-drag-region")).toBe(true);
+  });
 });

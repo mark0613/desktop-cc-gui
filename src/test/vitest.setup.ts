@@ -46,7 +46,7 @@ vi.mock("react-i18next", () => ({
         "sidebar.newCloneAgent": "New clone agent",
         "sidebar.noProjectsMatch": "No projects match your search.",
         "sidebar.addWorkspaceToStart": "Add a workspace to start.",
-        "sidebar.quickNewThread": "New Thread",
+        "sidebar.quickNewThread": "Home",
         "sidebar.quickAutomation": "Automation",
         "sidebar.quickSearch": "Search",
         "sidebar.quickSkills": "Skills",
@@ -58,6 +58,7 @@ vi.mock("react-i18next", () => ({
         "sidebar.signInToCodex": "Sign in to Codex",
         "sidebar.switchAccount": "Switch account",
         "sidebar.signIn": "Sign in",
+        "threads.size": "Size",
         "app.title": "ccgui",
         "app.subtitle": "Orchestrate agents across your local projects.",
         "home.latestAgents": "Latest agents",
@@ -565,6 +566,9 @@ vi.mock("react-i18next", () => ({
         "threads.turnFailedToStart": "会话启动失败。",
         "threads.turnFailedToStartWithMessage": "会话启动失败：{{message}}",
         "messages.middleStepsCollapsedHint": "已折叠 {{count}} 条中间步骤（实时中）",
+        "workspace.homeHeroTitle": "构建任何东西",
+        "workspace.homeBranchLabelMain": "主分支",
+        "workspace.homeBranchLabelWorktree": "工作树",
       };
       // Simple interpolation for test environment
       let template = translations[key] ?? key;

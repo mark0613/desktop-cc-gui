@@ -6,6 +6,7 @@ import PanelLeftClose from "lucide-react/dist/esm/icons/panel-left-close";
 import PanelLeftOpen from "lucide-react/dist/esm/icons/panel-left-open";
 import PanelRightClose from "lucide-react/dist/esm/icons/panel-right-close";
 import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
+import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
 
 export type SidebarToggleProps = {
   isCompact: boolean;
@@ -13,6 +14,7 @@ export type SidebarToggleProps = {
   rightPanelCollapsed: boolean;
   isLayoutSwapped?: boolean;
   rightPanelAvailable?: boolean;
+  showSidebarTitlebarToggle?: boolean;
   onCollapseSidebar: () => void;
   onExpandSidebar: () => void;
   onCollapseRightPanel: () => void;
@@ -33,20 +35,18 @@ export function SidebarCollapseButton({
   const isCollapsed = sidebarCollapsed;
   const labelKey = isCollapsed ? "sidebar.showThreadsSidebar" : "sidebar.hideThreadsSidebar";
   return (
-    <button
-      type="button"
+    <TooltipIconButton
       className="ghost main-header-action"
       onClick={isCollapsed ? onExpandSidebar : onCollapseSidebar}
       data-tauri-drag-region="false"
-      aria-label={t(labelKey)}
-      title={t(labelKey)}
+      label={t(labelKey)}
     >
       {isCollapsed ? (
         isLayoutSwapped ? <PanelRightOpen size={14} aria-hidden /> : <PanelLeftOpen size={14} aria-hidden />
       ) : (
         isLayoutSwapped ? <PanelRightClose size={14} aria-hidden /> : <PanelLeftClose size={14} aria-hidden />
       )}
-    </button>
+    </TooltipIconButton>
   );
 }
 
@@ -197,16 +197,30 @@ function WindowControls() {
   );
 }
 
-export function TitlebarExpandControls(_props: SidebarToggleProps) {
+export function TitlebarExpandControls({
+  showSidebarTitlebarToggle = false,
+  ...sidebarToggleProps
+}: SidebarToggleProps) {
   const isWindowsDesktop = useMemo(() => isWindowsPlatform(), []);
 
-  if (!isWindowsDesktop) {
+  if (!isWindowsDesktop && !showSidebarTitlebarToggle) {
     return null;
   }
 
   return (
     <div className="titlebar-controls">
-      <WindowControls />
+      {showSidebarTitlebarToggle ? (
+        <div
+          className={`titlebar-toggle ${
+            sidebarToggleProps.isLayoutSwapped
+              ? "titlebar-toggle-right"
+              : "titlebar-toggle-left"
+          } titlebar-sidebar-toggle`}
+        >
+          <SidebarCollapseButton {...sidebarToggleProps} />
+        </div>
+      ) : null}
+      {isWindowsDesktop ? <WindowControls /> : null}
     </div>
   );
 }

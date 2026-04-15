@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createRef } from "react";
 import { afterEach } from "vitest";
@@ -11,11 +11,11 @@ vi.mock("react-i18next", () => ({
     t: (key: string) => {
       const translations: Record<string, string> = {
         "sidebar.addWorkspace": "Add workspace",
+        "sidebar.sessionActionsGroup": "New Session",
         "sidebar.toggleSearch": "Toggle search",
         "sidebar.searchProjects": "Search projects",
-        "sidebar.quickNewThread": "New Thread",
+        "sidebar.quickNewThread": "Home",
         "sidebar.quickAutomation": "Automation",
-        "sidebar.quickAutomationBadge": "new task!",
         "sidebar.quickSearch": "Search",
         "sidebar.quickSkills": "Skills",
         "lockScreen.lock": "Lock",
@@ -139,6 +139,34 @@ describe("Sidebar", () => {
     expect(container.querySelector(".sidebar-section-title-icon-image")).toBeNull();
   });
 
+  it("marks the macOS sidebar titlebar placeholder as a drag region", () => {
+    const { container } = render(<Sidebar {...baseProps} />);
+
+    const placeholder = container.querySelector(".sidebar-topbar-placeholder");
+    expect(placeholder?.hasAttribute("data-tauri-drag-region")).toBe(true);
+  });
+
+  it("keeps the sidebar topbar shell draggable around injected controls", () => {
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        topbarNode={
+          <div data-testid="sidebar-topbar-interactive" data-tauri-drag-region="false">
+            toggle
+          </div>
+        }
+      />,
+    );
+
+    const placeholder = container.querySelector(".sidebar-topbar-placeholder");
+    const content = container.querySelector(".sidebar-topbar-content");
+    expect(placeholder?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(content?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(
+      screen.getByTestId("sidebar-topbar-interactive").getAttribute("data-tauri-drag-region"),
+    ).toBe("false");
+  });
+
   it("shows search entry and triggers callback", () => {
     const onOpenGlobalSearch = vi.fn();
     render(
@@ -154,6 +182,14 @@ describe("Sidebar", () => {
     expect(onOpenGlobalSearch).toHaveBeenCalledTimes(1);
   });
 
+  it("does not render an automation badge in the primary nav", () => {
+    const { container } = render(<Sidebar {...baseProps} />);
+    const automationButton = screen.getByRole("button", { name: "Automation" });
+
+    expect(within(automationButton).queryByText("new task!")).toBeNull();
+    expect(container.querySelector(".sidebar-primary-nav-badge")).toBeNull();
+  });
+
   it("keeps only Windows-friendly quick nav shortcuts K/F visible while hiding J", () => {
     const originalPlatform = window.navigator.platform;
     Object.defineProperty(window.navigator, "platform", {
@@ -166,7 +202,7 @@ describe("Sidebar", () => {
       expect(screen.getByText("Ctrl+K")).toBeTruthy();
       expect(screen.getByText("Ctrl+F")).toBeTruthy();
       expect(container.querySelectorAll(".sidebar-primary-nav .sidebar-primary-nav-shortcut")).toHaveLength(2);
-      expect(screen.getByRole("button", { name: "New Thread" }).getAttribute("title")).toContain("Ctrl+J");
+      expect(screen.getByRole("button", { name: "Home" }).getAttribute("title")).toContain("Ctrl+J");
       expect(screen.getByRole("button", { name: "Automation" }).getAttribute("title")).toContain("Ctrl+K");
       expect(screen.getByRole("button", { name: "Search" }).getAttribute("title")).toContain("Ctrl+F");
     } finally {
@@ -196,7 +232,7 @@ describe("Sidebar", () => {
     expect(dropdown).toBeTruthy();
     const menu = within(dropdown as HTMLElement);
 
-    expect(menu.queryByRole("menuitem", { name: "New Thread" })).toBeNull();
+    expect(menu.queryByRole("menuitem", { name: "Home" })).toBeNull();
     expect(menu.queryByRole("menuitem", { name: "Automation" })).toBeNull();
     const skillsEntry = menu.getByRole("menuitem", { name: "Skills" });
     expect((skillsEntry as HTMLButtonElement).disabled).toBe(true);
@@ -375,6 +411,60 @@ describe("Sidebar", () => {
     expect(worktreeIcon?.classList.contains("is-session-running")).toBe(true);
   });
 
+  it("does not render workspace or worktree session count badges", () => {
+    const workspace = {
+      id: "ws-root",
+      name: "codemoss",
+      path: "/tmp/codemoss",
+      connected: true,
+      kind: "main" as const,
+      settings: {
+        sidebarCollapsed: false,
+        worktreeSetupScript: null,
+      },
+    };
+    const worktree = {
+      id: "ws-worktree",
+      name: "codemoss/worktree",
+      path: "/tmp/codemoss-worktree",
+      connected: true,
+      parentId: "ws-root",
+      kind: "worktree" as const,
+      settings: {
+        sidebarCollapsed: false,
+        worktreeSetupScript: null,
+      },
+      worktree: {
+        branch: "feature/countless",
+      },
+    };
+
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace, worktree]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace],
+          },
+        ]}
+        runningSessionCountByWorkspaceId={{
+          "ws-root": 13,
+          "ws-worktree": 2,
+        }}
+        recentSessionCountByWorkspaceId={{
+          "ws-root": 5,
+          "ws-worktree": 3,
+        }}
+      />,
+    );
+
+    expect(container.querySelector(".workspace-session-signal")).toBeNull();
+    expect(container.querySelector(".worktree-session-signal")).toBeNull();
+  });
+
   it("keeps group collapse on double click only", () => {
     const workspace = {
       id: "ws-1",
@@ -465,7 +555,7 @@ describe("Sidebar", () => {
     expect(screen.queryByText("Ungrouped")).toBeNull();
   });
 
-  it("selects workspace on single click and toggles collapse on double click", () => {
+  it("toggles workspace collapse on single click without selecting the workspace", () => {
     const workspace = {
       id: "ws-1",
       name: "codemoss",
@@ -499,10 +589,92 @@ describe("Sidebar", () => {
     const workspaceLabel = screen.getByText("codemoss");
 
     fireEvent.click(workspaceLabel);
-    expect(onSelectWorkspace).toHaveBeenCalledWith("ws-1");
-    expect(onToggleWorkspaceCollapse).not.toHaveBeenCalled();
-
-    fireEvent.doubleClick(workspaceLabel);
     expect(onToggleWorkspaceCollapse).toHaveBeenCalledWith("ws-1", false);
+    expect(onSelectWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("does not toggle the workspace when opening workspace actions", () => {
+    const workspace = {
+      id: "ws-1",
+      name: "codemoss",
+      path: "/tmp/codemoss",
+      connected: true,
+      kind: "main" as const,
+      settings: {
+        sidebarCollapsed: true,
+        worktreeSetupScript: null,
+      },
+    };
+    const onSelectWorkspace = vi.fn();
+    const onToggleWorkspaceCollapse = vi.fn();
+
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace],
+          },
+        ]}
+        onSelectWorkspace={onSelectWorkspace}
+        onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "New Session" }));
+
+    expect(onToggleWorkspaceCollapse).not.toHaveBeenCalled();
+    expect(onSelectWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("shows tooltips for the add workspace and workspace actions icons", async () => {
+    vi.useFakeTimers();
+    try {
+      const workspace = {
+        id: "ws-1",
+        name: "codemoss",
+        path: "/tmp/codemoss",
+        connected: true,
+        kind: "main" as const,
+        settings: {
+          sidebarCollapsed: true,
+          worktreeSetupScript: null,
+        },
+      };
+
+      render(
+        <Sidebar
+          {...baseProps}
+          workspaces={[workspace]}
+          groupedWorkspaces={[
+            {
+              id: null,
+              name: "Ungrouped",
+              workspaces: [workspace],
+            },
+          ]}
+        />,
+      );
+
+      await act(async () => {
+        fireEvent.mouseEnter(screen.getByRole("button", { name: "Add workspace" }));
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      let tooltips = screen.getAllByRole("tooltip");
+      expect(tooltips[tooltips.length - 1]?.textContent).toContain("Add workspace");
+
+      await act(async () => {
+        fireEvent.mouseLeave(screen.getByRole("button", { name: "Add workspace" }));
+        fireEvent.mouseEnter(screen.getByRole("button", { name: "New Session" }));
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      tooltips = screen.getAllByRole("tooltip");
+      expect(tooltips[tooltips.length - 1]?.textContent).toContain("New Session");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

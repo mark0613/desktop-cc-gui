@@ -1,7 +1,8 @@
 import type { MouseEvent } from "react";
-import type { WorkspaceInfo } from "../../../types";
-import { isDefaultWorkspacePath } from "../../workspaces/utils/defaultWorkspace";
 import { useTranslation } from "react-i18next";
+import type { WorkspaceInfo } from "../../../types";
+import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
+import { isDefaultWorkspacePath } from "../../workspaces/utils/defaultWorkspace";
 
 type WorkspaceCardProps = {
   workspace: WorkspaceInfo;
@@ -9,10 +10,7 @@ type WorkspaceCardProps = {
   isActive: boolean;
   hasPrimaryActiveThread: boolean;
   hasRunningSession?: boolean;
-  runningSessionCount?: number;
-  recentSessionCount?: number;
   isCollapsed: boolean;
-  onSelectWorkspace: (id: string) => void;
   onShowWorkspaceMenu: (event: MouseEvent, workspace: WorkspaceInfo) => void;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   children?: React.ReactNode;
@@ -24,10 +22,7 @@ export function WorkspaceCard({
   isActive,
   hasPrimaryActiveThread,
   hasRunningSession = false,
-  runningSessionCount = 0,
-  recentSessionCount = 0,
   isCollapsed,
-  onSelectWorkspace,
   onShowWorkspaceMenu,
   onToggleWorkspaceCollapse,
   children,
@@ -35,17 +30,8 @@ export function WorkspaceCard({
   const { t } = useTranslation();
   const isDefaultWorkspace = isDefaultWorkspacePath(workspace.path);
 
-  const handleSelectWorkspace = () => {
-    onSelectWorkspace(workspace.id);
-  };
-
   const handleToggleCollapse = () => {
     onToggleWorkspaceCollapse(workspace.id, !isCollapsed);
-  };
-
-  const handleKeyboardToggle = () => {
-    onSelectWorkspace(workspace.id);
-    handleToggleCollapse();
   };
 
   return (
@@ -60,9 +46,9 @@ export function WorkspaceCard({
         }`}
         role="button"
         tabIndex={0}
-        onClick={handleSelectWorkspace}
-        onDoubleClick={(event) => {
-          if (event.button !== 0) {
+        aria-expanded={!isCollapsed}
+        onClick={(event) => {
+          if (event.detail > 1) {
             return;
           }
           handleToggleCollapse();
@@ -71,7 +57,7 @@ export function WorkspaceCard({
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            handleKeyboardToggle();
+            handleToggleCollapse();
           }
         }}
       >
@@ -90,24 +76,6 @@ export function WorkspaceCard({
           </button>
 
           <span className="workspace-name-text">{workspaceName ?? workspace.name}</span>
-          {runningSessionCount > 0 ? (
-            <span
-              className="workspace-session-signal is-running"
-              aria-label={t("activityPanel.radar.runningCountAria", { count: runningSessionCount })}
-              title={t("activityPanel.radar.runningCountAria", { count: runningSessionCount })}
-            >
-              {runningSessionCount}
-            </span>
-          ) : null}
-          {recentSessionCount > 0 ? (
-            <span
-              className="workspace-session-signal is-recent"
-              aria-label={t("activityPanel.radar.recentCountAria", { count: recentSessionCount })}
-              title={t("activityPanel.radar.recentCountAria", { count: recentSessionCount })}
-            >
-              {recentSessionCount}
-            </span>
-          ) : null}
           {isDefaultWorkspace ? (
             <span className="default-workspace-badge" aria-label="Default Workspace">
               Default
@@ -115,21 +83,23 @@ export function WorkspaceCard({
           ) : null}
 
           <div className="workspace-actions">
-            <button
+            <TooltipIconButton
               className="workspace-action-btn"
-              onClick={(event) => onShowWorkspaceMenu(event, workspace)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onShowWorkspaceMenu(event, workspace);
+              }}
               onDoubleClick={(event) => {
                 event.stopPropagation();
               }}
-              aria-label="Workspace Actions"
-              title="Workspace Actions"
+              label={t("sidebar.sessionActionsGroup")}
             >
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
                 <path d="M5.92578 15.075H12.0758C13.7326 15.075 15.0758 13.7319 15.0758 12.075V5.92505C15.0758 4.26819 13.7326 2.92505 12.0758 2.92505H9.90078H5.92578C4.26893 2.92505 2.92578 4.2682 2.92578 5.92505V12.075C2.92578 13.7319 4.26893 15.075 5.92578 15.075Z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
                 <path d="M6.16406 9H11.8341" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M9 6.16504V11.835" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-            </button>
+            </TooltipIconButton>
           </div>
         </div>
       </div>

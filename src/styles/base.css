@@ -205,6 +205,36 @@ body[data-panel-resizing="true"] .app {
   right: 10px;
 }
 
+.titlebar-sidebar-toggle {
+  --sidebar-titlebar-toggle-inline-gap: 6px;
+}
+
+.titlebar-sidebar-toggle .main-header-action {
+  width: var(--titlebar-toggle-size, 28px);
+  height: var(--titlebar-toggle-size, 28px);
+  padding: 0;
+  border-radius: 10px;
+}
+
+.titlebar-sidebar-toggle
+  .main-header-action:not(.open-app-action):not(.open-app-toggle) {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+.titlebar-sidebar-toggle
+  .main-header-action:not(.open-app-action):not(.open-app-toggle):hover:not(
+    :disabled
+  ),
+.titlebar-sidebar-toggle
+  .main-header-action:not(.open-app-action):not(.open-app-toggle):focus-visible {
+  background: transparent;
+  color: var(--text-stronger);
+  box-shadow: none;
+}
+
 .titlebar-window-controls {
   display: inline-flex;
   gap: 2px;

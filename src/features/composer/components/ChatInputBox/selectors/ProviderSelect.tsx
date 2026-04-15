@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Claude, Gemini } from '@lobehub/icons';
-import openaiColorIcon from '../../../../../assets/model-icons/openai.svg';
 import { AVAILABLE_PROVIDERS } from '../types';
 import type { ProviderId } from '../types';
+import { EngineIcon } from '../../../../engine/components/EngineIcon';
 
 interface ProviderSelectProps {
   value: string;
@@ -22,17 +22,11 @@ const ProviderIcon = ({ providerId, size = 16 }: { providerId: string; size?: nu
     case 'claude':
       return <Claude.Color size={size} />;
     case 'codex':
-      return <img src={openaiColorIcon} alt="OpenAI" style={imgStyle} aria-hidden />;
+      return <EngineIcon engine="codex" size={size} style={imgStyle} />;
     case 'gemini':
       return <Gemini.Color size={size} />;
     case 'opencode':
-      return (
-        <svg viewBox="0 0 24 24" fill="none" style={{ ...imgStyle, color: '#6366f1' }} aria-hidden>
-          <rect x="3.2" y="4.2" width="17.6" height="15.6" rx="2.3" stroke="currentColor" strokeWidth="1.6" />
-          <path d="m9.4 9.2-2.3 2.4 2.3 2.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          <path d="M12.3 14.2h4.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
-      );
+      return <EngineIcon engine="opencode" size={size} style={imgStyle} />;
     default:
       return <Claude.Color size={size} />;
   }

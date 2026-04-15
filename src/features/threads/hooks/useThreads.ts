@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { CustomPromptOption, DebugEntry, WorkspaceInfo } from "../../../types";
 import { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
-import { initialState, threadReducer } from "./useThreadsReducer";
+import { createInitialThreadState, threadReducer } from "./useThreadsReducer";
 import { useThreadStorage } from "./useThreadStorage";
 import { useThreadLinking } from "./useThreadLinking";
 import { useThreadEventHandlers } from "./useThreadEventHandlers";
@@ -18,6 +18,10 @@ import {
   saveCustomName,
 } from "../utils/threadStorage";
 import { writeClientStoreValue } from "../../../services/clientStorage";
+import {
+  loadSidebarSnapshot,
+  saveSidebarSnapshotThreads,
+} from "../utils/sidebarSnapshot";
 import {
   generateThreadTitle,
   listThreadTitles,
@@ -37,6 +41,12 @@ import {
 } from "../utils/memoryCaptureRace";
 import { buildItemsFromThread } from "../../../utils/threadItems";
 import i18n from "../../../i18n";
+import { clearSharedSessionBindingsForSharedThread } from "../../shared-session/runtime/sharedSessionBridge";
+import {
+  setSharedSessionSelectedEngine as setSharedSessionSelectedEngineService,
+  syncSharedSessionSnapshot as syncSharedSessionSnapshotService,
+} from "../../shared-session/services/sharedSessions";
+import { normalizeSharedSessionEngine } from "../../shared-session/utils/sharedSessionEngines";
 
 const AUTO_TITLE_REQUEST_TIMEOUT_MS = 8_000;
 const AUTO_TITLE_MAX_ATTEMPTS = 2;
@@ -459,7 +469,11 @@ export function useThreads({
   resolveCollaborationRuntimeMode,
   onCollaborationModeResolved,
 }: UseThreadsOptions) {
-  const [state, dispatch] = useReducer(threadReducer, initialState);
+  const [state, dispatch] = useReducer(
+    threadReducer,
+    loadSidebarSnapshot(),
+    createInitialThreadState,
+  );
   const loadedThreadsRef = useRef<Record<string, boolean>>({});
   const threadStatusByIdRef = useRef(state.threadStatusById);
   const loadedThreadLastRefreshAtRef = useRef<Record<string, number>>({});
@@ -474,6 +488,10 @@ export function useThreads({
   const pendingAssistantCompletionRef = useRef<Record<string, PendingAssistantCompletion>>({});
   const threadIdAliasRef = useRef<Record<string, string>>({});
   const recentThreadErrorsRef = useRef<Record<string, { message: string; at: number }>>({});
+  const sharedSessionSyncTimerByThreadRef = useRef<
+    Record<string, ReturnType<typeof setTimeout> | null>
+  >({});
+  const sharedSessionLastSignatureByThreadRef = useRef<Record<string, string>>({});
   const { approvalAllowlistRef, handleApprovalDecision, handleApprovalRemember } =
     useThreadApprovals({ dispatch, onDebug });
   const { handleUserInputSubmit } = useThreadUserInput({ dispatch });
@@ -559,6 +577,12 @@ export function useThreads({
   }, [state.activeThreadIdByWorkspace]);
 
   useEffect(() => {
+    Object.entries(state.threadsByWorkspace).forEach(([workspaceId, threads]) => {
+      saveSidebarSnapshotThreads(workspaceId, threads);
+    });
+  }, [state.threadsByWorkspace]);
+
+  useEffect(() => {
     threadStatusByIdRef.current = state.threadStatusById;
   }, [state.threadStatusById]);
 
@@ -570,6 +594,12 @@ export function useThreads({
         }
       });
       lazyResumeTimerByWorkspaceRef.current = {};
+      Object.values(sharedSessionSyncTimerByThreadRef.current).forEach((timer) => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+      });
+      sharedSessionSyncTimerByThreadRef.current = {};
     };
   }, []);
   const { applyCollabThreadLinks, applyCollabThreadLinksFromThread, updateThreadParent } =
@@ -600,6 +630,48 @@ export function useThreads({
       return thread?.engineSource;
     },
     [state.threadsByWorkspace],
+  );
+
+  const getThreadKind = useCallback(
+    (workspaceId: string, threadId: string): "native" | "shared" => {
+      const threads = state.threadsByWorkspace[workspaceId] ?? [];
+      const thread = threads.find((t) => t.id === threadId);
+      return thread?.threadKind === "shared" ? "shared" : "native";
+    },
+    [state.threadsByWorkspace],
+  );
+
+  const updateSharedSessionEngineSelection = useCallback(
+    (
+      workspaceId: string,
+      threadId: string,
+      engine: "claude" | "codex" | "gemini" | "opencode",
+    ) => {
+      const sharedEngine = normalizeSharedSessionEngine(engine);
+      dispatch({
+        type: "setThreadEngine",
+        workspaceId,
+        threadId,
+        engine: sharedEngine,
+      });
+      if (!threadId.startsWith("shared:")) {
+        return;
+      }
+      void setSharedSessionSelectedEngineService(
+        workspaceId,
+        threadId,
+        sharedEngine,
+      ).catch((error) => {
+        onDebug?.({
+          id: `${Date.now()}-shared-session-select-engine-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "shared-session/select-engine error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      });
+    },
+    [dispatch, onDebug],
   );
 
   const resolvePendingThreadForSession = useCallback(
@@ -750,6 +822,7 @@ export function useThreads({
 
   const {
     startThreadForWorkspace,
+    startSharedSessionForWorkspace,
     forkThreadForWorkspace,
     forkSessionFromMessageForWorkspace,
     forkClaudeSessionFromMessageForWorkspace,
@@ -1303,6 +1376,25 @@ export function useThreads({
       text: string;
     }) => {
       const canonicalThreadId = resolveCanonicalThreadId(payload.threadId);
+      const sharedThread = (state.threadsByWorkspace[payload.workspaceId] ?? []).find(
+        (thread) => thread.id === canonicalThreadId,
+      );
+      if (sharedThread?.threadKind === "shared" && sharedThread.engineSource) {
+        dispatch({
+          type: "upsertItem",
+          workspaceId: payload.workspaceId,
+          threadId: canonicalThreadId,
+          item: {
+            id: payload.itemId,
+            kind: "message",
+            role: "assistant",
+            text: payload.text,
+            engineSource: sharedThread.engineSource,
+            isFinal: true,
+          },
+          hasCustomName: Boolean(getCustomName(payload.workspaceId, canonicalThreadId)),
+        });
+      }
       const relatedThreadIds = collectRelatedThreadIds(canonicalThreadId);
       const pendingEntry = relatedThreadIds
         .map((threadId) => ({
@@ -1349,7 +1441,14 @@ export function useThreads({
         threadId: canonicalThreadId,
       });
     },
-    [collectRelatedThreadIds, mergeMemoryFromPendingCapture, resolveCanonicalThreadId],
+    [
+      collectRelatedThreadIds,
+      dispatch,
+      getCustomName,
+      mergeMemoryFromPendingCapture,
+      resolveCanonicalThreadId,
+      state.threadsByWorkspace,
+    ],
   );
 
   const {
@@ -1409,6 +1508,7 @@ export function useThreads({
     dispatch,
     getCustomName,
     getThreadEngine,
+    getThreadKind,
     markProcessing,
     markReviewing,
     setActiveTurnId,
@@ -1572,6 +1672,56 @@ export function useThreads({
     threadActivityRef,
   ]);
 
+  useEffect(() => {
+    Object.entries(state.threadsByWorkspace).forEach(([workspaceId, threads]) => {
+      threads.forEach((thread) => {
+        if (thread.threadKind !== "shared") {
+          return;
+        }
+        if (!loadedThreadsRef.current[thread.id]) {
+          const existingTimer = sharedSessionSyncTimerByThreadRef.current[thread.id];
+          if (existingTimer) {
+            clearTimeout(existingTimer);
+            sharedSessionSyncTimerByThreadRef.current[thread.id] = null;
+          }
+          return;
+        }
+        const selectedEngine = normalizeSharedSessionEngine(
+          thread.selectedEngine ?? thread.engineSource ?? "claude",
+        );
+        const items = state.itemsByThread[thread.id] ?? [];
+        const signature = JSON.stringify({
+          selectedEngine,
+          items,
+        });
+        if (sharedSessionLastSignatureByThreadRef.current[thread.id] === signature) {
+          return;
+        }
+        sharedSessionLastSignatureByThreadRef.current[thread.id] = signature;
+        const existingTimer = sharedSessionSyncTimerByThreadRef.current[thread.id];
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+        }
+        sharedSessionSyncTimerByThreadRef.current[thread.id] = setTimeout(() => {
+          void syncSharedSessionSnapshotService(
+            workspaceId,
+            thread.id,
+            items,
+            selectedEngine,
+          ).catch((error) => {
+            onDebug?.({
+              id: `${Date.now()}-shared-session-sync-error`,
+              timestamp: Date.now(),
+              source: "error",
+              label: "shared-session/sync error",
+              payload: error instanceof Error ? error.message : String(error),
+            });
+          });
+        }, 320);
+      });
+    });
+  }, [onDebug, state.itemsByThread, state.threadsByWorkspace]);
+
   const removeThread = useCallback(
     async (workspaceId: string, threadId: string): Promise<ThreadDeleteResult> => {
       const mapDeleteErrorCode = (errorMessage: string): ThreadDeleteErrorCode => {
@@ -1612,6 +1762,9 @@ export function useThreads({
       try {
         await deleteThreadForWorkspace(workspaceId, threadId);
         unpinThread(workspaceId, threadId);
+        if (getThreadKind(workspaceId, threadId) === "shared") {
+          clearSharedSessionBindingsForSharedThread(workspaceId, threadId);
+        }
         dispatch({ type: "removeThread", workspaceId, threadId });
         return {
           threadId,
@@ -1629,7 +1782,7 @@ export function useThreads({
         };
       }
     },
-    [deleteThreadForWorkspace, unpinThread],
+    [deleteThreadForWorkspace, getThreadKind, unpinThread],
   );
 
   const renameThread = useCallback(
@@ -1817,6 +1970,7 @@ export function useThreads({
     isThreadAutoNaming,
     startThread,
     startThreadForWorkspace,
+    startSharedSessionForWorkspace,
     forkThreadForWorkspace,
     forkSessionFromMessageForWorkspace,
     forkClaudeSessionFromMessageForWorkspace,
@@ -1839,6 +1993,8 @@ export function useThreads({
     startImport,
     startLsp,
     startShare,
+    getThreadKind,
+    updateSharedSessionEngineSelection,
     resolveCanonicalThreadId,
     reviewPrompt,
     openReviewPrompt,

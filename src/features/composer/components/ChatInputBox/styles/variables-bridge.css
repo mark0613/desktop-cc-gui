@@ -37,6 +37,8 @@
   --attachment-border: var(--border-muted, #353540);
   --token-ring-track: rgba(255, 255, 255, 0.28);
   --token-ring-fill: var(--accent-strong, #60a5fa);
+  --codex-context-accent: color-mix(in srgb, var(--text-primary, #e6e7ea) 86%, transparent);
+  --codex-context-accent-track: color-mix(in srgb, var(--text-primary, #e6e7ea) 24%, transparent);
 }
 
 /* Override ChatInputBox light theme to match ccgui */
@@ -64,6 +66,8 @@
   --attachment-border: color-mix(in srgb, var(--border-strong, rgba(15, 23, 36, 0.14)) 80%, transparent);
   --token-ring-track: rgba(15, 23, 42, 0.28);
   --token-ring-fill: #4d8ff0;
+  --codex-context-accent: color-mix(in srgb, var(--text-primary, #333333) 84%, transparent);
+  --codex-context-accent-track: color-mix(in srgb, var(--text-primary, #333333) 18%, transparent);
 }
 
 @media (prefers-color-scheme: light) {
@@ -91,5 +95,7 @@
     --attachment-border: color-mix(in srgb, var(--border-strong, rgba(15, 23, 36, 0.14)) 80%, transparent);
     --token-ring-track: rgba(15, 23, 42, 0.28);
     --token-ring-fill: #4d8ff0;
+    --codex-context-accent: color-mix(in srgb, var(--text-primary, #333333) 84%, transparent);
+    --codex-context-accent-track: color-mix(in srgb, var(--text-primary, #333333) 18%, transparent);
   }
 }

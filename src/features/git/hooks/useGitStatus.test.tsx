@@ -330,4 +330,23 @@ describe("useGitStatus", () => {
 
     unmount();
   });
+
+  it("does not force unknown branch when the first fetch fails", async () => {
+    const getGitStatusMock = vi.mocked(getGitStatus);
+    getGitStatusMock.mockRejectedValueOnce(new Error("workspace not connected"));
+
+    const { result, unmount } = renderHook(
+      ({ active }: { active: WorkspaceInfo | null }) => useGitStatus(active),
+      { initialProps: { active: workspace } },
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.status.branchName).toBe("");
+    expect(result.current.status.error).toBe("workspace not connected");
+
+    unmount();
+  });
 });

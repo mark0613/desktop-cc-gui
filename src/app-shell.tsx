@@ -108,6 +108,11 @@ import {
 import { SpecHub } from "./features/spec/components/SpecHub";
 import { SearchPalette } from "./features/search/components/SearchPalette";
 import { useUnifiedSearch } from "./features/search/hooks/useUnifiedSearch";
+import {
+  getHomeWorkspaceOptions,
+  resolveHomeWorkspaceId,
+} from "./features/home/utils/homeWorkspaceOptions";
+import { shouldHideHomeOnThreadActivation } from "./features/home/utils/homeVisibility";
 import { loadHistoryWithImportance } from "./features/composer/hooks/useInputHistoryStore";
 import { forceRefreshAgents } from "./features/composer/components/ChatInputBox/providers";
 import { recordSearchResultOpen } from "./features/search/ranking/recencyStore";
@@ -123,7 +128,6 @@ import {
   openOrFocusDetachedFileExplorer,
 } from "./features/files/detachedFileExplorer";
 import {
-  getOpenCodeAgentsList,
   ensureWorkspacePathDir,
   getWorkspaceFiles,
   pickWorkspacePath,
@@ -136,7 +140,6 @@ import type {
   ComposerEditorSettings,
   EngineType,
   MessageSendOptions,
-  OpenCodeAgentOption,
   RequestUserInputRequest,
   RequestUserInputResponse,
   WorkspaceInfo,
@@ -168,6 +171,13 @@ import { useAppShellSearchAndComposerSection } from "./app-shell-parts/useAppShe
 import { useAppShellSections } from "./app-shell-parts/useAppShellSections";
 import { useAppShellLayoutNodesSection } from "./app-shell-parts/useAppShellLayoutNodesSection";
 import { renderAppShell } from "./app-shell-parts/renderAppShell";
+import {
+  getEffectiveModels,
+  getEffectiveReasoningSupported,
+  getEffectiveSelectedModelId,
+  getNextEngineSelectedModelId,
+} from "./app-shell-parts/modelSelection";
+import { useOpenCodeSelection } from "./app-shell-parts/useOpenCodeSelection";
 import { useSelectedAgentSession } from "./app-shell-parts/useSelectedAgentSession";
 import type { AgentTaskScrollRequest } from "./features/messages/types";
 import type { SubagentInfo } from "./features/status-panel/types";
@@ -280,6 +290,16 @@ export function AppShell() {
   const workspacesByPath = useMemo(
     () => new Map(workspaces.map((workspace) => [workspace.path, workspace])),
     [workspaces],
+  );
+  const [homeOpen, setHomeOpen] = useState(true);
+  const homeWorkspaceOptions = useMemo(
+    () => getHomeWorkspaceOptions(groupedWorkspaces, workspaces),
+    [groupedWorkspaces, workspaces],
+  );
+  const homeWorkspaceDefaultId = homeWorkspaceOptions[0]?.id ?? null;
+  const homeWorkspaceSelectedId = useMemo(
+    () => resolveHomeWorkspaceId(activeWorkspaceId, homeWorkspaceOptions),
+    [activeWorkspaceId, homeWorkspaceOptions],
   );
   const {
     sidebarWidth,
@@ -665,58 +685,18 @@ export function AppShell() {
     engineStatuses,
     refreshEngines,
   } = useEngineController({ activeWorkspace, onDebug: addDebugEntry });
-  const [openCodeAgents, setOpenCodeAgents] = useState<OpenCodeAgentOption[]>([]);
-  const [openCodeAgentByThreadId, setOpenCodeAgentByThreadId] = useState<Record<string, string | null>>({});
-  const [openCodeVariantByThreadId, setOpenCodeVariantByThreadId] = useState<
-    Record<string, string | null>
-  >({});
-  const [openCodeDefaultAgentByWorkspace, setOpenCodeDefaultAgentByWorkspace] = useState<
-    Record<string, string | null>
-  >({});
-  const [openCodeDefaultVariantByWorkspace, setOpenCodeDefaultVariantByWorkspace] = useState<
-    Record<string, string | null>
-  >({});
-
-  useEffect(() => {
-    if (activeEngine !== "opencode") {
-      return;
-    }
-    let cancelled = false;
-    void getOpenCodeAgentsList()
-      .then((response) => {
-        if (cancelled) {
-          return;
-        }
-        const payload = Array.isArray(response)
-          ? response
-          : Array.isArray((response as any)?.result)
-            ? (response as any).result
-            : [];
-        const normalized = payload
-          .map((item: any) => ({
-            id: String(item.id ?? "").trim(),
-            description: item.description ? String(item.description) : undefined,
-            isPrimary: Boolean(item.isPrimary ?? item.is_primary),
-          }))
-          .filter((item: OpenCodeAgentOption) => item.id.length > 0)
-          .sort((a: OpenCodeAgentOption, b: OpenCodeAgentOption) =>
-            a.id.localeCompare(b.id),
-          );
-        setOpenCodeAgents(normalized);
-      })
-      .catch((error) => {
-        addDebugEntry({
-          id: `${Date.now()}-opencode-agents-list-error`,
-          timestamp: Date.now(),
-          source: "error",
-          label: "opencode/agents list error",
-          payload: error instanceof Error ? error.message : String(error),
-        });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeEngine, addDebugEntry]);
+  const {
+    openCodeAgents,
+    resolveOpenCodeAgentForThread,
+    resolveOpenCodeVariantForThread,
+    selectOpenCodeAgentForThread,
+    selectOpenCodeVariantForThread,
+    syncActiveOpenCodeThread,
+  } = useOpenCodeSelection({
+    activeEngine,
+    activeWorkspaceId,
+    onDebug: addDebugEntry,
+  });
 
   const handleAppModeChange = useCallback(
     (mode: AppMode) => {
@@ -763,70 +743,40 @@ export function AppShell() {
     [activeEngine, setSelectedModelId],
   );
 
-  // Derive effective models based on active engine
-  // For Codex, use models from useModels hook; for other engines, use engineModelsAsOptions
   const effectiveModels = useMemo(() => {
-    if (activeEngine === "codex") {
-      return models;
-    }
-    return engineModelsAsOptions;
+    return getEffectiveModels(activeEngine, models, engineModelsAsOptions);
   }, [activeEngine, models, engineModelsAsOptions]);
 
   useEffect(() => {
-    if (activeEngine === "codex") {
-      return;
-    }
-    if (engineModelsAsOptions.length === 0) {
+    const nextDefault = getNextEngineSelectedModelId({
+      activeEngine,
+      engineModelsAsOptions,
+      currentSelection: engineSelectedModelIdByType[activeEngine] ?? null,
+    });
+    if (!nextDefault) {
       return;
     }
     setEngineSelectedModelIdByType((prev) => {
       const existing = prev[activeEngine] ?? null;
-      const isValid =
-        !!existing &&
-        engineModelsAsOptions.some((model) => model.id === existing);
-      if (isValid) {
-        return prev;
-      }
-      const nextDefault =
-        engineModelsAsOptions.find((model) => model.isDefault)?.id ??
-        engineModelsAsOptions[0]?.id ??
-        null;
-      if (!nextDefault || nextDefault === existing) {
+      if (nextDefault === existing) {
         return prev;
       }
       return { ...prev, [activeEngine]: nextDefault };
     });
-  }, [activeEngine, engineModelsAsOptions]);
+  }, [activeEngine, engineModelsAsOptions, engineSelectedModelIdByType]);
 
-  // Derive effective selected model ID based on active engine
   const effectiveSelectedModelId = useMemo(() => {
-    if (activeEngine === "codex") {
-      return selectedModelId;
-    }
-    const engineSelection = engineSelectedModelIdByType[activeEngine] ?? null;
-    if (engineModelsAsOptions.length === 0) {
-      if (activeEngine === "claude") {
-        return engineSelection ?? DEFAULT_CLAUDE_MODEL_ID;
-      }
-      return engineSelection;
-    }
-    const validModel = engineModelsAsOptions.find(
-      (model) => model.id === engineSelection,
-    );
-    if (validModel) {
-      return engineSelection;
-    }
-    const defaultModel = engineModelsAsOptions.find((model) => model.isDefault);
-    return defaultModel?.id ?? engineModelsAsOptions[0]?.id ?? null;
+    return getEffectiveSelectedModelId({
+      activeEngine,
+      selectedModelId,
+      engineModelsAsOptions,
+      engineSelectedModelIdByType,
+      defaultClaudeModelId: DEFAULT_CLAUDE_MODEL_ID,
+    });
   }, [activeEngine, engineModelsAsOptions, engineSelectedModelIdByType, selectedModelId]);
 
-  // Derive effective reasoning support based on active engine
   const effectiveReasoningSupported = useMemo(() => {
-    if (activeEngine === "codex") {
-      return reasoningSupported;
-    }
-    // Other engines don't support reasoning effort selection (yet)
-    return false;
+    return getEffectiveReasoningSupported(activeEngine, reasoningSupported);
   }, [activeEngine, reasoningSupported]);
 
   // Derive effective selected model based on active engine
@@ -998,30 +948,6 @@ export function AppShell() {
     effectiveSelectedModel?.model,
     resolvedModel,
   ]);
-  const resolveOpenCodeAgentForThread = useCallback(
-    (threadId: string | null) => {
-      if (!activeWorkspaceId) {
-        return null;
-      }
-      if (threadId && threadId in openCodeAgentByThreadId) {
-        return openCodeAgentByThreadId[threadId] ?? null;
-      }
-      return openCodeDefaultAgentByWorkspace[activeWorkspaceId] ?? null;
-    },
-    [activeWorkspaceId, openCodeAgentByThreadId, openCodeDefaultAgentByWorkspace],
-  );
-  const resolveOpenCodeVariantForThread = useCallback(
-    (threadId: string | null) => {
-      if (!activeWorkspaceId) {
-        return null;
-      }
-      if (threadId && threadId in openCodeVariantByThreadId) {
-        return openCodeVariantByThreadId[threadId] ?? null;
-      }
-      return openCodeDefaultVariantByWorkspace[activeWorkspaceId] ?? null;
-    },
-    [activeWorkspaceId, openCodeVariantByThreadId, openCodeDefaultVariantByWorkspace],
-  );
   const activeGitRoot = activeWorkspace?.settings.gitRoot ?? null;
   const handleSetGitRoot = useCallback(
     async (path: string | null) => {
@@ -1164,6 +1090,8 @@ export function AppShell() {
     startImport,
     startLsp,
     startShare,
+    startSharedSessionForWorkspace,
+    updateSharedSessionEngineSelection,
     resolveCanonicalThreadId,
     reviewPrompt,
     closeReviewPrompt,
@@ -1209,6 +1137,34 @@ export function AppShell() {
     resolveCollaborationRuntimeMode,
     onCollaborationModeResolved: handleCollaborationModeResolved,
   });
+
+  useEffect(() => {
+    syncActiveOpenCodeThread(activeThreadId);
+  }, [activeThreadId, syncActiveOpenCodeThread]);
+
+  const selectedOpenCodeAgent = useMemo(
+    () => resolveOpenCodeAgentForThread(activeThreadId),
+    [activeThreadId, resolveOpenCodeAgentForThread],
+  );
+
+  const selectedOpenCodeVariant = useMemo(
+    () => resolveOpenCodeVariantForThread(activeThreadId),
+    [activeThreadId, resolveOpenCodeVariantForThread],
+  );
+
+  const handleSelectOpenCodeAgent = useCallback(
+    (agentId: string | null) => {
+      selectOpenCodeAgentForThread(activeThreadId, agentId);
+    },
+    [activeThreadId, selectOpenCodeAgentForThread],
+  );
+
+  const handleSelectOpenCodeVariant = useCallback(
+    (variant: string | null) => {
+      selectOpenCodeVariantForThread(activeThreadId, variant);
+    },
+    [activeThreadId, selectOpenCodeVariantForThread],
+  );
 
   const {
     selectedAgent,
@@ -1403,33 +1359,6 @@ export function AppShell() {
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId ?? null;
   }, [activeThreadId]);
-  const previousOpenCodeThreadIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    const previousThreadId = previousOpenCodeThreadIdRef.current;
-    if (
-      previousThreadId &&
-      activeThreadId &&
-      previousThreadId !== activeThreadId &&
-      previousThreadId.startsWith("opencode-pending-") &&
-      activeThreadId.startsWith("opencode:")
-    ) {
-      setOpenCodeAgentByThreadId((prev) => {
-        if (!(previousThreadId in prev) || activeThreadId in prev) {
-          return prev;
-        }
-        return { ...prev, [activeThreadId]: prev[previousThreadId] ?? null };
-      });
-      setOpenCodeVariantByThreadId((prev) => {
-        if (!(previousThreadId in prev) || activeThreadId in prev) {
-          return prev;
-        }
-        return { ...prev, [activeThreadId]: prev[previousThreadId] ?? null };
-      });
-    }
-    previousOpenCodeThreadIdRef.current = activeThreadId ?? null;
-  }, [
-    activeThreadId,
-  ]);
 
   useEffect(() => {
     void reloadAgentCatalog();
@@ -1441,57 +1370,6 @@ export function AppShell() {
       void reloadAgentCatalog();
     }
   }, [reloadAgentCatalog, settingsOpen]);
-
-  const selectedOpenCodeAgent = useMemo(
-    () => resolveOpenCodeAgentForThread(activeThreadId),
-    [activeThreadId, resolveOpenCodeAgentForThread],
-  );
-  const selectedOpenCodeVariant = useMemo(
-    () => resolveOpenCodeVariantForThread(activeThreadId),
-    [activeThreadId, resolveOpenCodeVariantForThread],
-  );
-
-  const handleSelectOpenCodeAgent = useCallback(
-    (agentId: string | null) => {
-      if (!activeWorkspaceId) {
-        return;
-      }
-      const normalized = agentId && agentId.trim().length > 0 ? agentId : null;
-      setOpenCodeDefaultAgentByWorkspace((prev) => ({
-        ...prev,
-        [activeWorkspaceId]: normalized,
-      }));
-      if (!activeThreadId) {
-        return;
-      }
-      setOpenCodeAgentByThreadId((prev) => ({
-        ...prev,
-        [activeThreadId]: normalized,
-      }));
-    },
-    [activeThreadId, activeWorkspaceId],
-  );
-
-  const handleSelectOpenCodeVariant = useCallback(
-    (variant: string | null) => {
-      if (!activeWorkspaceId) {
-        return;
-      }
-      const normalized = variant && variant.trim().length > 0 ? variant : null;
-      setOpenCodeDefaultVariantByWorkspace((prev) => ({
-        ...prev,
-        [activeWorkspaceId]: normalized,
-      }));
-      if (!activeThreadId) {
-        return;
-      }
-      setOpenCodeVariantByThreadId((prev) => ({
-        ...prev,
-        [activeThreadId]: normalized,
-      }));
-    },
-    [activeThreadId, activeWorkspaceId],
-  );
 
   useAutoExitEmptyDiff({
     centerMode,
@@ -1773,6 +1651,7 @@ export function AppShell() {
       exitDiffView();
       setAppMode("chat");
       setActiveTab("codex");
+      setHomeOpen(false);
       if (shouldCollapseRightPanel) {
         collapseRightPanel();
       }
@@ -1788,6 +1667,7 @@ export function AppShell() {
     [
       exitDiffView,
       collapseRightPanel,
+      setHomeOpen,
       setAppMode,
       selectWorkspace,
       setActiveEngine,
@@ -1845,7 +1725,6 @@ export function AppShell() {
     [
       activeWorkspaceId,
       exitDiffView,
-      navigateToThread,
       navigateToThreadWithUiOptions,
       setActiveTab,
       setCenterMode,
@@ -2019,14 +1898,43 @@ export function AppShell() {
   const showGitHistory = appMode === "gitHistory";
   const [selectedKanbanTaskId, setSelectedKanbanTaskId] = useState<string | null>(null);
   const [workspaceHomeWorkspaceId, setWorkspaceHomeWorkspaceId] = useState<string | null>(null);
-  const showHome = !activeWorkspace && !showKanban;
+  const showHome = (!activeWorkspace || homeOpen) && !showKanban;
   const showWorkspaceHome = Boolean(
     activeWorkspace &&
+      !showHome &&
       workspaceHomeWorkspaceId === activeWorkspace.id &&
       !activeThreadId &&
       appMode === "chat" &&
       (isCompact ? (isTablet ? tabletTab : activeTab) === "codex" : activeTab !== "spec"),
   );
+  useEffect(() => {
+    if (!showHome || activeWorkspaceId || !homeWorkspaceDefaultId) {
+      return;
+    }
+    setActiveWorkspaceId(homeWorkspaceDefaultId);
+    setActiveThreadId(null, homeWorkspaceDefaultId);
+  }, [
+    activeWorkspaceId,
+    homeWorkspaceDefaultId,
+    setActiveThreadId,
+    setActiveWorkspaceId,
+    showHome,
+  ]);
+  useEffect(() => {
+    if (
+      !shouldHideHomeOnThreadActivation({
+        homeOpen,
+        activeThreadId,
+      })
+    ) {
+      return;
+    }
+    setHomeOpen(false);
+  }, [
+    activeThreadId,
+    homeOpen,
+    setHomeOpen,
+  ]);
   const canInterrupt = activeThreadId
     ? threadStatusById[activeThreadId]?.isProcessing ?? false
     : false;
@@ -2895,8 +2803,7 @@ export function AppShell() {
     markWorkspaceConnected, maxHeight, minHeight, models, monitor, movePrompt, moveWorkspaceGroup, navigateToThread,
     next, nextDefault, nextFiles, nextHeight, nextSettings, normalizePath, normalized, onCloseTerminal,
     onDebugPanelResizeStart, onGitHistoryPanelResizeStart, onKanbanConversationResizeStart, onNewTerminal, onPlanPanelResizeStart, onRightPanelResizeStart, onSelectTerminal, onSidebarResizeStart,
-    onTerminalPanelResizeStart, onTextareaHeightChange, openAppIconById, openClonePrompt, openCodeAgentByThreadId, openCodeAgents, openCodeDefaultAgentByWorkspace, openCodeDefaultVariantByWorkspace,
-    openCodeVariantByThreadId, openDeleteThreadPrompt, openFileTabs, openPlanPanel, openReleaseNotes, openRenamePrompt, openRenameWorktreePrompt, openSettings,
+    onTerminalPanelResizeStart, onTextareaHeightChange, openAppIconById, openClonePrompt, openCodeAgents, openDeleteThreadPrompt, openFileTabs, openPlanPanel, openReleaseNotes, openRenamePrompt, openRenameWorktreePrompt, openSettings,
     openTerminal, openWorktreePrompt, path, payload, perfSnapshotRef, persistProjectCopiesFolder, pickImages, pinThread,
     pinnedThreadsVersion, planByThread, planPanelHeight, pointerId, prefillDraft, prevFiles, previous, previousAgentTimestamp,
     previousDurationMs, previousTracker, prompts, pushError, pushLoading, queueGitStatusRefresh, queueMessage,
@@ -2916,21 +2823,22 @@ export function AppShell() {
     setAppMode, setAppSettings, setCenterMode, setCodexCollaborationMode, setCollaborationRuntimeModeByThread, setCollaborationUiModeByThread, setComposerInsert, setDebugOpen,
     setDiffSource, setEditorSplitLayout, setEngineSelectedModelIdByType, setFilePanelMode, setFileReferenceMode, setGitDiffListView, setGitDiffViewStyle, setGitHistoryPanelHeight,
     setGitPanelMode, setGitRootScanDepth, setGlobalSearchFilesByWorkspace, setHighlightedBranchIndex, setHighlightedCommitIndex, setHighlightedPresetIndex, setIsEditorFileMaximized, setIsPanelLocked,
-    setIsPlanPanelDismissed, setIsSearchPaletteOpen, setKanbanViewState, setLiveEditPreviewEnabled, setOpenCodeAgentByThreadId, setOpenCodeAgents, setOpenCodeDefaultAgentByWorkspace, setOpenCodeDefaultVariantByWorkspace,
-    setOpenCodeVariantByThreadId, setPrefillDraft, setReduceTransparency, setRightPanelWidth, setSearchContentFilters, setSearchPaletteQuery, setSearchPaletteSelectedIndex, setSearchScope,
+    setIsPlanPanelDismissed, setIsSearchPaletteOpen, setKanbanViewState, setLiveEditPreviewEnabled, setPrefillDraft, setReduceTransparency, setRightPanelWidth, setSearchContentFilters, setSearchPaletteQuery, setSearchPaletteSelectedIndex, setSearchScope,
     setSelectedCollaborationModeId, setSelectedCommitSha, setSelectedDiffPath, setSelectedEffort, setSelectedKanbanTaskId, setSelectedModelId, setSelectedPullRequest,
-    setWorkspaceHomeWorkspaceId, settingsHighlightTarget, settingsOpen, settingsSection, shouldForceResumeInCode, shouldImplementPlan, shouldLoadDiffs, shouldLoadGitHubPanelData,
+    setHomeOpen, setWorkspaceHomeWorkspaceId, settingsHighlightTarget, settingsOpen, settingsSection, shouldForceResumeInCode, shouldImplementPlan, shouldLoadDiffs, shouldLoadGitHubPanelData,
     showDebugButton, showGitHistory, showHome, showKanban, showNextReleaseNotes, showPresetStep, showPreviousReleaseNotes, showWorkspaceHome,
     sidebarCollapsed, sidebarWidth, skills, snapshot, startExport, startFast, startFork, startHeight,
     startImport, startLsp, startMcp, startMode, startResume, startReview, startShare, startSpecRoot,
-    startStatus, startThreadForWorkspace, startUpdate, startY, stored, syncError, syncLoading,
+    startStatus, startThreadForWorkspace, startSharedSessionForWorkspace, startUpdate, startY, stored, syncError, syncLoading,
     t, tabletTab, target, targetThread, targetWorkspaceIds, terminalOpen, terminalPanelHeight, terminalState,
     terminalTabs, textareaHeight, threadAccessMode, threadChanged, threadId, threadItemsByThread, threadListCursorByWorkspace, threadListLoadingByWorkspace,
     threadListPagingByWorkspace, threadMode, threadParentById, threadStatusById, threads, threadsByWorkspace, timelinePlan, title,
     tokenUsageByThread, triggerAutoThreadTitle, trimmed, uiMode, uncachedWorkspaceIds, ungroupedLabel, uniquePaths, unpinThread,
-    updateCloneCopyName, updateCustomInstructions, updatePrompt, updateWorkspaceCodexBin, updateWorkspaceSettings, updateWorktreeBaseRef, updateWorktreeBranch, updateWorktreePublishToOrigin,
+    updateCloneCopyName, updateCustomInstructions, updatePrompt, updateSharedSessionEngineSelection, updateWorkspaceCodexBin, updateWorkspaceSettings, updateWorktreeBaseRef, updateWorktreeBranch, updateWorktreePublishToOrigin,
     updateWorktreeSetupScript, updatedAt, updaterState, useSuggestedCloneCopiesFolder, userInputRequests, validModel, viewportHeight, wasProcessing,
     workspace, workspaceActivity, workspaceDropTargetRef, workspaceFilesPollingEnabled, workspaceGroups, workspaceHomeWorkspaceId, workspaceId, workspaceNameByPath,
+    homeWorkspaceDefaultId,
+    homeWorkspaceSelectedId,
     workspacePath, workspaceSearchSources, workspaces, workspacesById, workspacesByPath, worktreeApplyError, worktreeApplyLoading, worktreeApplySuccess,
     worktreeCreateResult, worktreeLabel, worktreePrompt, worktreeRename, worktreeSetupScriptState,
     sessionRadarRunningSessions: sessionRadarFeed.runningSessions,

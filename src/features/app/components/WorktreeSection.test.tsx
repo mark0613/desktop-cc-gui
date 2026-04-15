@@ -29,8 +29,6 @@ describe("WorktreeSection", () => {
         deletingWorktreeIds={new Set()}
         threadsByWorkspace={{ [worktree.id]: [] }}
         threadStatusById={{}}
-        runningSessionCountByWorkspaceId={{}}
-        recentSessionCountByWorkspaceId={{}}
         threadListLoadingByWorkspace={{ [worktree.id]: false }}
         threadListPagingByWorkspace={{ [worktree.id]: false }}
         threadListCursorByWorkspace={{ [worktree.id]: "cursor" }}
@@ -48,7 +46,6 @@ describe("WorktreeSection", () => {
         isThreadAutoNaming={() => false}
         onToggleThreadPin={vi.fn()}
         getPinTimestamp={() => null}
-        onSelectWorkspace={vi.fn()}
         onConnectWorkspace={vi.fn()}
         onToggleWorkspaceCollapse={vi.fn()}
         onSelectThread={vi.fn()}
@@ -79,8 +76,6 @@ describe("WorktreeSection", () => {
         deletingWorktreeIds={new Set()}
         threadsByWorkspace={{ [worktree.id]: [] }}
         threadStatusById={{}}
-        runningSessionCountByWorkspaceId={{}}
-        recentSessionCountByWorkspaceId={{}}
         threadListLoadingByWorkspace={{ [worktree.id]: false }}
         threadListPagingByWorkspace={{ [worktree.id]: false }}
         threadListCursorByWorkspace={{ [worktree.id]: null }}
@@ -98,7 +93,6 @@ describe("WorktreeSection", () => {
         isThreadAutoNaming={() => false}
         onToggleThreadPin={vi.fn()}
         getPinTimestamp={() => null}
-        onSelectWorkspace={vi.fn()}
         onConnectWorkspace={vi.fn()}
         onToggleWorkspaceCollapse={vi.fn()}
         onSelectThread={vi.fn()}
@@ -121,8 +115,7 @@ describe("WorktreeSection", () => {
     expect(onToggleSectionCollapse).toHaveBeenCalledWith("workspace-1");
   });
 
-  it("selects worktree on single click and toggles agents on double click", () => {
-    const onSelectWorkspace = vi.fn();
+  it("toggles worktree agents on single click", () => {
     const onToggleWorkspaceCollapse = vi.fn();
 
     const { container } = render(
@@ -134,8 +127,6 @@ describe("WorktreeSection", () => {
         deletingWorktreeIds={new Set()}
         threadsByWorkspace={{ [worktree.id]: [] }}
         threadStatusById={{}}
-        runningSessionCountByWorkspaceId={{}}
-        recentSessionCountByWorkspaceId={{}}
         threadListLoadingByWorkspace={{ [worktree.id]: false }}
         threadListPagingByWorkspace={{ [worktree.id]: false }}
         threadListCursorByWorkspace={{ [worktree.id]: null }}
@@ -153,7 +144,6 @@ describe("WorktreeSection", () => {
         isThreadAutoNaming={() => false}
         onToggleThreadPin={vi.fn()}
         getPinTimestamp={() => null}
-        onSelectWorkspace={onSelectWorkspace}
         onConnectWorkspace={vi.fn()}
         onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
         onSelectThread={vi.fn()}
@@ -171,10 +161,6 @@ describe("WorktreeSection", () => {
     }
 
     fireEvent.click(worktreeRow);
-    expect(onSelectWorkspace).toHaveBeenCalledWith("wt-1");
-    expect(onToggleWorkspaceCollapse).not.toHaveBeenCalled();
-
-    fireEvent.doubleClick(worktreeRow);
     expect(onToggleWorkspaceCollapse).toHaveBeenCalledWith("wt-1", true);
   });
 });

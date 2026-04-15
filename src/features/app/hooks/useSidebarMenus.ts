@@ -5,12 +5,14 @@ import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import type { EngineType, WorkspaceInfo } from "../../../types";
+import { formatByteSize } from "../../../utils/formatting";
 
 export type WorkspaceMenuIconKind =
   | "engine-claude"
   | "engine-codex"
   | "engine-opencode"
   | "engine-gemini"
+  | "new-shared"
   | "reload"
   | "remove"
   | "new-worktree"
@@ -41,6 +43,7 @@ export type WorkspaceMenuState = {
 
 type SidebarMenuHandlers = {
   onAddAgent: (workspace: WorkspaceInfo, engine?: EngineType) => void;
+  onAddSharedAgent?: (workspace: WorkspaceInfo) => void;
   onDeleteThread: (workspaceId: string, threadId: string) => void;
   onSyncThread: (workspaceId: string, threadId: string) => void;
   onPinThread: (workspaceId: string, threadId: string) => void;
@@ -58,6 +61,7 @@ type SidebarMenuHandlers = {
 
 export function useSidebarMenus({
   onAddAgent,
+  onAddSharedAgent,
   onDeleteThread,
   onSyncThread,
   onPinThread,
@@ -97,6 +101,7 @@ export function useSidebarMenus({
       workspaceId: string,
       threadId: string,
       canPin: boolean,
+      sizeBytes?: number,
     ) => {
       event.preventDefault();
       event.stopPropagation();
@@ -155,6 +160,15 @@ export function useSidebarMenus({
         );
       }
       items.push(copyItem);
+      const sizeLabel = formatByteSize(sizeBytes);
+      if (sizeLabel) {
+        items.push(
+          await MenuItem.new({
+            text: `${t("threads.size")}: ${sizeLabel}`,
+            enabled: false,
+          }),
+        );
+      }
       const deleteItem = await MenuItem.new({
         text: t("threads.delete"),
         action: () => onDeleteThread(workspaceId, threadId),
@@ -203,6 +217,13 @@ export function useSidebarMenus({
           id: "new-session",
           label: t("sidebar.sessionActionsGroup"),
           actions: [
+            {
+              id: "new-session-shared",
+              label: t("sidebar.newSharedSession"),
+              iconKind: "new-shared",
+              unavailable: !onAddSharedAgent,
+              onSelect: () => onAddSharedAgent?.(workspace),
+            },
             {
               id: "new-session-claude",
               label: t("workspace.engineClaudeCode"),
@@ -273,6 +294,7 @@ export function useSidebarMenus({
     [
       t,
       onAddAgent,
+      onAddSharedAgent,
       onReloadWorkspaceThreads,
       onDeleteWorkspace,
       onAddWorktreeAgent,

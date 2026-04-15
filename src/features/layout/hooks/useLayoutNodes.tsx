@@ -92,6 +92,10 @@ import { resolvePresentationProfile } from "../../messages/presentation/presenta
 import { useWorkspaceSessionActivity } from "../../session-activity/hooks/useWorkspaceSessionActivity";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
 import {
+  getHomeWorkspaceOptions,
+  resolveHomeWorkspaceId,
+} from "../../home/utils/homeWorkspaceOptions";
+import {
   TOPBAR_SESSION_TAB_MAX,
   buildTopbarSessionTabItems,
   createEmptyTopbarSessionWindows,
@@ -210,6 +214,7 @@ type LayoutNodesOptions = {
   onSelectWorkspace: (workspaceId: string) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   onAddAgent: (workspace: WorkspaceInfo, engine?: EngineType) => Promise<void>;
+  onAddSharedAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onAddWorktreeAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onAddCloneAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
@@ -268,6 +273,7 @@ type LayoutNodesOptions = {
   }>;
   isLoadingLatestAgents: boolean;
   onSelectHomeThread: (workspaceId: string, threadId: string) => void;
+  onSelectHomeWorkspace: (workspaceId: string) => void;
   activeWorkspace: WorkspaceInfo | null;
   activeParentWorkspace: WorkspaceInfo | null;
   worktreeLabel: string | null;
@@ -1075,6 +1081,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onSelectWorkspace={options.onSelectWorkspace}
       onConnectWorkspace={options.onConnectWorkspace}
       onAddAgent={options.onAddAgent}
+      onAddSharedAgent={options.onAddSharedAgent}
       onAddWorktreeAgent={options.onAddWorktreeAgent}
       onAddCloneAgent={options.onAddCloneAgent}
       onToggleWorkspaceCollapse={options.onToggleWorkspaceCollapse}
@@ -1225,138 +1232,152 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
     isStatusPanelEngine &&
     options.bottomStatusPanelExpanded &&
     (hasStatusPanelActivity || options.bottomStatusPanelExpanded);
+  const activeThreadSummary =
+    options.activeWorkspaceId && options.activeThreadId
+      ? (options.threadsByWorkspace[options.activeWorkspaceId] ?? []).find(
+          (thread) => thread.id === options.activeThreadId,
+        ) ?? null
+      : null;
+  const isSharedSession = activeThreadSummary?.threadKind === "shared";
 
-  const composerNode = options.showComposer ? (
-    <Composer
-      items={options.activeItems}
-      activeThreadId={options.activeThreadId}
-      threadItemsByThread={options.threadItemsByThread}
-      threadParentById={options.threadParentById}
-      threadStatusById={options.threadStatusById}
-      onSend={options.onSend}
-      onQueue={options.onQueue}
-      onStop={options.onStop}
-      onRewind={options.onRewind}
-      canStop={options.canStop}
-      disabled={options.isReviewing}
-      contextUsage={options.activeTokenUsage}
-      contextDualViewEnabled={options.contextDualViewEnabled}
-      isContextCompacting={activeThreadStatus?.isContextCompacting ?? false}
-      accountRateLimits={options.activeRateLimits}
-      usageShowRemaining={options.usageShowRemaining}
-      onRefreshAccountRateLimits={options.onRefreshAccountRateLimits}
-      queuedMessages={options.activeQueue}
-      sendLabel={
-        options.composerSendLabel ??
-        (options.isProcessing && !options.steerEnabled ? t("messages.queue") : t("messages.send"))
-      }
-      steerEnabled={options.steerEnabled}
-      isProcessing={options.isProcessing}
-      draftText={options.draftText}
-      onDraftChange={options.onDraftChange}
-      attachedImages={options.activeImages}
-      onPickImages={options.onPickImages}
-      onAttachImages={options.onAttachImages}
-      onRemoveImage={options.onRemoveImage}
-      prefillDraft={options.prefillDraft}
-      onPrefillHandled={options.onPrefillHandled}
-      insertText={options.insertText}
-      onInsertHandled={options.onInsertHandled}
-      onEditQueued={options.onEditQueued}
-      onDeleteQueued={options.onDeleteQueued}
-      onFuseQueued={options.onFuseQueued}
-      canFuseQueuedMessages={options.canFuseActiveQueue}
-      fusingQueuedMessageId={options.activeFusingMessageId}
-      collaborationModes={options.collaborationModes}
-      collaborationModesEnabled={options.collaborationModesEnabled}
-      selectedCollaborationModeId={options.selectedCollaborationModeId}
-      onSelectCollaborationMode={options.onSelectCollaborationMode}
-      engines={options.engines}
-      selectedEngine={options.selectedEngine}
-      onSelectEngine={options.onSelectEngine}
-      models={options.models}
-      selectedModelId={options.selectedModelId}
-      onSelectModel={options.onSelectModel}
-      reasoningOptions={options.reasoningOptions}
-      selectedEffort={options.selectedEffort}
-      onSelectEffort={options.onSelectEffort}
-      reasoningSupported={options.reasoningSupported}
-      opencodeAgents={options.opencodeAgents}
-      selectedOpenCodeAgent={options.selectedOpenCodeAgent}
-      onSelectOpenCodeAgent={options.onSelectOpenCodeAgent}
-      selectedAgent={composerSelectedAgent}
-      onAgentSelect={options.onSelectAgent}
-      onOpenAgentSettings={options.onOpenAgentSettings}
-      onOpenPromptSettings={options.onOpenPromptSettings}
-      onOpenModelSettings={options.onOpenModelSettings}
-      opencodeVariantOptions={options.opencodeVariantOptions}
-      selectedOpenCodeVariant={options.selectedOpenCodeVariant}
-      onSelectOpenCodeVariant={options.onSelectOpenCodeVariant}
-      accessMode={options.accessMode}
-      onSelectAccessMode={options.onSelectAccessMode}
-      skills={options.skills}
-      prompts={options.prompts}
-      commands={composerCommands}
-      files={options.files}
-      directories={options.directories}
-      gitignoredFiles={options.gitignoredFiles}
-      gitignoredDirectories={options.gitignoredDirectories}
-      textareaRef={options.textareaRef}
-      historyKey={options.activeWorkspace?.id ?? null}
-      editorSettings={options.composerEditorSettings}
-      sendShortcut={options.composerSendShortcut}
-      textareaHeight={options.textareaHeight}
-      onTextareaHeightChange={options.onTextareaHeightChange}
-      dictationEnabled={options.dictationEnabled}
-      dictationState={options.dictationState}
-      dictationLevel={options.dictationLevel}
-      onToggleDictation={options.onToggleDictation}
-      onOpenDictationSettings={options.onOpenDictationSettings}
-      onOpenExperimentalSettings={options.onOpenExperimentalSettings}
-      dictationTranscript={options.dictationTranscript}
-      onDictationTranscriptHandled={options.onDictationTranscriptHandled}
-      dictationError={options.dictationError}
-      onDismissDictationError={options.onDismissDictationError}
-      dictationHint={options.dictationHint}
-      onDismissDictationHint={options.onDismissDictationHint}
-      linkedKanbanPanels={options.composerLinkedKanbanPanels}
-      selectedLinkedKanbanPanelId={options.selectedComposerKanbanPanelId}
-      onSelectLinkedKanbanPanel={options.onSelectComposerKanbanPanel}
-      kanbanContextMode={options.composerKanbanContextMode}
-      onKanbanContextModeChange={options.onComposerKanbanContextModeChange}
-      onOpenLinkedKanbanPanel={options.onOpenComposerKanbanPanel}
-      activeFilePath={options.activeComposerFilePath}
-      activeFileLineRange={options.activeComposerFileLineRange}
-      fileReferenceMode={options.fileReferenceMode}
-      activeWorkspaceId={options.activeWorkspaceId}
-      plan={options.plan}
-      isPlanMode={options.isPlanMode}
-      onOpenDiffPath={handleOpenDiffPath}
-      statusPanelExpandedOverride={showBottomStatusPanel}
-      onToggleStatusPanelOverride={
-        showBottomStatusPanel ? options.onClosePlanPanel : options.onOpenPlanPanel
-      }
-      reviewPrompt={options.reviewPrompt}
-      onReviewPromptClose={options.onReviewPromptClose}
-      onReviewPromptShowPreset={options.onReviewPromptShowPreset}
-      onReviewPromptChoosePreset={options.onReviewPromptChoosePreset}
-      highlightedPresetIndex={options.highlightedPresetIndex}
-      onReviewPromptHighlightPreset={options.onReviewPromptHighlightPreset}
-      highlightedBranchIndex={options.highlightedBranchIndex}
-      onReviewPromptHighlightBranch={options.onReviewPromptHighlightBranch}
-      highlightedCommitIndex={options.highlightedCommitIndex}
-      onReviewPromptHighlightCommit={options.onReviewPromptHighlightCommit}
-      onReviewPromptKeyDown={options.onReviewPromptKeyDown}
-      onReviewPromptSelectBranch={options.onReviewPromptSelectBranch}
-      onReviewPromptSelectBranchAtIndex={options.onReviewPromptSelectBranchAtIndex}
-      onReviewPromptConfirmBranch={options.onReviewPromptConfirmBranch}
-      onReviewPromptSelectCommit={options.onReviewPromptSelectCommit}
-      onReviewPromptSelectCommitAtIndex={options.onReviewPromptSelectCommitAtIndex}
-      onReviewPromptConfirmCommit={options.onReviewPromptConfirmCommit}
-      onReviewPromptUpdateCustomInstructions={options.onReviewPromptUpdateCustomInstructions}
-      onReviewPromptConfirmCustom={options.onReviewPromptConfirmCustom}
-    />
-  ) : null;
+  const renderComposerNode = (
+    showStatusPanelToggleOverride?: boolean,
+  ) =>
+    options.showComposer ? (
+      <Composer
+        items={options.activeItems}
+        activeThreadId={options.activeThreadId}
+        threadItemsByThread={options.threadItemsByThread}
+        threadParentById={options.threadParentById}
+        threadStatusById={options.threadStatusById}
+        onSend={options.onSend}
+        onQueue={options.onQueue}
+        onStop={options.onStop}
+        onRewind={options.onRewind}
+        canStop={options.canStop}
+        disabled={options.isReviewing}
+        contextUsage={options.activeTokenUsage}
+        contextDualViewEnabled={options.contextDualViewEnabled}
+        isContextCompacting={activeThreadStatus?.isContextCompacting ?? false}
+        accountRateLimits={options.activeRateLimits}
+        usageShowRemaining={options.usageShowRemaining}
+        onRefreshAccountRateLimits={options.onRefreshAccountRateLimits}
+        queuedMessages={options.activeQueue}
+        sendLabel={
+          options.composerSendLabel ??
+          (options.isProcessing && !options.steerEnabled ? t("messages.queue") : t("messages.send"))
+        }
+        steerEnabled={options.steerEnabled}
+        isProcessing={options.isProcessing}
+        draftText={options.draftText}
+        onDraftChange={options.onDraftChange}
+        attachedImages={options.activeImages}
+        onPickImages={options.onPickImages}
+        onAttachImages={options.onAttachImages}
+        onRemoveImage={options.onRemoveImage}
+        prefillDraft={options.prefillDraft}
+        onPrefillHandled={options.onPrefillHandled}
+        insertText={options.insertText}
+        onInsertHandled={options.onInsertHandled}
+        onEditQueued={options.onEditQueued}
+        onDeleteQueued={options.onDeleteQueued}
+        onFuseQueued={options.onFuseQueued}
+        canFuseQueuedMessages={options.canFuseActiveQueue}
+        fusingQueuedMessageId={options.activeFusingMessageId}
+        collaborationModes={options.collaborationModes}
+        collaborationModesEnabled={options.collaborationModesEnabled}
+        selectedCollaborationModeId={options.selectedCollaborationModeId}
+        onSelectCollaborationMode={options.onSelectCollaborationMode}
+        isSharedSession={isSharedSession}
+        engines={options.engines}
+        selectedEngine={options.selectedEngine}
+        onSelectEngine={options.onSelectEngine}
+        models={options.models}
+        selectedModelId={options.selectedModelId}
+        onSelectModel={options.onSelectModel}
+        reasoningOptions={options.reasoningOptions}
+        selectedEffort={options.selectedEffort}
+        onSelectEffort={options.onSelectEffort}
+        reasoningSupported={options.reasoningSupported}
+        opencodeAgents={options.opencodeAgents}
+        selectedOpenCodeAgent={options.selectedOpenCodeAgent}
+        onSelectOpenCodeAgent={options.onSelectOpenCodeAgent}
+        selectedAgent={composerSelectedAgent}
+        onAgentSelect={options.onSelectAgent}
+        onOpenAgentSettings={options.onOpenAgentSettings}
+        onOpenPromptSettings={options.onOpenPromptSettings}
+        onOpenModelSettings={options.onOpenModelSettings}
+        opencodeVariantOptions={options.opencodeVariantOptions}
+        selectedOpenCodeVariant={options.selectedOpenCodeVariant}
+        onSelectOpenCodeVariant={options.onSelectOpenCodeVariant}
+        accessMode={options.accessMode}
+        onSelectAccessMode={options.onSelectAccessMode}
+        skills={options.skills}
+        prompts={options.prompts}
+        commands={composerCommands}
+        files={options.files}
+        directories={options.directories}
+        gitignoredFiles={options.gitignoredFiles}
+        gitignoredDirectories={options.gitignoredDirectories}
+        textareaRef={options.textareaRef}
+        historyKey={options.activeWorkspace?.id ?? null}
+        editorSettings={options.composerEditorSettings}
+        sendShortcut={options.composerSendShortcut}
+        textareaHeight={options.textareaHeight}
+        onTextareaHeightChange={options.onTextareaHeightChange}
+        dictationEnabled={options.dictationEnabled}
+        dictationState={options.dictationState}
+        dictationLevel={options.dictationLevel}
+        onToggleDictation={options.onToggleDictation}
+        onOpenDictationSettings={options.onOpenDictationSettings}
+        onOpenExperimentalSettings={options.onOpenExperimentalSettings}
+        dictationTranscript={options.dictationTranscript}
+        onDictationTranscriptHandled={options.onDictationTranscriptHandled}
+        dictationError={options.dictationError}
+        onDismissDictationError={options.onDismissDictationError}
+        dictationHint={options.dictationHint}
+        onDismissDictationHint={options.onDismissDictationHint}
+        linkedKanbanPanels={options.composerLinkedKanbanPanels}
+        selectedLinkedKanbanPanelId={options.selectedComposerKanbanPanelId}
+        onSelectLinkedKanbanPanel={options.onSelectComposerKanbanPanel}
+        kanbanContextMode={options.composerKanbanContextMode}
+        onKanbanContextModeChange={options.onComposerKanbanContextModeChange}
+        onOpenLinkedKanbanPanel={options.onOpenComposerKanbanPanel}
+        activeFilePath={options.activeComposerFilePath}
+        activeFileLineRange={options.activeComposerFileLineRange}
+        fileReferenceMode={options.fileReferenceMode}
+        activeWorkspaceId={options.activeWorkspaceId}
+        plan={options.plan}
+        isPlanMode={options.isPlanMode}
+        onOpenDiffPath={handleOpenDiffPath}
+        showStatusPanelToggleOverride={showStatusPanelToggleOverride}
+        statusPanelExpandedOverride={showBottomStatusPanel}
+        onToggleStatusPanelOverride={
+          showBottomStatusPanel ? options.onClosePlanPanel : options.onOpenPlanPanel
+        }
+        reviewPrompt={options.reviewPrompt}
+        onReviewPromptClose={options.onReviewPromptClose}
+        onReviewPromptShowPreset={options.onReviewPromptShowPreset}
+        onReviewPromptChoosePreset={options.onReviewPromptChoosePreset}
+        highlightedPresetIndex={options.highlightedPresetIndex}
+        onReviewPromptHighlightPreset={options.onReviewPromptHighlightPreset}
+        highlightedBranchIndex={options.highlightedBranchIndex}
+        onReviewPromptHighlightBranch={options.onReviewPromptHighlightBranch}
+        highlightedCommitIndex={options.highlightedCommitIndex}
+        onReviewPromptHighlightCommit={options.onReviewPromptHighlightCommit}
+        onReviewPromptKeyDown={options.onReviewPromptKeyDown}
+        onReviewPromptSelectBranch={options.onReviewPromptSelectBranch}
+        onReviewPromptSelectBranchAtIndex={options.onReviewPromptSelectBranchAtIndex}
+        onReviewPromptConfirmBranch={options.onReviewPromptConfirmBranch}
+        onReviewPromptSelectCommit={options.onReviewPromptSelectCommit}
+        onReviewPromptSelectCommitAtIndex={options.onReviewPromptSelectCommitAtIndex}
+        onReviewPromptConfirmCommit={options.onReviewPromptConfirmCommit}
+        onReviewPromptUpdateCustomInstructions={options.onReviewPromptUpdateCustomInstructions}
+        onReviewPromptConfirmCustom={options.onReviewPromptConfirmCustom}
+      />
+    ) : null;
+  const composerNode = renderComposerNode();
+  const homeComposerNode = renderComposerNode(false);
 
   const approvalToastsNode = (
     <ApprovalToasts
@@ -1378,13 +1399,26 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
   const errorToastsNode = (
     <ErrorToasts toasts={options.errorToasts} onDismiss={options.onDismissErrorToast} />
   );
+  const homeWorkspaceOptions = getHomeWorkspaceOptions(
+    options.groupedWorkspaces,
+    options.workspaces,
+  );
 
   const homeNode = (
     <HomeChat
       latestAgentRuns={options.latestAgentRuns}
       isLoadingLatestAgents={options.isLoadingLatestAgents}
       onSelectThread={options.onSelectHomeThread}
-      composerNode={composerNode}
+      workspaces={homeWorkspaceOptions}
+      selectedWorkspaceId={resolveHomeWorkspaceId(
+        options.activeWorkspace?.id ?? null,
+        homeWorkspaceOptions,
+      )}
+      onSelectWorkspace={options.onSelectHomeWorkspace}
+      onAddWorkspace={options.onAddWorkspace}
+      composerNode={homeComposerNode}
+      selectedEngine={options.selectedEngine}
+      selectedBranchName={options.branchName}
     />
   );
 

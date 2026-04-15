@@ -27,8 +27,6 @@ type WorktreeSectionProps = {
   deletingWorktreeIds: Set<string>;
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   threadStatusById: ThreadStatusMap;
-  runningSessionCountByWorkspaceId: Record<string, number>;
-  recentSessionCountByWorkspaceId: Record<string, number>;
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
   threadListCursorByWorkspace: Record<string, string | null>;
@@ -48,7 +46,6 @@ type WorktreeSectionProps = {
   isThreadAutoNaming: (workspaceId: string, threadId: string) => boolean;
   onToggleThreadPin: (workspaceId: string, threadId: string) => void;
   getPinTimestamp: (workspaceId: string, threadId: string) => number | null;
-  onSelectWorkspace: (id: string) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => void;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   onSelectThread: (workspaceId: string, threadId: string) => void;
@@ -76,8 +73,6 @@ export function WorktreeSection({
   deletingWorktreeIds,
   threadsByWorkspace,
   threadStatusById,
-  runningSessionCountByWorkspaceId,
-  recentSessionCountByWorkspaceId,
   threadListLoadingByWorkspace,
   threadListPagingByWorkspace,
   threadListCursorByWorkspace,
@@ -92,7 +87,6 @@ export function WorktreeSection({
   isThreadAutoNaming,
   onToggleThreadPin,
   getPinTimestamp,
-  onSelectWorkspace,
   onConnectWorkspace,
   onToggleWorkspaceCollapse,
   onSelectThread,
@@ -196,8 +190,6 @@ export function WorktreeSection({
             const hasRunningSession = worktreeThreads.some(
               (thread) => Boolean(threadStatusById[thread.id]?.isProcessing),
             );
-            const runningSessionCount = runningSessionCountByWorkspaceId[worktree.id] ?? 0;
-            const recentSessionCount = recentSessionCountByWorkspaceId[worktree.id] ?? 0;
             const threadRows = threadRowsByWorktreeId.get(worktree.id);
             const worktreeThreadRows = threadRows?.unpinnedRows ?? [];
             const totalWorktreeRoots = threadRows?.totalRoots ?? 0;
@@ -209,12 +201,9 @@ export function WorktreeSection({
                 isActive={worktree.id === activeWorkspaceId}
                 hasPrimaryActiveThread={hasPrimaryActiveThread}
                 hasRunningSession={hasRunningSession}
-                runningSessionCount={runningSessionCount}
-                recentSessionCount={recentSessionCount}
                 threadCount={totalWorktreeRoots}
                 hasThreadCursor={Boolean(worktreeNextCursor)}
                 isDeleting={deletingWorktreeIds.has(worktree.id)}
-                onSelectWorkspace={onSelectWorkspace}
                 onShowWorktreeMenu={onShowWorktreeMenu}
                 onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
                 onConnectWorkspace={onConnectWorkspace}

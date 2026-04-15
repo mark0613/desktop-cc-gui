@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Switch } from 'antd';
-import { Claude, Gemini } from '@lobehub/icons';
 import { AgentIcon } from '../../../../../components/AgentIcon';
-import openaiColorIcon from '../../../../../assets/model-icons/openai.svg';
-import { AVAILABLE_PROVIDERS } from '../types';
 import { agentProvider, CREATE_NEW_AGENT_ID, EMPTY_STATE_ID, type AgentItem } from '../providers/agentProvider';
 import type { AccountRateLimitsInfo, CodexSpeedMode, ProviderId, SelectedAgent } from '../types';
 import { formatRelativeTime } from '../../../../../utils/time';
@@ -33,39 +29,11 @@ interface ConfigSelectProps {
 }
 
 /**
- * Provider Icon Component
- */
-const ProviderIcon = ({ providerId, size = 16 }: { providerId: string; size?: number }) => {
-  const imgStyle = { width: size, height: size, flexShrink: 0 } as const;
-  switch (providerId) {
-    case 'claude':
-      return <Claude.Color size={size} />;
-    case 'codex':
-      return <img src={openaiColorIcon} alt="OpenAI" style={imgStyle} aria-hidden />;
-    case 'gemini':
-      return <Gemini.Color size={size} />;
-    case 'opencode':
-      return (
-        <svg viewBox="0 0 24 24" fill="none" style={{ ...imgStyle, color: '#6366f1' }} aria-hidden>
-          <rect x="3.2" y="4.2" width="17.6" height="15.6" rx="2.3" stroke="currentColor" strokeWidth="1.6" />
-          <path d="m9.4 9.2-2.3 2.4 2.3 2.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          <path d="M12.3 14.2h4.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
-      );
-    default:
-      return <Claude.Color size={size} />;
-  }
-};
-
-/**
  * ConfigSelect - Combined Configuration Selector
  * Contains CLI Tool Selection and Thinking Switch
  */
 export const ConfigSelect = ({
   currentProvider: providerId,
-  onProviderChange,
-  providerAvailability,
-  providerVersions,
   alwaysThinkingEnabled,
   onToggleThinking,
   streamingEnabled,
@@ -85,9 +53,7 @@ export const ConfigSelect = ({
   const USAGE_REFRESH_TIMEOUT_MS = 10_000;
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'provider' | 'agent' | 'usage' | 'speed'>('none');
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'agent' | 'usage' | 'speed'>('none');
   const [agentItems, setAgentItems] = useState<AgentItem[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [usageLoading, setUsageLoading] = useState(false);
@@ -97,19 +63,6 @@ export const ConfigSelect = ({
   const agentAbortControllerRef = useRef<AbortController | null>(null);
   const usageLoadingRef = useRef(false);
 
-  const providers = AVAILABLE_PROVIDERS.map((provider) => ({
-    ...provider,
-    enabled: providerAvailability?.[provider.id] ?? provider.enabled,
-    version: providerVersions?.[provider.id] ?? null,
-  }));
-  const currentProviderInfo =
-    providers.find((p) => p.id === providerId) ??
-    providers[0] ?? {
-      id: providerId,
-      label: providerId,
-      enabled: true,
-      version: null,
-    };
   const isCodexProvider = providerId === 'codex';
   const isClaudeProvider = providerId === 'claude';
   const supportsReviewQuickAction = isCodexProvider || isClaudeProvider;
@@ -165,14 +118,6 @@ export const ConfigSelect = ({
     };
   }, [accountRateLimits, formatUsageReset, resolveUsagePercent]);
 
-  const showToastMessage = useCallback((message: string) => {
-    setToastMessage(message);
-    setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-    }, 1500);
-  }, []);
-
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setIsOpen(!isOpen);
@@ -180,20 +125,6 @@ export const ConfigSelect = ({
       setActiveSubmenu('none');
     }
   }, [isOpen]);
-
-  const handleProviderSelect = useCallback((pId: string) => {
-    const provider = providers.find((p) => p.id === pId);
-    if (!provider) return;
-
-    if (!provider.enabled) {
-      showToastMessage(t('settings.provider.featureComingSoon'));
-      return;
-    }
-
-    onProviderChange(pId);
-    setIsOpen(false);
-    setActiveSubmenu('none');
-  }, [onProviderChange, providers, showToastMessage, t]);
 
   const loadAgents = useCallback(async () => {
     if (agentAbortControllerRef.current) {
@@ -293,38 +224,6 @@ export const ConfigSelect = ({
       }
     };
   }, []);
-
-  const renderProviderSubmenu = () => (
-    <div
-      className="selector-dropdown"
-      style={{
-        position: 'absolute',
-        left: '100%',
-        bottom: 0,
-        marginLeft: '-30px',
-        zIndex: 10001,
-        minWidth: '180px'
-      }}
-    >
-      {providers.map((provider) => (
-        <div
-          key={provider.id}
-          className={`selector-option ${provider.id === providerId ? 'selected' : ''} ${!provider.enabled ? 'disabled' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleProviderSelect(provider.id);
-          }}
-        >
-          <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ProviderIcon providerId={provider.id} size={14}  />
-          </div>
-          <span>{provider.label}</span>
-          {provider.version ? <span>{` (${provider.version})`}</span> : null}
-          {provider.id === providerId && <span className="codicon codicon-check check-mark" />}
-        </div>
-      ))}
-    </div>
-  );
 
   const renderAgentSubmenu = () => (
     <div
@@ -567,42 +466,6 @@ export const ConfigSelect = ({
             minWidth: '200px'
           }}
         >
-          {/* CLI Tool Item */}
-          <div 
-            className="selector-option" 
-            onMouseEnter={() => setActiveSubmenu('provider')}
-            onMouseLeave={() => setActiveSubmenu('none')}
-            style={{ position: 'relative' }}
-          >
-            <div style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ProviderIcon providerId={currentProviderInfo.id} size={14} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span>
-                {currentProviderInfo.label}
-                {currentProviderInfo.version ? ` (${currentProviderInfo.version})` : ''}
-              </span>
-            </div>
-            <div 
-              style={{ 
-                marginLeft: 'auto',
-                display: 'flex',
-                alignItems: 'center',
-                alignSelf: 'stretch',
-                paddingLeft: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              <span className="codicon codicon-chevron-right" style={{ fontSize: '12px' }} />
-            </div>
-            
-            {activeSubmenu === 'provider' && renderProviderSubmenu()}
-          </div>
-
-
-          {/* Divider */}
-          <div style={{ height: 1, background: 'var(--dropdown-border)', margin: '4px 0', opacity: 0.5 }} />
-
           {/* Agent Item (Disabled) */}
           <div
             className="selector-option"
@@ -807,13 +670,6 @@ export const ConfigSelect = ({
             </>
           )}
         </div>
-      )}
-
-      {showToast && createPortal(
-        <div className="selector-toast" style={{ zIndex: 20000 }}>
-          {toastMessage}
-        </div>,
-        document.body
       )}
     </div>
   );

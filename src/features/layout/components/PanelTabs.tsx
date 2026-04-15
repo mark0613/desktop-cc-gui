@@ -7,6 +7,7 @@ import Brain from "lucide-react/dist/esm/icons/brain";
 import Search from "lucide-react/dist/esm/icons/search";
 import Activity from "lucide-react/dist/esm/icons/activity";
 import LayoutList from "lucide-react/dist/esm/icons/layout-list";
+import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
 
 export type PanelTabId =
   | "radar"
@@ -76,20 +77,18 @@ export function PanelTabs({ active, onSelect, tabs, liveStates }: PanelTabsProps
         const isActive = active === tab.id;
         const isLive = Boolean(liveStates?.[tab.id]);
         return (
-          <button
+          <TooltipIconButton
             key={tab.id}
-            type="button"
             className={`panel-tab${isActive ? " is-active" : ""}${isLive ? " is-live" : ""}`}
             onClick={() => onSelect(tab.id)}
             aria-current={isActive ? "page" : undefined}
-            aria-label={tab.label}
-            title={tab.label}
             data-tauri-drag-region="false"
+            label={tab.label}
           >
             <span className={`panel-tab-icon${isLive ? " is-live" : ""}`} aria-hidden>
               {tab.icon}
             </span>
-          </button>
+          </TooltipIconButton>
         );
       })}
     </div>

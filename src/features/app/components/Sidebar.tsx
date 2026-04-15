@@ -25,6 +25,8 @@ import { isDefaultWorkspacePath } from "../../workspaces/utils/defaultWorkspace"
 import { formatShortcutForPlatform, isMacPlatform } from "../../../utils/shortcuts";
 import { formatRelativeTimeShort } from "../../../utils/time";
 import { EngineIcon } from "../../engine/components/EngineIcon";
+import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
+import { SharedSessionIcon } from "../../shared-session/components/SharedSessionIcon";
 import { pushErrorToast } from "../../../services/toasts";
 import Brain from "lucide-react/dist/esm/icons/brain";
 import BrainCircuit from "lucide-react/dist/esm/icons/brain-circuit";
@@ -34,6 +36,7 @@ import ChevronsDownUp from "lucide-react/dist/esm/icons/chevrons-down-up";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import FileText from "lucide-react/dist/esm/icons/file-text";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
+import House from "lucide-react/dist/esm/icons/house";
 import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
 import Lock from "lucide-react/dist/esm/icons/lock";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
@@ -88,6 +91,7 @@ type SidebarProps = {
   onSelectWorkspace: (id: string) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => void;
   onAddAgent: (workspace: WorkspaceInfo, engine?: EngineType) => void;
+  onAddSharedAgent?: (workspace: WorkspaceInfo) => void;
   onAddWorktreeAgent: (workspace: WorkspaceInfo) => void;
   onAddCloneAgent: (workspace: WorkspaceInfo) => void;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
@@ -140,8 +144,8 @@ export function Sidebar({
   threadsByWorkspace,
   threadParentById,
   threadStatusById,
-  runningSessionCountByWorkspaceId = {},
-  recentSessionCountByWorkspaceId = {},
+  runningSessionCountByWorkspaceId: _runningSessionCountByWorkspaceId = {},
+  recentSessionCountByWorkspaceId: _recentSessionCountByWorkspaceId = {},
   threadListLoadingByWorkspace,
   threadListPagingByWorkspace,
   threadListCursorByWorkspace,
@@ -160,9 +164,10 @@ export function Sidebar({
   onToggleTerminal: _onToggleTerminal,
   onAddWorkspace,
   onSelectHome: _onSelectHome,
-  onSelectWorkspace,
+  onSelectWorkspace: _onSelectWorkspace,
   onConnectWorkspace,
   onAddAgent,
+  onAddSharedAgent,
   onAddWorktreeAgent,
   onAddCloneAgent,
   onToggleWorkspaceCollapse,
@@ -256,6 +261,7 @@ export function Sidebar({
   } =
     useSidebarMenus({
       onAddAgent,
+      onAddSharedAgent,
       onDeleteThread,
       onSyncThread,
       onPinThread: pinThread,
@@ -293,13 +299,15 @@ export function Sidebar({
       case "engine-claude":
         return <EngineIcon engine="claude" size={14} />;
       case "engine-codex":
-        return <EngineIcon engine="codex" size={14} style={{ color: "#10a37f" }} />;
+        return <EngineIcon engine="codex" size={14} />;
       case "engine-opencode":
         return <EngineIcon engine="opencode" size={14} style={{ color: "#3b82f6" }} />;
       case "engine-gemini":
         return <EngineIcon engine="gemini" size={14} />;
       case "reload":
         return <RefreshCw size={13} />;
+      case "new-shared":
+        return <SharedSessionIcon size={13} />;
       case "remove":
         return <Trash2 size={13} />;
       case "new-worktree":
@@ -729,17 +737,7 @@ export function Sidebar({
       collapsedWorktreeSections.has(entry.id);
     const hasPrimaryActiveThread =
       entry.id === activeWorkspaceId && Boolean(activeThreadId);
-    const runningSessionCount = (runningSessionCountByWorkspaceId[entry.id] ?? 0) +
-      worktrees.reduce(
-        (sum, worktree) => sum + (runningSessionCountByWorkspaceId[worktree.id] ?? 0),
-        0,
-      );
-    const recentSessionCount = (recentSessionCountByWorkspaceId[entry.id] ?? 0) +
-      worktrees.reduce(
-        (sum, worktree) => sum + (recentSessionCountByWorkspaceId[worktree.id] ?? 0),
-        0,
-      );
-    const hasRunningSession = runningSessionCount > 0 || (hasRunningSessionByProjectId.get(entry.id) ?? false);
+    const hasRunningSession = hasRunningSessionByProjectId.get(entry.id) ?? false;
     return (
       <WorkspaceCard
         key={entry.id}
@@ -748,10 +746,7 @@ export function Sidebar({
         isActive={entry.id === activeWorkspaceId}
         hasPrimaryActiveThread={hasPrimaryActiveThread}
         hasRunningSession={hasRunningSession}
-        runningSessionCount={runningSessionCount}
-        recentSessionCount={recentSessionCount}
         isCollapsed={isCollapsed}
-        onSelectWorkspace={onSelectWorkspace}
         onShowWorkspaceMenu={showWorkspaceMenu}
         onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
       >
@@ -764,8 +759,6 @@ export function Sidebar({
             deletingWorktreeIds={deletingWorktreeIds}
             threadsByWorkspace={threadsByWorkspace}
             threadStatusById={threadStatusById}
-            runningSessionCountByWorkspaceId={runningSessionCountByWorkspaceId}
-            recentSessionCountByWorkspaceId={recentSessionCountByWorkspaceId}
             threadListLoadingByWorkspace={threadListLoadingByWorkspace}
             threadListPagingByWorkspace={threadListPagingByWorkspace}
             threadListCursorByWorkspace={threadListCursorByWorkspace}
@@ -780,7 +773,6 @@ export function Sidebar({
             isThreadAutoNaming={isThreadAutoNaming}
             onToggleThreadPin={handleToggleThreadPin}
             getPinTimestamp={getPinTimestamp}
-            onSelectWorkspace={onSelectWorkspace}
             onConnectWorkspace={onConnectWorkspace}
             onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
             onSelectThread={onSelectThread}
@@ -847,14 +839,11 @@ export function Sidebar({
     isThreadAutoNaming,
     isThreadPinned,
     hasRunningSessionByProjectId,
-    recentSessionCountByWorkspaceId,
-    runningSessionCountByWorkspaceId,
     onCancelDeleteConfirm,
     onConfirmDeleteConfirm,
     onConnectWorkspace,
     onLoadOlderThreads,
     onSelectThread,
-    onSelectWorkspace,
     showThreadMenu,
     showWorkspaceMenu,
     showWorktreeMenu,
@@ -880,9 +869,9 @@ export function Sidebar({
       onDragLeave={onWorkspaceDragLeave}
       onDrop={onWorkspaceDrop}
     >
-      <div className="sidebar-topbar-placeholder">
+      <div className="sidebar-topbar-placeholder" data-tauri-drag-region>
         {topbarNode ? (
-          <div className="sidebar-topbar-content">
+          <div className="sidebar-topbar-content" data-tauri-drag-region>
             {topbarNode}
           </div>
         ) : null}
@@ -943,10 +932,7 @@ export function Sidebar({
               aria-label={t("sidebar.quickNewThread")}
               data-tauri-drag-region="false"
             >
-              <svg className="sidebar-primary-nav-icon" aria-hidden width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M14.7842 2.9688C15.0826 2.67043 15.4873 2.50281 15.9092 2.50281C16.3312 2.50281 16.7359 2.67043 17.0342 2.9688C17.3326 3.26717 17.5002 3.67184 17.5002 4.0938C17.5002 4.51575 17.3326 4.92043 17.0342 5.2188L10.2745 11.9793C10.0964 12.1572 9.8764 12.2875 9.63475 12.358L7.48 12.988C7.41546 13.0069 7.34705 13.008 7.28193 12.9913C7.21681 12.9746 7.15737 12.9407 7.10983 12.8932C7.0623 12.8457 7.02842 12.7862 7.01173 12.7211C6.99505 12.656 6.99618 12.5876 7.015 12.523L7.645 10.3683C7.71589 10.1268 7.8464 9.90709 8.0245 9.7293L14.7842 2.9688Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M10 3.25H6.25C4.59315 3.25 3.25 4.59315 3.25 6.25V13.75C3.25 15.4069 4.59315 16.75 6.25 16.75H13.75C15.4069 16.75 16.75 15.4069 16.75 13.75V10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-              </svg>
+              <House className="sidebar-primary-nav-icon" aria-hidden size={20} strokeWidth={1.8} />
               <span className="sidebar-primary-nav-text">{t("sidebar.quickNewThread")}</span>
             </button>
             <button
@@ -962,12 +948,7 @@ export function Sidebar({
                 <path d="M13 15.25H17.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M15.25 17.5V13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              <span className="sidebar-primary-nav-text-with-badge">
-                <span className="sidebar-primary-nav-text">{t("sidebar.quickAutomation")}</span>
-                <span className="sidebar-primary-nav-badge" aria-hidden>
-                  {t("sidebar.quickAutomationBadge")}
-                </span>
-              </span>
+              <span className="sidebar-primary-nav-text">{t("sidebar.quickAutomation")}</span>
               <span className="sidebar-primary-nav-shortcut" aria-hidden>
                 {quickKanbanShortcutLabel}
               </span>
@@ -1042,20 +1023,18 @@ export function Sidebar({
               >
                 <ChevronsDownUp size={14} aria-hidden />
               </button>
-              <button
+              <TooltipIconButton
                 className="sidebar-title-add"
                 onClick={onAddWorkspace}
                 data-tauri-drag-region="false"
-                aria-label={t("sidebar.addWorkspace")}
-                type="button"
-                title={t("sidebar.addWorkspace")}
+                label={t("sidebar.addWorkspace")}
               >
                 <span
                   className="codicon codicon-new-folder"
                   aria-hidden
                   style={{ fontSize: "16px" }}
                 />
-              </button>
+              </TooltipIconButton>
             </div>
             <div className="workspace-list">
           {defaultWorkspaceEntries.map(renderWorkspaceEntry)}

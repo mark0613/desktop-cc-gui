@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveKanbanThreadCreationStrategy } from "./contextMode";
+import {
+  isKanbanThreadCompatibleWithEngine,
+  resolveKanbanThreadCreationStrategy,
+} from "./contextMode";
 
 describe("resolveKanbanThreadCreationStrategy", () => {
   it("returns new by default", () => {
@@ -8,6 +11,7 @@ describe("resolveKanbanThreadCreationStrategy", () => {
         mode: "new",
         engine: "codex",
         activeThreadId: "thread-1",
+        activeThreadEngine: "codex",
         activeWorkspaceId: "ws-1",
         targetWorkspaceId: "ws-1",
         isActiveThreadInWorkspace: true,
@@ -21,6 +25,7 @@ describe("resolveKanbanThreadCreationStrategy", () => {
         mode: "inherit",
         engine: "codex",
         activeThreadId: "thread-1",
+        activeThreadEngine: "codex",
         activeWorkspaceId: "ws-1",
         targetWorkspaceId: "ws-1",
         isActiveThreadInWorkspace: true,
@@ -33,7 +38,8 @@ describe("resolveKanbanThreadCreationStrategy", () => {
       resolveKanbanThreadCreationStrategy({
         mode: "inherit",
         engine: "claude",
-        activeThreadId: "thread-1",
+        activeThreadId: "claude:thread-1",
+        activeThreadEngine: "claude",
         activeWorkspaceId: "ws-1",
         targetWorkspaceId: "ws-1",
         isActiveThreadInWorkspace: true,
@@ -47,6 +53,7 @@ describe("resolveKanbanThreadCreationStrategy", () => {
         mode: "inherit",
         engine: "codex",
         activeThreadId: null,
+        activeThreadEngine: null,
         activeWorkspaceId: "ws-1",
         targetWorkspaceId: "ws-1",
         isActiveThreadInWorkspace: true,
@@ -58,6 +65,7 @@ describe("resolveKanbanThreadCreationStrategy", () => {
         mode: "inherit",
         engine: "codex",
         activeThreadId: "thread-1",
+        activeThreadEngine: "codex",
         activeWorkspaceId: "ws-2",
         targetWorkspaceId: "ws-1",
         isActiveThreadInWorkspace: true,
@@ -69,10 +77,74 @@ describe("resolveKanbanThreadCreationStrategy", () => {
         mode: "inherit",
         engine: "codex",
         activeThreadId: "thread-1",
+        activeThreadEngine: "codex",
         activeWorkspaceId: "ws-1",
         targetWorkspaceId: "ws-1",
         isActiveThreadInWorkspace: false,
       }),
     ).toBe("new");
+  });
+
+  it("falls back to new when active thread engine does not match selected engine", () => {
+    expect(
+      resolveKanbanThreadCreationStrategy({
+        mode: "inherit",
+        engine: "codex",
+        activeThreadId: "claude:thread-1",
+        activeThreadEngine: "claude",
+        activeWorkspaceId: "ws-1",
+        targetWorkspaceId: "ws-1",
+        isActiveThreadInWorkspace: true,
+      }),
+    ).toBe("new");
+  });
+});
+
+describe("isKanbanThreadCompatibleWithEngine", () => {
+  it("rejects a claude thread when the task targets codex", () => {
+    expect(
+      isKanbanThreadCompatibleWithEngine({
+        engine: "codex",
+        threadId: "claude:session-1",
+        threadEngine: "claude",
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects an unprefixed codex thread when the task explicitly targets claude", () => {
+    expect(
+      isKanbanThreadCompatibleWithEngine({
+        engine: "claude",
+        threadId: "thread-1",
+        threadEngine: "codex",
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts legacy unprefixed thread ids for codex by default", () => {
+    expect(
+      isKanbanThreadCompatibleWithEngine({
+        engine: "codex",
+        threadId: "thread-1",
+        threadEngine: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("accepts claude pending threads only for claude tasks", () => {
+    expect(
+      isKanbanThreadCompatibleWithEngine({
+        engine: "claude",
+        threadId: "claude-pending-1",
+        threadEngine: null,
+      }),
+    ).toBe(true);
+    expect(
+      isKanbanThreadCompatibleWithEngine({
+        engine: "codex",
+        threadId: "claude-pending-1",
+        threadEngine: null,
+      }),
+    ).toBe(false);
   });
 });
