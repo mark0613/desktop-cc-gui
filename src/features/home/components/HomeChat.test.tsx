@@ -104,4 +104,24 @@ describe("HomeChat", () => {
 
     expect(markup).not.toContain("home-chat-workspace-summary");
   });
+
+  it("does not render an unknown branch placeholder when branch data is unavailable", () => {
+    const markup = renderToStaticMarkup(
+      <HomeChat
+        {...baseProps}
+        selectedBranchName={null}
+        workspaces={[
+          {
+            id: "ws-1",
+            name: "desktop-cc-gui",
+            path: "/Users/demo/Desktop/desktop-cc-gui",
+            kind: "main",
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).not.toContain("unknown");
+    expect(markup).not.toContain("home-chat-workspace-branch");
+  });
 });

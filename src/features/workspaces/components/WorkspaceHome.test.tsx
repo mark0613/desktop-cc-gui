@@ -62,4 +62,11 @@ describe("WorkspaceHome", () => {
     expect(container.querySelector(".workspace-home-branch-line")?.textContent)
       .toContain("工作树(feature/worktree-home)");
   });
+
+  it("does not render an unknown branch placeholder when branch data is unavailable", () => {
+    const { container } = renderWorkspaceHome(baseWorkspace, null);
+
+    expect(container.querySelector(".workspace-home-branch-line")).toBeNull();
+    expect(container.textContent).not.toContain("unknown");
+  });
 });

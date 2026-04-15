@@ -8,6 +8,7 @@ import type {
   ThreadTokenUsage,
   TurnPlan,
 } from "../../../types";
+import type { SidebarSnapshot } from "../utils/sidebarSnapshot";
 import {
   normalizeItem,
   prepareThreadItems,
@@ -586,6 +587,16 @@ export const initialState: ThreadState = {
   lastAgentMessageByThread: {},
   agentSegmentByThread: {},
 };
+
+export function createInitialThreadState(snapshot?: SidebarSnapshot | null): ThreadState {
+  if (!snapshot) {
+    return initialState;
+  }
+  return {
+    ...initialState,
+    threadsByWorkspace: snapshot.threadsByWorkspace,
+  };
+}
 
 
 function findAssistantMessageIndexById(

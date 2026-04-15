@@ -65,7 +65,7 @@ export function WorkspaceHome({
   currentBranch,
 }: WorkspaceHomeProps) {
   const { t } = useTranslation();
-  const branchLabel = currentBranch || workspace.worktree?.branch || t("workspace.unknownBranch");
+  const branchLabel = currentBranch || workspace.worktree?.branch || null;
   const branchDescriptor = workspace.kind === "worktree"
     ? t("workspace.homeBranchLabelWorktree")
     : t("workspace.homeBranchLabelMain");
@@ -91,11 +91,13 @@ export function WorkspaceHome({
               <span className="workspace-home-path-name">{pathName}</span>
             </p>
 
-            <div className="workspace-home-branch-line">
-              <GitBranch size={20} aria-hidden className="workspace-home-branch-icon" />
-              <span className="workspace-home-branch-label">{branchDescriptor}</span>
-              <span className="workspace-home-branch-value">({branchLabel})</span>
-            </div>
+            {branchLabel ? (
+              <div className="workspace-home-branch-line">
+                <GitBranch size={20} aria-hidden className="workspace-home-branch-icon" />
+                <span className="workspace-home-branch-label">{branchDescriptor}</span>
+                <span className="workspace-home-branch-value">({branchLabel})</span>
+              </div>
+            ) : null}
           </div>
         </header>
       </div>

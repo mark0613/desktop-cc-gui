@@ -84,7 +84,7 @@ export function HomeChat({
     ?? null;
   const deferredWorkspaceQuery = useDeferredValue(workspaceQuery.trim().toLowerCase());
   const branchLabel = selectedWorkspace
-    ? selectedBranchName?.trim() || selectedWorkspace.worktree?.branch || t("workspace.unknownBranch")
+    ? selectedBranchName?.trim() || selectedWorkspace.worktree?.branch || null
     : null;
   const branchDescriptor = selectedWorkspace?.kind === "worktree"
     ? t("workspace.homeBranchLabelWorktree")

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { CustomPromptOption, DebugEntry, WorkspaceInfo } from "../../../types";
 import { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
-import { initialState, threadReducer } from "./useThreadsReducer";
+import { createInitialThreadState, threadReducer } from "./useThreadsReducer";
 import { useThreadStorage } from "./useThreadStorage";
 import { useThreadLinking } from "./useThreadLinking";
 import { useThreadEventHandlers } from "./useThreadEventHandlers";
@@ -18,6 +18,10 @@ import {
   saveCustomName,
 } from "../utils/threadStorage";
 import { writeClientStoreValue } from "../../../services/clientStorage";
+import {
+  loadSidebarSnapshot,
+  saveSidebarSnapshotThreads,
+} from "../utils/sidebarSnapshot";
 import {
   generateThreadTitle,
   listThreadTitles,
@@ -459,7 +463,11 @@ export function useThreads({
   resolveCollaborationRuntimeMode,
   onCollaborationModeResolved,
 }: UseThreadsOptions) {
-  const [state, dispatch] = useReducer(threadReducer, initialState);
+  const [state, dispatch] = useReducer(
+    threadReducer,
+    loadSidebarSnapshot(),
+    createInitialThreadState,
+  );
   const loadedThreadsRef = useRef<Record<string, boolean>>({});
   const threadStatusByIdRef = useRef(state.threadStatusById);
   const loadedThreadLastRefreshAtRef = useRef<Record<string, number>>({});
@@ -557,6 +565,12 @@ export function useThreads({
   useEffect(() => {
     activeThreadIdByWorkspaceRef.current = state.activeThreadIdByWorkspace;
   }, [state.activeThreadIdByWorkspace]);
+
+  useEffect(() => {
+    Object.entries(state.threadsByWorkspace).forEach(([workspaceId, threads]) => {
+      saveSidebarSnapshotThreads(workspaceId, threads);
+    });
+  }, [state.threadsByWorkspace]);
 
   useEffect(() => {
     threadStatusByIdRef.current = state.threadStatusById;
