@@ -2251,6 +2251,55 @@ describe("useThreadActions", () => {
     ]);
   });
 
+  it("can skip opencode probing while keeping existing opencode threads", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(listClaudeSessions).mockResolvedValue([]);
+    vi.mocked(getOpenCodeSessionList).mockResolvedValue([
+      {
+        sessionId: "ses_should_not_fetch",
+        title: "Should not fetch",
+        updatedLabel: "1m ago",
+        updatedAt: 1_740_000_000_000,
+      },
+    ]);
+
+    const { result, dispatch } = renderActions({
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "opencode:ses_cached_1",
+            name: "Cached OpenCode",
+            updatedAt: 1_730_500_000_000,
+            engineSource: "opencode",
+            threadKind: "native",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, {
+        preserveState: true,
+        includeOpenCodeSessions: false,
+      });
+    });
+
+    expect(getOpenCodeSessionList).not.toHaveBeenCalled();
+    expectSetThreadsDispatched(dispatch, "ws-1", [
+      {
+        id: "opencode:ses_cached_1",
+        name: "Cached OpenCode",
+        updatedAt: 1_730_500_000_000,
+        engineSource: "opencode",
+      },
+    ]);
+  });
+
   it("reconnects workspace and retries list when backend reports not connected", async () => {
     vi.mocked(listThreads)
       .mockRejectedValueOnce(new Error("workspace not connected"))

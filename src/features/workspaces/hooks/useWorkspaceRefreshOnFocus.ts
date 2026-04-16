@@ -7,7 +7,7 @@ type WorkspaceRefreshOptions = {
   refreshWorkspaces: () => Promise<WorkspaceInfo[] | void>;
   listThreadsForWorkspace: (
     workspace: WorkspaceInfo,
-    options?: { preserveState?: boolean },
+    options?: { preserveState?: boolean; includeOpenCodeSessions?: boolean },
   ) => Promise<void>;
 };
 
@@ -39,11 +39,17 @@ export function useWorkspaceRefreshOnFocus({
         const active = visible.find((w) => w.id === activeWorkspaceId);
         const rest = visible.filter((w) => w.id !== activeWorkspaceId);
         if (active) {
-          await listThreadsForWorkspace(active, { preserveState: true });
+          await listThreadsForWorkspace(active, {
+            preserveState: true,
+            includeOpenCodeSessions: false,
+          });
         }
         await Promise.allSettled(
           rest.map((workspace) =>
-            listThreadsForWorkspace(workspace, { preserveState: true }),
+            listThreadsForWorkspace(workspace, {
+              preserveState: true,
+              includeOpenCodeSessions: false,
+            }),
           ),
         );
       })();

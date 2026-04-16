@@ -1284,7 +1284,10 @@ export function AppShell() {
   const listThreadsForWorkspaceTracked = useCallback(
     async (
       workspace: WorkspaceInfo,
-      options?: { preserveState?: boolean },
+      options?: {
+        preserveState?: boolean;
+        includeOpenCodeSessions?: boolean;
+      },
     ) => {
       await listThreadsForWorkspace(workspace, options);
       hydratedThreadListWorkspaceIdsRef.current.add(workspace.id);

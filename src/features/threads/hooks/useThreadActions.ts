@@ -1900,6 +1900,7 @@ export function useThreadActions({
       workspace: WorkspaceInfo,
       options?: {
         preserveState?: boolean;
+        includeOpenCodeSessions?: boolean;
       },
     ) => {
       // Store workspace path for Claude session loading
@@ -1907,6 +1908,7 @@ export function useThreadActions({
       const requestSeq = (threadListRequestSeqRef.current[workspace.id] ?? 0) + 1;
       threadListRequestSeqRef.current[workspace.id] = requestSeq;
       const preserveState = options?.preserveState ?? false;
+      const includeOpenCodeSessions = options?.includeOpenCodeSessions ?? true;
       const workspacePath = normalizeComparableWorkspacePath(workspace.path);
       if (!preserveState) {
         dispatch({
@@ -2152,7 +2154,11 @@ export function useThreadActions({
         allSummaries.forEach((entry) => mergedById.set(entry.id, entry));
         const [claudeResult, opencodeResult] = await Promise.allSettled([
           listClaudeSessionsService(workspace.path, 50),
-          getOpenCodeSessionListService(workspace.id),
+          includeOpenCodeSessions
+            ? getOpenCodeSessionListService(workspace.id)
+            : Promise.resolve<
+                Awaited<ReturnType<typeof getOpenCodeSessionListService>>
+              >([]),
         ]);
         if (claudeResult.status === "fulfilled") {
           const claudeSessions = Array.isArray(claudeResult.value)
@@ -2224,6 +2230,42 @@ export function useThreadActions({
             };
             if (!prev || next.updatedAt >= prev.updatedAt) {
               mergedById.set(id, next);
+            }
+          });
+        }
+        if (!includeOpenCodeSessions) {
+          existingThreads.forEach((thread) => {
+            if (thread.threadKind === "shared" || hiddenSharedBindingIds.has(thread.id)) {
+              return;
+            }
+            const isOpenCodeThread =
+              thread.engineSource === "opencode"
+              || thread.id.startsWith("opencode:")
+              || thread.id.startsWith("opencode-pending-");
+            if (!isOpenCodeThread) {
+              return;
+            }
+            const prev = mergedById.get(thread.id);
+            const threadUpdatedAt = Number.isFinite(thread.updatedAt)
+              ? Math.max(0, thread.updatedAt)
+              : 0;
+            const updatedAt =
+              threadUpdatedAt ||
+              nextActivityByThread[thread.id] ||
+              prev?.updatedAt ||
+              0;
+            if (updatedAt > (nextActivityByThread[thread.id] ?? 0)) {
+              nextActivityByThread[thread.id] = updatedAt;
+              didChangeActivity = true;
+            }
+            const next: ThreadSummary = {
+              ...thread,
+              updatedAt,
+              engineSource: "opencode",
+              threadKind: thread.threadKind ?? "native",
+            };
+            if (!prev || next.updatedAt >= prev.updatedAt) {
+              mergedById.set(thread.id, next);
             }
           });
         }
