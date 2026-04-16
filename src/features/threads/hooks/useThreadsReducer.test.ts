@@ -129,6 +129,55 @@ describe("threadReducer", () => {
     }
   });
 
+  it("reconciles optimistic user bubble when backend payload appends selected-agent prompt block", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "user-old-1",
+            kind: "message",
+            role: "user",
+            text: "上一轮真实消息",
+          },
+          {
+            id: "optimistic-user-1",
+            kind: "message",
+            role: "user",
+            text: "你好",
+            selectedAgentName: "小张",
+            selectedAgentIcon: "agent-robot-02",
+          },
+        ],
+      },
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-1", name: "Agent 1", updatedAt: 1 }],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      item: {
+        id: "user-remote-1",
+        kind: "message",
+        role: "user",
+        text:
+          "你好\n\n## Agent Role and Instructions\n\nAgent Name: 小张\n\n你是资深助手，回答要精炼。",
+      },
+      hasCustomName: false,
+    });
+
+    const items = next.itemsByThread["thread-1"] ?? [];
+    expect(items.map((item) => item.id)).toEqual(["user-old-1", "user-remote-1"]);
+    expect(items[1]?.kind).toBe("message");
+    if (items[1]?.kind === "message") {
+      expect(items[1].role).toBe("user");
+      expect(items[1].text).toContain("## Agent Role and Instructions");
+    }
+  });
+
   it("does not drop earlier optimistic user bubbles when incoming real user is unmatched", () => {
     const base: ThreadState = {
       ...initialState,
@@ -524,6 +573,61 @@ describe("threadReducer", () => {
         kind: "message",
         role: "user",
         text: "新增日志 CRUD",
+      },
+    ]);
+  });
+
+  it("drops preserved optimistic user bubble when snapshot user message carries selected-agent injection block", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "optimistic-user-1",
+            kind: "message",
+            role: "user",
+            text: "请分析这个异常",
+            selectedAgentName: "后端架构师",
+            selectedAgentIcon: "agent-robot-03",
+          },
+        ],
+      },
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          isContextCompacting: false,
+          processingStartedAt: Date.now(),
+          lastDurationMs: null,
+          heartbeatPulse: 1,
+        },
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "setThreadItems",
+      threadId: "thread-1",
+      items: [
+        {
+          id: "user-remote-1",
+          kind: "message",
+          role: "user",
+          text:
+            "请分析这个异常\n\n## Agent Role and Instructions\n\nAgent Name: 后端架构师\n\nAgent Icon: agent-robot-03\n\n优先定位根因并给出最小修复方案。",
+        },
+      ],
+    });
+
+    expect(next.itemsByThread["thread-1"]).toEqual([
+      {
+        id: "user-remote-1",
+        kind: "message",
+        role: "user",
+        text:
+          "请分析这个异常\n\n## Agent Role and Instructions\n\nAgent Name: 后端架构师\n\nAgent Icon: agent-robot-03\n\n优先定位根因并给出最小修复方案。",
+        selectedAgentName: "后端架构师",
+        selectedAgentIcon: "agent-robot-03",
       },
     ]);
   });

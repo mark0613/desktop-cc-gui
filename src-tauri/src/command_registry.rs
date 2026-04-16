@@ -93,6 +93,7 @@ pub(crate) fn invoke_handler(
         crate::codex::generate_run_metadata,
         crate::codex::resume_thread,
         crate::codex::fork_thread,
+        crate::codex::rewind_codex_thread,
         crate::codex::list_threads,
         crate::codex::list_global_mcp_servers,
         crate::codex::list_mcp_server_status,

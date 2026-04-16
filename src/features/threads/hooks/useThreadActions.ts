@@ -16,6 +16,7 @@ import {
   forkClaudeSession as forkClaudeSessionService,
   forkClaudeSessionFromMessage as forkClaudeSessionFromMessageService,
   forkThread as forkThreadService,
+  rewindCodexThread as rewindCodexThreadService,
   listThreadTitles as listThreadTitlesService,
   listThreads as listThreadsService,
   listClaudeSessions as listClaudeSessionsService,
@@ -61,10 +62,6 @@ import {
   asNumber,
 } from "../utils/threadNormalize";
 import {
-  type CodexRewindHiddenItemIdsMap,
-  loadCodexRewindHiddenItemIds,
-  makeCustomNameKey,
-  saveCodexRewindHiddenItemIds,
   saveThreadActivity,
 } from "../utils/threadStorage";
 import {
@@ -132,118 +129,6 @@ const CODEX_BACKGROUND_HELPER_PROMPT_PREFIXES = [
   "Please generate a commit message. The commit message must follow the Conventional Commits specification and be written entirely in English.",
   "Generate a concise git commit message for the following changes.",
 ] as const;
-const CODEX_REWIND_HIDDEN_ITEM_IDS_PER_THREAD_LIMIT = 4000;
-
-function normalizeCodexRewindHiddenItemIds(ids: string[]): string[] {
-  if (ids.length < 1) {
-    return [];
-  }
-  const normalized: string[] = [];
-  const seen = new Set<string>();
-  ids.forEach((rawId) => {
-    const id = rawId.trim();
-    if (!id || seen.has(id)) {
-      return;
-    }
-    seen.add(id);
-    normalized.push(id);
-  });
-  if (normalized.length <= CODEX_REWIND_HIDDEN_ITEM_IDS_PER_THREAD_LIMIT) {
-    return normalized;
-  }
-  return normalized.slice(-CODEX_REWIND_HIDDEN_ITEM_IDS_PER_THREAD_LIMIT);
-}
-
-function getCodexRewindHiddenItemIdsForThread(params: {
-  map: CodexRewindHiddenItemIdsMap;
-  workspaceId: string;
-  threadId: string;
-}): string[] {
-  const key = makeCustomNameKey(params.workspaceId, params.threadId);
-  return normalizeCodexRewindHiddenItemIds(params.map[key] ?? []);
-}
-
-function setCodexRewindHiddenItemIdsForThread(params: {
-  map: CodexRewindHiddenItemIdsMap;
-  workspaceId: string;
-  threadId: string;
-  itemIds: string[];
-}): CodexRewindHiddenItemIdsMap {
-  const key = makeCustomNameKey(params.workspaceId, params.threadId);
-  const normalized = normalizeCodexRewindHiddenItemIds(params.itemIds);
-  if (normalized.length < 1) {
-    if (!(key in params.map)) {
-      return params.map;
-    }
-    const next = { ...params.map };
-    delete next[key];
-    return next;
-  }
-  const previous = params.map[key] ?? [];
-  if (
-    previous.length === normalized.length &&
-    previous.every((itemId, index) => itemId === normalized[index])
-  ) {
-    return params.map;
-  }
-  return {
-    ...params.map,
-    [key]: normalized,
-  };
-}
-
-function removeCodexRewindHiddenItemIdsForThread(params: {
-  map: CodexRewindHiddenItemIdsMap;
-  workspaceId: string;
-  threadId: string;
-}): CodexRewindHiddenItemIdsMap {
-  const key = makeCustomNameKey(params.workspaceId, params.threadId);
-  if (!(key in params.map)) {
-    return params.map;
-  }
-  const next = { ...params.map };
-  delete next[key];
-  return next;
-}
-
-function collectCodexRewindHiddenItemIdsFromIndex(
-  items: ConversationItem[],
-  rewindTargetIndex: number,
-): string[] {
-  if (rewindTargetIndex < 0 || rewindTargetIndex >= items.length) {
-    return [];
-  }
-  const hiddenIds: string[] = [];
-  for (let index = rewindTargetIndex; index < items.length; index += 1) {
-    const item = items[index];
-    if (!item) {
-      continue;
-    }
-    hiddenIds.push(item.id);
-  }
-  return normalizeCodexRewindHiddenItemIds(hiddenIds);
-}
-
-function filterCodexRewindHiddenItems(
-  items: ConversationItem[],
-  hiddenItemIds: string[],
-): ConversationItem[] {
-  if (items.length < 1 || hiddenItemIds.length < 1) {
-    return items;
-  }
-  const hiddenSet = new Set(hiddenItemIds);
-  let hasHiddenItems = false;
-  const filtered = items.filter((item) => {
-    const normalizedId = item.id.trim();
-    const shouldHide = normalizedId.length > 0 && hiddenSet.has(normalizedId);
-    if (shouldHide) {
-      hasHiddenItems = true;
-      return false;
-    }
-    return true;
-  });
-  return hasHiddenItems ? filtered : items;
-}
 
 function isWorkspaceNotConnectedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -258,6 +143,26 @@ function isUserConversationMessage(
 
 function normalizeComparableRewindText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function findLastUserMessageIndexById(
+  items: UserConversationMessage[],
+  messageId: string,
+): number {
+  const normalizedMessageId = messageId.trim();
+  if (!normalizedMessageId) {
+    return -1;
+  }
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (!item) {
+      continue;
+    }
+    if (item.id.trim() === normalizedMessageId) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function resolveClaudeRewindMessageIdFromHistory(params: {
@@ -776,9 +681,6 @@ export function useThreadActions({
   const geminiRefreshAttemptedRef = useRef<Record<string, boolean>>({});
   const threadListRequestSeqRef = useRef<Record<string, number>>({});
   const claudeRewindInFlightByThreadRef = useRef<Record<string, boolean>>({});
-  const codexRewindHiddenItemIdsRef = useRef<CodexRewindHiddenItemIdsMap>(
-    loadCodexRewindHiddenItemIds(),
-  );
   const latestThreadsByWorkspaceRef = useRef(threadsByWorkspace);
   latestThreadsByWorkspaceRef.current = threadsByWorkspace;
 
@@ -1046,15 +948,7 @@ export function useThreadActions({
                   });
           const loader = createHistoryLoader(threadId);
           const snapshot = await loader.load(threadId);
-          const codexHiddenItemIds = getCodexRewindHiddenItemIdsForThread({
-            map: codexRewindHiddenItemIdsRef.current,
-            workspaceId,
-            threadId,
-          });
-          const snapshotItems = filterCodexRewindHiddenItems(
-            snapshot.items,
-            codexHiddenItemIds,
-          );
+          const snapshotItems = snapshot.items;
           dispatch({
             type: "ensureThread",
             workspaceId,
@@ -1119,15 +1013,7 @@ export function useThreadActions({
                 const relatedSnapshot = await createHistoryLoader(relatedThreadId).load(
                   relatedThreadId,
                 );
-                const relatedHiddenItemIds = getCodexRewindHiddenItemIdsForThread({
-                  map: codexRewindHiddenItemIdsRef.current,
-                  workspaceId,
-                  threadId: relatedThreadId,
-                });
-                const relatedSnapshotItems = filterCodexRewindHiddenItems(
-                  relatedSnapshot.items,
-                  relatedHiddenItemIds,
-                );
+                const relatedSnapshotItems = relatedSnapshot.items;
                 if (relatedSnapshotItems.length > 0) {
                   dispatch({
                     type: "setThreadItems",
@@ -1340,20 +1226,11 @@ export function useThreadActions({
                   ? localItems
                   : mergeThreadItems(items, localItems)
               : localItems;
-          const codexHiddenItemIds = getCodexRewindHiddenItemIdsForThread({
-            map: codexRewindHiddenItemIdsRef.current,
-            workspaceId,
-            threadId,
-          });
-          const mergedItemsWithoutHidden = filterCodexRewindHiddenItems(
-            mergedItems,
-            codexHiddenItemIds,
-          );
-          if (mergedItemsWithoutHidden.length > 0) {
+          if (mergedItems.length > 0) {
             dispatch({
               type: "setThreadItems",
               threadId,
-              items: mergedItemsWithoutHidden,
+              items: mergedItems,
             });
           }
           dispatch({
@@ -1371,7 +1248,7 @@ export function useThreadActions({
               name: previewThreadName(preview, `Agent ${threadId.slice(0, 4)}`),
             });
           }
-          const lastAgentMessage = [...mergedItemsWithoutHidden]
+          const lastAgentMessage = [...mergedItems]
             .reverse()
             .find(
               (item) => item.kind === "message" && item.role === "assistant",
@@ -1797,25 +1674,31 @@ export function useThreadActions({
         | null = null;
       try {
         const threadItems = itemsByThread[canonicalThreadId] ?? [];
-        const rewindTargetIndex = threadItems.findIndex(
-          (item) =>
-            item.kind === "message" &&
-            item.role === "user" &&
-            item.id.trim() === normalizedMessageId,
+        const userThreadItems = threadItems.filter(isUserConversationMessage);
+        const targetUserTurnIndex = findLastUserMessageIndexById(
+          userThreadItems,
+          normalizedMessageId,
         );
-        if (rewindTargetIndex < 0) {
+        if (targetUserTurnIndex < 0) {
           return null;
         }
-        const retainedThreadItems = threadItems.slice(0, rewindTargetIndex);
-        const rewindHiddenItemIds = collectCodexRewindHiddenItemIdsFromIndex(
-          threadItems,
-          rewindTargetIndex,
+        const targetUserMessageText = normalizeComparableRewindText(
+          userThreadItems[targetUserTurnIndex]?.text ?? "",
         );
+        const targetUserMessageOccurrence = targetUserMessageText
+          ? userThreadItems.reduce((count, item, index) => {
+              if (index > targetUserTurnIndex) {
+                return count;
+              }
+              return normalizeComparableRewindText(item.text) === targetUserMessageText
+                ? count + 1
+                : count;
+            }, 0) || 1
+          : undefined;
         const impactedItems = findImpactedClaudeRewindItems(
           threadItems,
           normalizedMessageId,
         );
-        const firstThreadMessageId = findFirstHistoryUserMessageId(threadItems);
         if (shouldRestoreWorkspaceFiles) {
           rewindRestoreState = await applyClaudeRewindWorkspaceRestore({
             workspaceId,
@@ -1851,17 +1734,7 @@ export function useThreadActions({
           }
         }
 
-        if (rewindTargetIndex === 0 || (firstThreadMessageId &&
-          normalizedMessageId === firstThreadMessageId)) {
-          const trimmedMap = removeCodexRewindHiddenItemIdsForThread({
-            map: codexRewindHiddenItemIdsRef.current,
-            workspaceId,
-            threadId: canonicalThreadId,
-          });
-          if (trimmedMap !== codexRewindHiddenItemIdsRef.current) {
-            codexRewindHiddenItemIdsRef.current = trimmedMap;
-            saveCodexRewindHiddenItemIds(trimmedMap);
-          }
+        if (targetUserTurnIndex === 0) {
           await deleteCodexSessionService(workspaceId, canonicalThreadId);
           delete loadedThreadsRef.current[canonicalThreadId];
           dispatch({
@@ -1872,19 +1745,26 @@ export function useThreadActions({
           return canonicalThreadId;
         }
 
-        const response = await forkThreadService(
+        const hardRewindResponse = await rewindCodexThreadService(
           workspaceId,
           canonicalThreadId,
+          targetUserTurnIndex,
           normalizedMessageId,
+          {
+            targetUserMessageText:
+              targetUserMessageText.length > 0 ? targetUserMessageText : undefined,
+            targetUserMessageOccurrence,
+            localUserMessageCount: userThreadItems.length,
+          },
         );
         onDebug?.({
           id: `${Date.now()}-server-thread-codex-fork-from-message`,
           timestamp: Date.now(),
           source: "server",
           label: "codex/thread/fork from message response",
-          payload: response,
+          payload: hardRewindResponse,
         });
-        const forkedThreadId = extractThreadId(response);
+        const forkedThreadId = extractThreadId(hardRewindResponse);
         if (!forkedThreadId) {
           if (
             shouldRestoreWorkspaceFiles &&
@@ -1897,39 +1777,6 @@ export function useThreadActions({
           }
           return null;
         }
-        const canonicalHiddenItemIds = getCodexRewindHiddenItemIdsForThread({
-          map: codexRewindHiddenItemIdsRef.current,
-          workspaceId,
-          threadId: canonicalThreadId,
-        });
-        const forkedHiddenItemIds = getCodexRewindHiddenItemIdsForThread({
-          map: codexRewindHiddenItemIdsRef.current,
-          workspaceId,
-          threadId: forkedThreadId,
-        });
-        const mergedHiddenItemIds = normalizeCodexRewindHiddenItemIds([
-          ...canonicalHiddenItemIds,
-          ...forkedHiddenItemIds,
-          ...rewindHiddenItemIds,
-        ]);
-        let nextHiddenMap = setCodexRewindHiddenItemIdsForThread({
-          map: codexRewindHiddenItemIdsRef.current,
-          workspaceId,
-          threadId: forkedThreadId,
-          itemIds: mergedHiddenItemIds,
-        });
-        if (forkedThreadId !== canonicalThreadId) {
-          nextHiddenMap = removeCodexRewindHiddenItemIdsForThread({
-            map: nextHiddenMap,
-            workspaceId,
-            threadId: canonicalThreadId,
-          });
-        }
-        if (nextHiddenMap !== codexRewindHiddenItemIdsRef.current) {
-          codexRewindHiddenItemIdsRef.current = nextHiddenMap;
-          saveCodexRewindHiddenItemIds(nextHiddenMap);
-        }
-
         dispatch({
           type: "renameThreadId",
           workspaceId,
@@ -1980,26 +1827,6 @@ export function useThreadActions({
         delete loadedThreadsRef.current[canonicalThreadId];
         loadedThreadsRef.current[forkedThreadId] = false;
         await resumeThreadForWorkspace(workspaceId, forkedThreadId, true, true);
-        dispatch({
-          type: "evictThreadItems",
-          threadIds: [forkedThreadId],
-        });
-        dispatch({
-          type: "setThreadItems",
-          threadId: forkedThreadId,
-          items: retainedThreadItems,
-        });
-        try {
-          await deleteCodexSessionService(workspaceId, canonicalThreadId);
-        } catch (error) {
-          onDebug?.({
-            id: `${Date.now()}-client-thread-codex-fork-from-message-delete-source-error`,
-            timestamp: Date.now(),
-            source: "error",
-            label: "codex/thread/fork from message delete source error",
-            payload: error instanceof Error ? error.message : String(error),
-          });
-        }
         return forkedThreadId;
       } catch (error) {
         try {
@@ -2073,6 +1900,7 @@ export function useThreadActions({
       workspace: WorkspaceInfo,
       options?: {
         preserveState?: boolean;
+        includeOpenCodeSessions?: boolean;
       },
     ) => {
       // Store workspace path for Claude session loading
@@ -2080,6 +1908,7 @@ export function useThreadActions({
       const requestSeq = (threadListRequestSeqRef.current[workspace.id] ?? 0) + 1;
       threadListRequestSeqRef.current[workspace.id] = requestSeq;
       const preserveState = options?.preserveState ?? false;
+      const includeOpenCodeSessions = options?.includeOpenCodeSessions ?? true;
       const workspacePath = normalizeComparableWorkspacePath(workspace.path);
       if (!preserveState) {
         dispatch({
@@ -2325,7 +2154,11 @@ export function useThreadActions({
         allSummaries.forEach((entry) => mergedById.set(entry.id, entry));
         const [claudeResult, opencodeResult] = await Promise.allSettled([
           listClaudeSessionsService(workspace.path, 50),
-          getOpenCodeSessionListService(workspace.id),
+          includeOpenCodeSessions
+            ? getOpenCodeSessionListService(workspace.id)
+            : Promise.resolve<
+                Awaited<ReturnType<typeof getOpenCodeSessionListService>>
+              >([]),
         ]);
         if (claudeResult.status === "fulfilled") {
           const claudeSessions = Array.isArray(claudeResult.value)
@@ -2397,6 +2230,42 @@ export function useThreadActions({
             };
             if (!prev || next.updatedAt >= prev.updatedAt) {
               mergedById.set(id, next);
+            }
+          });
+        }
+        if (!includeOpenCodeSessions) {
+          existingThreads.forEach((thread) => {
+            if (thread.threadKind === "shared" || hiddenSharedBindingIds.has(thread.id)) {
+              return;
+            }
+            const isOpenCodeThread =
+              thread.engineSource === "opencode"
+              || thread.id.startsWith("opencode:")
+              || thread.id.startsWith("opencode-pending-");
+            if (!isOpenCodeThread) {
+              return;
+            }
+            const prev = mergedById.get(thread.id);
+            const threadUpdatedAt = Number.isFinite(thread.updatedAt)
+              ? Math.max(0, thread.updatedAt)
+              : 0;
+            const updatedAt =
+              threadUpdatedAt ||
+              nextActivityByThread[thread.id] ||
+              prev?.updatedAt ||
+              0;
+            if (updatedAt > (nextActivityByThread[thread.id] ?? 0)) {
+              nextActivityByThread[thread.id] = updatedAt;
+              didChangeActivity = true;
+            }
+            const next: ThreadSummary = {
+              ...thread,
+              updatedAt,
+              engineSource: "opencode",
+              threadKind: thread.threadKind ?? "native",
+            };
+            if (!prev || next.updatedAt >= prev.updatedAt) {
+              mergedById.set(thread.id, next);
             }
           });
         }
@@ -2795,15 +2664,6 @@ export function useThreadActions({
         }
         await deleteGeminiSessionService(workspacePath, sessionId);
         return;
-      }
-      const trimmedMap = removeCodexRewindHiddenItemIdsForThread({
-        map: codexRewindHiddenItemIdsRef.current,
-        workspaceId,
-        threadId,
-      });
-      if (trimmedMap !== codexRewindHiddenItemIdsRef.current) {
-        codexRewindHiddenItemIdsRef.current = trimmedMap;
-        saveCodexRewindHiddenItemIds(trimmedMap);
       }
       await deleteCodexSessionService(workspaceId, threadId);
     },

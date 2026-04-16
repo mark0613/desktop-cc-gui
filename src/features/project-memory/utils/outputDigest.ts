@@ -26,6 +26,7 @@ const DETAIL_MAX_LENGTH = 800;
 const TITLE_MAX_LENGTH = 50;
 /** summary 提取的最大句数 */
 const SUMMARY_MAX_SENTENCES = 3;
+const SENTENCE_BOUNDARY_CHARS = new Set(["。", "！", "？", ".", "!", "?", "\n"]);
 
 /**
  * 清洗 markdown 噪声，返回纯文本。
@@ -68,10 +69,28 @@ function cleanMarkdown(text: string): string {
  * 按句号/问号/感叹号/换行拆分句子，过滤空句。
  */
 function splitSentences(text: string): string[] {
-  return text
-    .split(/(?<=[。！？.!?\n])\s*/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  const sentences: string[] = [];
+  let sentenceStart = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const currentChar = text[index] ?? "";
+    if (!SENTENCE_BOUNDARY_CHARS.has(currentChar)) {
+      continue;
+    }
+    let sentenceEnd = index + 1;
+    while (sentenceEnd < text.length && /\s/.test(text[sentenceEnd] ?? "")) {
+      sentenceEnd += 1;
+    }
+    const sentence = text.slice(sentenceStart, sentenceEnd).trim();
+    if (sentence) {
+      sentences.push(sentence);
+    }
+    sentenceStart = sentenceEnd;
+  }
+  const tailSentence = text.slice(sentenceStart).trim();
+  if (tailSentence) {
+    sentences.push(tailSentence);
+  }
+  return sentences;
 }
 
 /**

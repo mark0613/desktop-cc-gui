@@ -18,6 +18,10 @@ use crate::types::{
     LocalUsageWeekData, LocalUsageWeeklyComparison, WorkspaceEntry,
 };
 
+#[path = "local_usage/codex_rewind.rs"]
+mod codex_rewind;
+pub(crate) use codex_rewind::commit_codex_rewind_for_workspace;
+
 #[derive(Default, Clone, Copy)]
 struct DailyTotals {
     input: i64,
@@ -281,79 +285,11 @@ pub(crate) async fn delete_codex_session_for_workspace(
     .map_err(|err| err.to_string())?
 }
 
-fn load_codex_session_entries(
+fn collect_matching_codex_session_files(
     session_id: &str,
     workspace_path: &Path,
     sessions_roots: &[PathBuf],
-) -> Result<Vec<Value>, String> {
-    let session_path = find_codex_session_file(session_id, workspace_path, sessions_roots)?;
-    let file = File::open(&session_path).map_err(|err| {
-        format!(
-            "failed to open codex session file {}: {}",
-            session_path.display(),
-            err
-        )
-    })?;
-    let reader = BufReader::new(file);
-    let mut entries = Vec::new();
-    for line in reader.lines() {
-        let line = line.map_err(|err| err.to_string())?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let value: Value = serde_json::from_str(&line).map_err(|err| {
-            format!(
-                "failed to parse codex session entry {}: {}",
-                session_path.display(),
-                err
-            )
-        })?;
-        entries.push(value);
-    }
-    Ok(entries)
-}
-
-fn find_codex_session_file(
-    session_id: &str,
-    workspace_path: &Path,
-    sessions_roots: &[PathBuf],
-) -> Result<PathBuf, String> {
-    let mut files = Vec::new();
-    let mut seen = HashSet::new();
-    for root in sessions_roots {
-        collect_jsonl_files(root, &mut files, &mut seen);
-    }
-
-    let mut unknown_candidates = Vec::new();
-    for path in files {
-        if !codex_session_file_matches_session_id(&path, session_id)? {
-            continue;
-        }
-        match codex_session_file_matches_workspace(&path, workspace_path)? {
-            Some(true) => return Ok(path),
-            Some(false) => continue,
-            None => unknown_candidates.push(path),
-        }
-    }
-
-    match unknown_candidates.len() {
-        0 => Err(format!(
-            "codex session file not found for session {}",
-            session_id
-        )),
-        1 => Ok(unknown_candidates.remove(0)),
-        count => Err(format!(
-            "ambiguous codex session file for session {}: {} candidates missing workspace metadata",
-            session_id, count
-        )),
-    }
-}
-
-fn delete_codex_session_files(
-    session_id: &str,
-    workspace_path: &Path,
-    sessions_roots: &[PathBuf],
-) -> Result<usize, String> {
+) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
     let mut seen = HashSet::new();
     for root in sessions_roots {
@@ -393,6 +329,60 @@ fn delete_codex_session_files(
         ));
     }
 
+    Ok(matched_targets)
+}
+
+fn find_codex_session_file(
+    session_id: &str,
+    workspace_path: &Path,
+    sessions_roots: &[PathBuf],
+) -> Result<PathBuf, String> {
+    let matches = collect_matching_codex_session_files(session_id, workspace_path, sessions_roots)?;
+    matches
+        .into_iter()
+        .next()
+        .ok_or_else(|| format!("codex session file not found for session {}", session_id))
+}
+
+fn load_codex_session_entries(
+    session_id: &str,
+    workspace_path: &Path,
+    sessions_roots: &[PathBuf],
+) -> Result<Vec<Value>, String> {
+    let session_path = find_codex_session_file(session_id, workspace_path, sessions_roots)?;
+    let file = File::open(&session_path).map_err(|err| {
+        format!(
+            "failed to open codex session file {}: {}",
+            session_path.display(),
+            err
+        )
+    })?;
+    let reader = BufReader::new(file);
+    let mut entries = Vec::new();
+    for line in reader.lines() {
+        let line = line.map_err(|err| err.to_string())?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value: Value = serde_json::from_str(&line).map_err(|err| {
+            format!(
+                "failed to parse codex session entry {}: {}",
+                session_path.display(),
+                err
+            )
+        })?;
+        entries.push(value);
+    }
+    Ok(entries)
+}
+
+fn delete_codex_session_files(
+    session_id: &str,
+    workspace_path: &Path,
+    sessions_roots: &[PathBuf],
+) -> Result<usize, String> {
+    let matched_targets =
+        collect_matching_codex_session_files(session_id, workspace_path, sessions_roots)?;
     let mut deleted_count = 0;
     for path in matched_targets {
         fs::remove_file(&path).map_err(|err| {
@@ -950,8 +940,9 @@ fn collect_jsonl_files(root: &Path, output: &mut Vec<PathBuf>, seen: &mut HashSe
         Ok(entries) => entries,
         Err(_) => return,
     };
-    for entry in entries.flatten() {
-        let path = entry.path();
+    let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
+    paths.sort_by(|left, right| left.to_string_lossy().cmp(&right.to_string_lossy()));
+    for path in paths {
         if path.is_dir() {
             collect_jsonl_files(&path, output, seen);
             continue;

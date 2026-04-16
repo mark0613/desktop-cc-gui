@@ -591,7 +591,10 @@ where
     Ok(())
 }
 
-async fn kill_session_by_id(sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>, id: &str) {
+pub(crate) async fn disconnect_workspace_session_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    id: &str,
+) {
     if let Some(session) = sessions.lock().await.remove(id) {
         let mut child = session.child.lock().await;
         let _ = child.kill().await;
@@ -662,7 +665,7 @@ where
             }
         }
 
-        kill_session_by_id(sessions, &child.id).await;
+        disconnect_workspace_session_core(sessions, &child.id).await;
         removed_child_ids.push(child.id.clone());
     }
 
@@ -670,7 +673,7 @@ where
 
     let mut ids_to_remove = removed_child_ids;
     if failures.is_empty() || !require_all_children_removed_to_remove_parent {
-        kill_session_by_id(sessions, &id).await;
+        disconnect_workspace_session_core(sessions, &id).await;
         ids_to_remove.push(id.clone());
     }
 
@@ -754,7 +757,7 @@ where
     }
     let _ = run_git_command(&parent_path, &["worktree", "prune", "--expire", "now"]).await;
 
-    kill_session_by_id(sessions, &entry.id).await;
+    disconnect_workspace_session_core(sessions, &entry.id).await;
 
     {
         let mut workspaces = workspaces.lock().await;
@@ -896,7 +899,7 @@ where
 
     let was_connected = sessions.lock().await.contains_key(&entry_snapshot.id);
     if was_connected {
-        kill_session_by_id(sessions, &entry_snapshot.id).await;
+        disconnect_workspace_session_core(sessions, &entry_snapshot.id).await;
         let (default_bin, codex_args) = {
             let settings = app_settings.lock().await;
             (

@@ -55,6 +55,73 @@ function normalizeTurnAnchorText(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function normalizeComparableHistoryMessageText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function buildComparableMessageSignature(
+  item: Extract<ConversationItem, { kind: "message" }>,
+) {
+  const normalizedImages = Array.isArray(item.images) ? item.images.join("\u0001") : "";
+  return [
+    item.role,
+    normalizeComparableHistoryMessageText(item.text),
+    normalizedImages,
+  ].join("\u0000");
+}
+
+function collectComparableMessageSequence(items: ConversationItem[]) {
+  return items
+    .filter(
+      (item): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message",
+    )
+    .map(buildComparableMessageSignature);
+}
+
+function isComparableMessageSequencePrefix(prefix: string[], target: string[]) {
+  if (prefix.length === 0 || prefix.length > target.length) {
+    return false;
+  }
+  return prefix.every((value, index) => value === target[index]);
+}
+
+function areComparableMessageSequencesEqual(
+  leftItems: ConversationItem[],
+  rightItems: ConversationItem[],
+) {
+  const left = collectComparableMessageSequence(leftItems);
+  const right = collectComparableMessageSequence(rightItems);
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((value, index) => value === right[index]);
+}
+
+function shouldPreferFallbackMessageHistory(
+  historyItems: ConversationItem[],
+  fallbackItems: ConversationItem[],
+) {
+  const historyMessages = collectComparableMessageSequence(historyItems);
+  const fallbackMessages = collectComparableMessageSequence(fallbackItems);
+  const fallbackHasAssistantMessage = fallbackItems.some(
+    (item) => item.kind === "message" && item.role === "assistant",
+  );
+  if (fallbackMessages.length === 0) {
+    return false;
+  }
+  if (historyMessages.length === 0) {
+    return true;
+  }
+  if (!fallbackHasAssistantMessage) {
+    return false;
+  }
+  return (
+    isComparableMessageSequencePrefix(fallbackMessages, historyMessages) ||
+    isComparableMessageSequencePrefix(historyMessages, fallbackMessages)
+  );
+}
+
 function isAssistantMessage(item: ConversationItem): item is AssistantMessageItem {
   return item.kind === "message" && item.role === "assistant";
 }
@@ -337,7 +404,13 @@ export function createCodexHistoryLoader({
         try {
           const fallbackHistory = await loadCodexSession(workspaceId, threadId);
           const fallbackItems = parseCodexSessionHistory(fallbackHistory);
-          items = mergeCodexHistoryPreservingTurns(historyItems, fallbackItems);
+          if (areComparableMessageSequencesEqual(historyItems, fallbackItems)) {
+            items = mergeCodexHistoryPreservingTurns(historyItems, fallbackItems);
+          } else if (shouldPreferFallbackMessageHistory(historyItems, fallbackItems)) {
+            items = fallbackItems;
+          } else {
+            items = mergeCodexHistoryPreservingTurns(historyItems, fallbackItems);
+          }
         } catch (error) {
           console.warn("Failed to load Codex local history fallback", {
             workspaceId,

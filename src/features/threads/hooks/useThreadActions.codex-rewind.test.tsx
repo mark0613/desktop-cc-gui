@@ -10,6 +10,7 @@ import {
   deleteGeminiSession,
   deleteOpenCodeSession,
   forkThread,
+  rewindCodexThread,
   getOpenCodeSessionList,
   listClaudeSessions,
   listGeminiSessions,
@@ -30,10 +31,6 @@ import {
   mergeThreadItems,
   previewThreadName,
 } from "../../../utils/threadItems";
-import {
-  loadCodexRewindHiddenItemIds,
-  saveCodexRewindHiddenItemIds,
-} from "../utils/threadStorage";
 import { useThreadActions } from "./useThreadActions";
 
 vi.mock("../../../services/tauri", () => ({
@@ -44,6 +41,7 @@ vi.mock("../../../services/tauri", () => ({
   deleteGeminiSession: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
   forkThread: vi.fn(),
+  rewindCodexThread: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
@@ -67,10 +65,8 @@ vi.mock("../../../utils/threadItems", () => ({
 }));
 
 vi.mock("../utils/threadStorage", () => ({
-  loadCodexRewindHiddenItemIds: vi.fn(() => ({})),
   makeCustomNameKey: (workspaceId: string, threadId: string) =>
     `${workspaceId}:${threadId}`,
-  saveCodexRewindHiddenItemIds: vi.fn(),
   saveThreadActivity: vi.fn(),
 }));
 
@@ -125,7 +121,6 @@ describe("useThreadActions codex rewind", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(loadCodexRewindHiddenItemIds).mockReturnValue({});
     vi.mocked(listThreadTitles).mockResolvedValue({});
     vi.mocked(listGeminiSessions).mockResolvedValue([]);
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
@@ -149,6 +144,12 @@ describe("useThreadActions codex rewind", () => {
       method: "filesystem",
       archivedBeforeDelete: true,
     });
+    vi.mocked(rewindCodexThread).mockResolvedValue({
+      thread: { id: "thread-codex-rewind-1" },
+      truncated: true,
+      deletedCount: 1,
+      archivedBeforeDelete: true,
+    } as any);
     vi.mocked(loadGeminiSession).mockResolvedValue({ messages: [] });
     vi.mocked(readWorkspaceFile).mockResolvedValue({
       content: "",
@@ -170,10 +171,28 @@ describe("useThreadActions codex rewind", () => {
       content: "const value = 'after';\n",
       truncated: false,
     });
-    vi.mocked(forkThread).mockResolvedValue({
-      thread: { id: "thread-codex-rewind-1" },
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          preview: "rewound",
+          turns: [{ id: "turn-1", items: [] }],
+        },
+      },
     } as any);
-
+    vi.mocked(buildItemsFromThread).mockReturnValue([
+      {
+        id: "server-user-prev",
+        kind: "message",
+        role: "user",
+        text: "更早一条",
+      },
+      {
+        id: "server-assistant-prev",
+        kind: "message",
+        role: "assistant",
+        text: "历史回复",
+      },
+    ]);
     const { result, dispatch } = renderActions({
       itemsByThread: {
         "thread-codex-1": [
@@ -221,10 +240,16 @@ describe("useThreadActions codex rewind", () => {
     });
 
     expect(output).toBe("thread-codex-rewind-1");
-    expect(forkThread).toHaveBeenCalledWith(
+    expect(rewindCodexThread).toHaveBeenCalledWith(
       "ws-1",
       "thread-codex-1",
+      1,
       "user-local-target",
+      {
+        targetUserMessageText: "回溯目标",
+        targetUserMessageOccurrence: 1,
+        localUserMessageCount: 2,
+      },
     );
     expect(writeWorkspaceFile).toHaveBeenCalledWith(
       "ws-1",
@@ -243,28 +268,94 @@ describe("useThreadActions codex rewind", () => {
       threadId: "thread-codex-1",
     });
     expect(dispatch).toHaveBeenCalledWith({
-      type: "evictThreadItems",
-      threadIds: ["thread-codex-rewind-1"],
-    });
-    expect(dispatch).toHaveBeenCalledWith({
       type: "setThreadItems",
       threadId: "thread-codex-rewind-1",
       items: [
         {
-          id: "user-local-prev",
+          id: "server-user-prev",
           kind: "message",
           role: "user",
           text: "更早一条",
         },
+        {
+          id: "server-assistant-prev",
+          kind: "message",
+          role: "assistant",
+          text: "历史回复",
+        },
       ],
     });
-    expect(saveCodexRewindHiddenItemIds).toHaveBeenCalledWith({
-      "ws-1:thread-codex-rewind-1": [
-        "user-local-target",
-        "tool-local-1",
-      ],
+    expect(deleteCodexSession).not.toHaveBeenCalled();
+  });
+
+  it("uses the latest matching local user message when duplicate ids exist", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+    } as any);
+    vi.mocked(listClaudeSessions).mockResolvedValue([]);
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          turns: [{ id: "turn-1", items: [] }],
+        },
+      },
+    } as any);
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    vi.mocked(rewindCodexThread).mockResolvedValue({
+      thread: { id: "thread-codex-rewind-dup-id" },
+    } as any);
+
+    const { result } = renderActions({
+      itemsByThread: {
+        "thread-codex-1": [
+          {
+            id: "user-dup-id",
+            kind: "message",
+            role: "user",
+            text: "更早一条",
+          },
+          {
+            id: "assistant-dup-id",
+            kind: "message",
+            role: "assistant",
+            text: "历史回复",
+          },
+          {
+            id: "user-dup-id",
+            kind: "message",
+            role: "user",
+            text: "最新一条",
+          },
+        ],
+      },
     });
-    expect(deleteCodexSession).toHaveBeenCalledWith("ws-1", "thread-codex-1");
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, { preserveState: true });
+    });
+
+    await act(async () => {
+      await result.current.forkSessionFromMessageForWorkspace(
+        "ws-1",
+        "thread-codex-1",
+        "user-dup-id",
+      );
+    });
+
+    expect(rewindCodexThread).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-codex-1",
+      1,
+      "user-dup-id",
+      {
+        targetUserMessageText: "最新一条",
+        targetUserMessageOccurrence: 1,
+        localUserMessageCount: 2,
+      },
+    );
   });
 
   it("skips workspace restore when Codex rewind toggle is disabled", async () => {
@@ -275,7 +366,15 @@ describe("useThreadActions codex rewind", () => {
       },
     } as any);
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
-    vi.mocked(forkThread).mockResolvedValue({
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          turns: [{ id: "turn-1", items: [] }],
+        },
+      },
+    } as any);
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    vi.mocked(rewindCodexThread).mockResolvedValue({
       thread: { id: "thread-codex-rewind-no-restore" },
     } as any);
 
@@ -325,10 +424,16 @@ describe("useThreadActions codex rewind", () => {
       );
     });
 
-    expect(forkThread).toHaveBeenCalledWith(
+    expect(rewindCodexThread).toHaveBeenCalledWith(
       "ws-1",
       "thread-codex-1",
+      1,
       "user-local-target",
+      {
+        targetUserMessageText: "回溯目标",
+        targetUserMessageOccurrence: 1,
+        localUserMessageCount: 2,
+      },
     );
     expect(writeWorkspaceFile).not.toHaveBeenCalled();
   });
@@ -385,7 +490,15 @@ describe("useThreadActions codex rewind", () => {
       content: "const value = 'after';\n",
       truncated: false,
     });
-    vi.mocked(forkThread).mockResolvedValue({
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          turns: [{ id: "turn-1", items: [] }],
+        },
+      },
+    } as any);
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    vi.mocked(rewindCodexThread).mockResolvedValue({
       thread: { id: "thread-codex-rewind-1" },
     } as any);
 
@@ -526,7 +639,7 @@ describe("useThreadActions codex rewind", () => {
       content: "const value = 'after';\n",
       truncated: false,
     });
-    vi.mocked(forkThread).mockRejectedValue(new Error("fork failed"));
+    vi.mocked(rewindCodexThread).mockRejectedValue(new Error("fork failed"));
 
     const { result } = renderActions({
       itemsByThread: {
@@ -595,7 +708,7 @@ describe("useThreadActions codex rewind", () => {
       },
     } as any);
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
-    vi.mocked(forkThread).mockRejectedValue(new Error("fork failed"));
+    vi.mocked(rewindCodexThread).mockRejectedValue(new Error("fork failed"));
 
     const { result } = renderActions({
       itemsByThread: {
@@ -646,10 +759,7 @@ describe("useThreadActions codex rewind", () => {
     expect(writeWorkspaceFile).not.toHaveBeenCalled();
   });
 
-  it("filters persisted Codex rewind hidden items on resume", async () => {
-    vi.mocked(loadCodexRewindHiddenItemIds).mockReturnValue({
-      "ws-1:thread-2": ["user-hidden", "assistant-hidden"],
-    });
+  it("resumes Codex thread without applying persisted hidden-item filtering", async () => {
     vi.mocked(resumeThread).mockResolvedValue({
       result: {
         thread: { id: "thread-2", preview: "preview", updated_at: 555 },
@@ -702,6 +812,18 @@ describe("useThreadActions codex rewind", () => {
           kind: "message",
           role: "user",
           text: "保留用户消息",
+        },
+        {
+          id: "user-hidden",
+          kind: "message",
+          role: "user",
+          text: "应被隐藏",
+        },
+        {
+          id: "assistant-hidden",
+          kind: "message",
+          role: "assistant",
+          text: "应被隐藏助手消息",
         },
         {
           id: "assistant-visible",

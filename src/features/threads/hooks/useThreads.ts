@@ -83,7 +83,19 @@ const MAX_ASSISTANT_DETAIL_LENGTH = 12000;
 // Claude turns can exceed 30s frequently; keep a wider merge window to avoid dropping write-back.
 const PENDING_MEMORY_STALE_MS = 10 * 60_000;
 const MEMORY_PARAGRAPH_BREAK_SPLIT_REGEX = /\r?\n[^\S\r\n]*\r?\n+/;
-const MEMORY_SENTENCE_SPLIT_REGEX = /(?<=[。！？.!?；;:：\n])\s*/;
+const MEMORY_SENTENCE_BOUNDARY_CHARS = new Set([
+  "。",
+  "！",
+  "？",
+  ".",
+  "!",
+  "?",
+  "；",
+  ";",
+  ":",
+  "：",
+  "\n",
+]);
 
 function compactComparableMemoryText(value: string) {
   return value
@@ -92,8 +104,28 @@ function compactComparableMemoryText(value: string) {
 }
 
 function splitMemorySentences(value: string) {
-  return value
-    .split(MEMORY_SENTENCE_SPLIT_REGEX)
+  const segments: string[] = [];
+  let segmentStart = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const currentChar = value[index] ?? "";
+    if (!MEMORY_SENTENCE_BOUNDARY_CHARS.has(currentChar)) {
+      continue;
+    }
+    let segmentEnd = index + 1;
+    while (segmentEnd < value.length && /\s/.test(value[segmentEnd] ?? "")) {
+      segmentEnd += 1;
+    }
+    const segment = value.slice(segmentStart, segmentEnd);
+    if (segment.trim()) {
+      segments.push(segment);
+    }
+    segmentStart = segmentEnd;
+  }
+  const tailSegment = value.slice(segmentStart);
+  if (tailSegment.trim()) {
+    segments.push(tailSegment);
+  }
+  return segments
     .map((entry) => trimTrailingPromptFragment(entry).trim())
     .filter(Boolean);
 }

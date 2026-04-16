@@ -93,6 +93,54 @@ describe("Messages explore rows", () => {
     );
   });
 
+  it("expands explored card during thinking and auto-collapses after thinking ends", async () => {
+    const items: ConversationItem[] = [
+      {
+        id: "explore-live-toggle-1",
+        kind: "explore",
+        status: "explored",
+        entries: [
+          { kind: "search", label: "find route guards" },
+          { kind: "read", label: "routes.ts" },
+        ],
+      },
+    ];
+
+    const { container, rerender } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".explore-inline-list")?.className ?? "").not.toContain(
+      "is-collapsed",
+    );
+
+    rerender(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector(".explore-inline-list")?.className ?? "").toContain(
+        "is-collapsed",
+      );
+    });
+  });
+
   it("renders spec-root explore card as collapsible and toggles details", async () => {
     const items: ConversationItem[] = [
       {
@@ -167,6 +215,55 @@ describe("Messages explore rows", () => {
     });
     const exploreTitle = container.querySelector(".explore-inline-title");
     expect(exploreTitle?.textContent ?? "").toContain("Explored");
+  });
+
+  it("hides only exploring cards in codex canvas while keeping explored cards", async () => {
+    const items: ConversationItem[] = [
+      {
+        id: "explore-hidden-codex",
+        kind: "explore",
+        status: "exploring",
+        entries: [{ kind: "search", label: "Search routes.ts" }],
+      },
+      {
+        id: "explore-keep-codex",
+        kind: "explore",
+        status: "explored",
+        entries: [{ kind: "read", label: "Read routes.ts" }],
+      },
+      {
+        id: "tool-edit-visible",
+        kind: "tool",
+        toolType: "edit",
+        title: "Tool: edit",
+        detail: JSON.stringify({
+          file_path: "src/routes.ts",
+          old_string: "before",
+          new_string: "after",
+        }),
+        status: "completed",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="codex"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.textContent ?? "").toContain("routes.ts");
+    });
+    const exploreRows = container.querySelectorAll(".explore-inline");
+    expect(exploreRows.length).toBe(1);
+    expect(container.textContent ?? "").not.toContain("Search routes.ts");
+    expect(container.textContent ?? "").toContain("Read routes.ts");
   });
 
   it("does not merge explore items across interleaved tools", async () => {

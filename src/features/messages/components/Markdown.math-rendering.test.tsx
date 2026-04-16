@@ -38,6 +38,90 @@ describe("Markdown math rendering", () => {
     expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("renders codex-style over-escaped delimiters mixed with dollar math", () => {
+    const value = [
+      String.raw`Codex 常见输出：\\( \sigma(z)=\frac{1}{1+e^{-z}} \\)，并混用 $x_t=\beta x_{t-1}$。`,
+      String.raw`\\[`,
+      String.raw`\mathcal{L}(\theta)=\sum_{i=1}^{n}(y_i-\hat{y}_i)^2`,
+      String.raw`\\]`,
+      "结尾说明文本。",
+    ].join("\n");
+
+    const { container } = render(
+      <Markdown value={value} className="markdown" codeBlockStyle="message" />,
+    );
+
+    expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelector(".katex-display")).toBeTruthy();
+    expect(container.textContent).not.toContain("\\[");
+    expect(container.textContent).not.toContain("\\]");
+  });
+
+  it("supports mixed single and double backslash inline delimiters in one sentence", () => {
+    const value = String.raw`混合分隔符：\\(a_i=b_i+1\\)，\(c_i=d_i+1\)，以及 $e_i=f_i+1$。`;
+
+    const { container } = render(
+      <Markdown value={value} className="markdown" codeBlockStyle="message" />,
+    );
+
+    expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("renders prose that mixes $...$, $$...$$, \\(...\\), and \\[...\\]", () => {
+    const value = [
+      "模型训练中，我们常写 $L(\\theta)=\\frac{1}{n}\\sum_{i=1}^{n}\\ell_i$，也会写成 \\( p(y\\mid x)=\\frac{e^{f_y(x)}}{\\sum_j e^{f_j(x)}} \\)。",
+      "接着给出块级写法：",
+      "$$\\min_{\\theta}\\;\\mathcal{L}(\\theta)+\\lambda\\|\\theta\\|_2^2$$",
+      "另一种块级分隔符也可直接写在正文流中：",
+      "\\[\\int_0^1 x^2\\,dx=\\frac{1}{3}\\]",
+      "最后回到自然语言结论。",
+    ].join("\n");
+
+    const { container } = render(
+      <Markdown value={value} className="markdown" codeBlockStyle="message" />,
+    );
+
+    expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(4);
+    expect(container.querySelectorAll(".katex-display").length).toBeGreaterThanOrEqual(2);
+    expect(container.textContent).toContain("最后回到自然语言结论");
+  });
+
+  it("renders codex list prose that embeds $$...$$ and \\[...\\] without katex errors", () => {
+    const value = [
+      "2. 对于线性系统 $Ax=b$，若 \\(A\\in\\mathbb{R}^{n\\times n}\\) 可逆，则解唯一且为 \\(x=A^{-1}b\\)；误差传播通常记为 $$ \\frac{\\|\\delta x\\|}{\\|x\\|}\\le \\kappa(A)\\frac{\\|\\delta b\\|}{\\|b\\|} $$，其中条件数定义为 \\[ \\kappa(A)=\\|A\\|\\,\\|A^{-1}\\|. \\]",
+      "3. 在凸优化问题 $ \\min_{x\\in\\mathcal{X}} f(x) $ 中，若 \\(f\\) 为可微凸函数，则一阶最优性条件为 $$ \\langle \\nabla f(x^\\*),x-x^\\*\\rangle\\ge 0,\\ \\forall x\\in\\mathcal{X} $$；无约束情形可简化为 \\[ \\nabla f(x^\\*)=0. \\]",
+    ].join("\n\n");
+
+    const { container } = render(
+      <Markdown value={value} className="markdown" codeBlockStyle="message" />,
+    );
+
+    expect(container.querySelector(".katex-error")).toBeFalsy();
+    expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("downgrades malformed $$...$$ prose blocks and keeps inner inline math renderable", () => {
+    const value = String.raw`说明：$$一步，在热点 key 下把冲突概率从 $p$ 降到 $p' \approx \frac{p}{s}$，可得到更高吞吐。$$`;
+
+    const { container } = render(
+      <Markdown value={value} className="markdown" codeBlockStyle="message" />,
+    );
+
+    expect(container.querySelector(".katex-error")).toBeFalsy();
+    expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("extracts leading bare latex before cjk prose into display math", () => {
+    const value = String.raw`\mathcal{L}_{total}=\mathcal{L}_{queue}+\mathcal{L}_{retry}+\mathcal{L}_{io}, \qquad \mathcal{L}_{retry}=\sum_{i=1}^{m} b_i. 在热点 key 下继续分片。`;
+
+    const { container } = render(
+      <Markdown value={value} className="markdown" codeBlockStyle="message" />,
+    );
+
+    expect(container.querySelector(".katex-display")).toBeTruthy();
+    expect(container.textContent).toContain("在热点 key 下继续分片");
+  });
+
   it("preserves function-style parentheses inside valid inline formulas", () => {
     const value = "梯度流：$\\frac{d\\theta}{dt}=-\\nabla_\\theta \\mathcal{L}(\\theta)$。";
 
@@ -92,6 +176,28 @@ describe("Markdown math rendering", () => {
 
     expect(container.querySelector(".katex")).toBeTruthy();
     expect(container.textContent).not.toContain("$P(\\theta");
+  });
+
+  it("does not parse inline formula when closing dollar is escaped", () => {
+    const value = "这是原始文本：$a\\$";
+
+    const { container } = render(
+      <Markdown value={value} className="markdown" codeBlockStyle="message" />,
+    );
+
+    expect(container.querySelector(".katex")).toBeFalsy();
+    expect(container.textContent).toContain("这是原始文本");
+    expect(container.textContent).toContain("a\\");
+  });
+
+  it("parses inline formula when closing dollar has an even backslash prefix", () => {
+    const value = "双反斜杠场景：$a\\\\$";
+
+    const { container } = render(
+      <Markdown value={value} className="markdown" codeBlockStyle="message" />,
+    );
+
+    expect(container.querySelector(".katex")).toBeTruthy();
   });
 
   it("keeps indented formulas renderable inside ordered lists", () => {

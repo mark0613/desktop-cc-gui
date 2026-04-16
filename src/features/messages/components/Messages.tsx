@@ -1749,6 +1749,27 @@ export const Messages = memo(function Messages({
       return next;
     });
   }, []);
+  useEffect(() => {
+    if (isThinking) {
+      return;
+    }
+    setExpandedItems((prev) => {
+      if (prev.size === 0) {
+        return prev;
+      }
+      const next = new Set(prev);
+      let changed = false;
+      for (const item of effectiveItems) {
+        if (item.kind !== "explore") {
+          continue;
+        }
+        if (next.delete(item.id)) {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [effectiveItems, isThinking]);
 
   // Auto-expand the latest reasoning block during streaming (synced with idea-claude-code-gui)
   const lastAutoExpandedIdRef = useRef<string | null>(null);
@@ -1971,39 +1992,46 @@ export const Messages = memo(function Messages({
 
   const visibleItems = useMemo(() => {
     const filtered = effectiveItems.filter((item) => {
-        if (hideClaudeReasoning && item.kind === "reasoning") {
-          return false;
-        }
-        if (item.kind === "tool" && shouldHideToolItemForRender(item)) {
-          return false;
-        }
-        if (item.kind !== "reasoning") {
-          return true;
-        }
-        const parsed = reasoningMetaById.get(item.id);
-        const hasBody = parsed?.hasBody ?? false;
-        if (hasBody) {
-          return true;
-        }
-        if (!parsed?.workingLabel) {
-          return false;
-        }
-        // Gemini realtime segmented reasoning must stay visible as independent
-        // timeline slices instead of being reduced to only the latest title-only row.
-        if (activeEngine === "gemini" && isExplicitReasoningSegmentId(item.id)) {
-          return true;
-        }
-        if (activeEngine === "claude") {
-          return true;
-        }
-        // Keep title-only reasoning visible for Codex canvas and retain the
-        // latest title-only reasoning row for other engines to avoid the
-        // "thinking module disappears" regression in real-time conversations.
-        const keepTitleOnlyReasoning = presentationProfile
-          ? presentationProfile.showReasoningLiveDot
-          : activeEngine === "codex";
-        return keepTitleOnlyReasoning || item.id === latestTitleOnlyReasoningId;
-      });
+      if (
+        activeEngine === "codex" &&
+        item.kind === "explore" &&
+        item.status === "exploring"
+      ) {
+        return false;
+      }
+      if (hideClaudeReasoning && item.kind === "reasoning") {
+        return false;
+      }
+      if (item.kind === "tool" && shouldHideToolItemForRender(item)) {
+        return false;
+      }
+      if (item.kind !== "reasoning") {
+        return true;
+      }
+      const parsed = reasoningMetaById.get(item.id);
+      const hasBody = parsed?.hasBody ?? false;
+      if (hasBody) {
+        return true;
+      }
+      if (!parsed?.workingLabel) {
+        return false;
+      }
+      // Gemini realtime segmented reasoning must stay visible as independent
+      // timeline slices instead of being reduced to only the latest title-only row.
+      if (activeEngine === "gemini" && isExplicitReasoningSegmentId(item.id)) {
+        return true;
+      }
+      if (activeEngine === "claude") {
+        return true;
+      }
+      // Keep title-only reasoning visible for Codex canvas and retain the
+      // latest title-only reasoning row for other engines to avoid the
+      // "thinking module disappears" regression in real-time conversations.
+      const keepTitleOnlyReasoning = presentationProfile
+        ? presentationProfile.showReasoningLiveDot
+        : activeEngine === "codex";
+      return keepTitleOnlyReasoning || item.id === latestTitleOnlyReasoningId;
+    });
     const appendReasoningRuns = activeEngine === "claude" || activeEngine === "gemini";
     const deduped = dedupeAdjacentReasoningItems(
       filtered,
@@ -2612,7 +2640,7 @@ export const Messages = memo(function Messages({
       );
     }
     if (item.kind === "explore") {
-      const isExpanded = expandedItems.has(item.id);
+      const isExpanded = isThinking || expandedItems.has(item.id);
       return (
         <ExploreRow
           key={`explore:${item.id}`}

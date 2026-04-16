@@ -20,7 +20,6 @@ import {
   previewThreadName,
 } from "../../../utils/threadItems";
 import { listSharedSessions } from "../../shared-session/services/sharedSessions";
-import { loadCodexRewindHiddenItemIds } from "../utils/threadStorage";
 import { useThreadActions } from "./useThreadActions";
 
 vi.mock("../../../services/tauri", () => ({
@@ -33,6 +32,7 @@ vi.mock("../../../services/tauri", () => ({
   forkClaudeSession: vi.fn(),
   forkClaudeSessionFromMessage: vi.fn(),
   forkThread: vi.fn(),
+  rewindCodexThread: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
@@ -59,10 +59,8 @@ vi.mock("../../../utils/threadItems", () => ({
 }));
 
 vi.mock("../utils/threadStorage", () => ({
-  loadCodexRewindHiddenItemIds: vi.fn(() => ({})),
   makeCustomNameKey: (workspaceId: string, threadId: string) =>
     `${workspaceId}:${threadId}`,
-  saveCodexRewindHiddenItemIds: vi.fn(),
   saveThreadActivity: vi.fn(),
 }));
 
@@ -114,7 +112,6 @@ function renderActions() {
 describe("useThreadActions shared/native compatibility", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(loadCodexRewindHiddenItemIds).mockReturnValue({});
     vi.mocked(listThreadTitles).mockResolvedValue({});
     vi.mocked(listThreads).mockResolvedValue({
       result: {

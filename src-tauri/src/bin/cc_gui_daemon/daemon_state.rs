@@ -22,6 +22,20 @@ pub(super) struct CodexRuntimeReloadResult {
 }
 
 impl DaemonState {
+    async fn ensure_codex_session_for_workspace(&self, workspace_id: &str) -> Result<(), String> {
+        {
+            let sessions = self.sessions.lock().await;
+            if sessions.contains_key(workspace_id) {
+                return Ok(());
+            }
+        }
+        self.connect_workspace(
+            workspace_id.to_string(),
+            env!("CARGO_PKG_VERSION").to_string(),
+        )
+        .await
+    }
+
     fn allowed_external_skill_roots(
         &self,
         workspaces: &HashMap<String, WorkspaceEntry>,
@@ -1618,6 +1632,47 @@ impl DaemonState {
         codex_core::fork_thread_core(&self.sessions, workspace_id, thread_id, message_id).await
     }
 
+    pub(super) async fn rewind_codex_thread(
+        &self,
+        workspace_id: String,
+        thread_id: String,
+        message_id: Option<String>,
+        target_user_turn_index: u32,
+        target_user_message_text: Option<String>,
+        target_user_message_occurrence: Option<u32>,
+        local_user_message_count: Option<u32>,
+    ) -> Result<Value, String> {
+        self.ensure_codex_session_for_workspace(&workspace_id).await?;
+        let rewind_response = crate::codex::rewind::rewind_thread_from_message(
+            &self.sessions,
+            &self.workspaces,
+            workspace_id.clone(),
+            thread_id,
+            message_id,
+            target_user_turn_index,
+            target_user_message_text,
+            target_user_message_occurrence,
+            local_user_message_count,
+        )
+        .await?;
+
+        let rewound_thread_id = rewind_response
+            .get("thread")
+            .and_then(|thread| thread.get("id"))
+            .or_else(|| rewind_response.get("threadId"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+            .ok_or_else(|| "codex rewind response missing child thread id".to_string())?;
+
+        workspaces_core::disconnect_workspace_session_core(&self.sessions, &workspace_id).await;
+        self.ensure_codex_session_for_workspace(&workspace_id).await?;
+        codex_core::resume_thread_core(&self.sessions, workspace_id, rewound_thread_id).await?;
+
+        Ok(rewind_response)
+    }
+
     pub(super) async fn list_threads(
         &self,
         workspace_id: String,
@@ -1817,6 +1872,8 @@ impl DaemonState {
         preferred_language: Option<String>,
         custom_spec_root: Option<String>,
     ) -> Result<Value, String> {
+        self.ensure_codex_session_for_workspace(&workspace_id)
+            .await?;
         let mode_enforcement_enabled = {
             let settings = self.app_settings.lock().await;
             settings.codex_mode_enforcement_enabled

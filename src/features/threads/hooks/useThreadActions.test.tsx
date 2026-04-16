@@ -36,10 +36,7 @@ import {
   mergeThreadItems,
   previewThreadName,
 } from "../../../utils/threadItems";
-import {
-  loadCodexRewindHiddenItemIds,
-  saveThreadActivity,
-} from "../utils/threadStorage";
+import { saveThreadActivity } from "../utils/threadStorage";
 import { useThreadActions } from "./useThreadActions";
 
 vi.mock("../../../services/tauri", () => ({
@@ -49,6 +46,7 @@ vi.mock("../../../services/tauri", () => ({
   forkClaudeSession: vi.fn(),
   forkClaudeSessionFromMessage: vi.fn(),
   forkThread: vi.fn(),
+  rewindCodexThread: vi.fn(),
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
@@ -79,10 +77,8 @@ vi.mock("../../../utils/threadItems", () => ({
 }));
 
 vi.mock("../utils/threadStorage", () => ({
-  loadCodexRewindHiddenItemIds: vi.fn(() => ({})),
   makeCustomNameKey: (workspaceId: string, threadId: string) =>
     `${workspaceId}:${threadId}`,
-  saveCodexRewindHiddenItemIds: vi.fn(),
   saveThreadActivity: vi.fn(),
 }));
 
@@ -97,7 +93,6 @@ describe("useThreadActions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(loadCodexRewindHiddenItemIds).mockReturnValue({});
     vi.mocked(listThreadTitles).mockResolvedValue({});
     vi.mocked(listGeminiSessions).mockResolvedValue([]);
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
@@ -2251,6 +2246,55 @@ describe("useThreadActions", () => {
         id: "opencode:ses_opc_1",
         name: "OpenCode Hello",
         updatedAt: 1_730_000_000_000,
+        engineSource: "opencode",
+      },
+    ]);
+  });
+
+  it("can skip opencode probing while keeping existing opencode threads", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(listClaudeSessions).mockResolvedValue([]);
+    vi.mocked(getOpenCodeSessionList).mockResolvedValue([
+      {
+        sessionId: "ses_should_not_fetch",
+        title: "Should not fetch",
+        updatedLabel: "1m ago",
+        updatedAt: 1_740_000_000_000,
+      },
+    ]);
+
+    const { result, dispatch } = renderActions({
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "opencode:ses_cached_1",
+            name: "Cached OpenCode",
+            updatedAt: 1_730_500_000_000,
+            engineSource: "opencode",
+            threadKind: "native",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, {
+        preserveState: true,
+        includeOpenCodeSessions: false,
+      });
+    });
+
+    expect(getOpenCodeSessionList).not.toHaveBeenCalled();
+    expectSetThreadsDispatched(dispatch, "ws-1", [
+      {
+        id: "opencode:ses_cached_1",
+        name: "Cached OpenCode",
+        updatedAt: 1_730_500_000_000,
         engineSource: "opencode",
       },
     ]);

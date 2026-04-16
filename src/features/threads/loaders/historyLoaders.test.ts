@@ -477,6 +477,46 @@ describe("history loaders", () => {
     );
   });
 
+  it("preserves real codex user message ids from local session payloads", () => {
+    const items = parseCodexSessionHistory({
+      entries: [
+        {
+          type: "event_msg",
+          payload: {
+            type: "user_message",
+            id: "real-user-message-1",
+            message: "你好1",
+          },
+        },
+        {
+          type: "event_msg",
+          payload: {
+            type: "user_message",
+            messageId: "real-user-message-2",
+            message: "你好2",
+          },
+        },
+      ],
+    });
+
+    expect(items[0]).toEqual(
+      expect.objectContaining({
+        kind: "message",
+        role: "user",
+        id: "real-user-message-1",
+        text: "你好1",
+      }),
+    );
+    expect(items[1]).toEqual(
+      expect.objectContaining({
+        kind: "message",
+        role: "user",
+        id: "real-user-message-2",
+        text: "你好2",
+      }),
+    );
+  });
+
   it("hydrates codex local assistant final metadata from entry timestamps", () => {
     const startedAt = "2026-04-01T16:31:34.000Z";
     const completedAt = "2026-04-01T16:31:37.000Z";
@@ -1017,6 +1057,68 @@ describe("history loaders", () => {
     );
     expect(assistantMessages).toHaveLength(1);
     expect(assistantMessages[0]?.text).toBe("同一条 assistant 文本");
+  });
+
+  it("prefers response_item assistant message when mirror event_msg appears first", () => {
+    const items = parseCodexSessionHistory({
+      entries: [
+        {
+          type: "event_msg",
+          payload: {
+            type: "agent_message",
+            message: "同一条 assistant 文本",
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: "同一条 assistant 文本" }],
+          },
+        },
+      ],
+    });
+
+    const assistantMessages = items.filter(
+      (item): item is Extract<(typeof items)[number], { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    expect(assistantMessages).toHaveLength(1);
+    expect(assistantMessages[0]?.id).toBe("codex-assistant-2");
+    expect(assistantMessages[0]?.text).toBe("同一条 assistant 文本");
+  });
+
+  it("dedupes codex mirror messages with equivalent \\(...\\) and $...$ delimiters", () => {
+    const items = parseCodexSessionHistory({
+      entries: [
+        {
+          type: "event_msg",
+          payload: {
+            type: "agent_message",
+            message: String.raw`逻辑函数：\\( \sigma(z)=\frac{1}{1+e^{-z}} \\)`,
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "message",
+            role: "assistant",
+            content: [
+              { type: "output_text", text: "逻辑函数：$\\sigma(z)=\\frac{1}{1+e^{-z}}$" },
+            ],
+          },
+        },
+      ],
+    });
+
+    const assistantMessages = items.filter(
+      (item): item is Extract<(typeof items)[number], { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    expect(assistantMessages).toHaveLength(1);
+    expect(assistantMessages[0]?.id).toBe("codex-assistant-2");
+    expect(assistantMessages[0]?.text).toContain("$\\sigma(z)=\\frac{1}{1+e^{-z}}$");
   });
 
   it("keeps repeated assistant messages when they come from separate response_item events", () => {
@@ -1845,5 +1947,127 @@ describe("history loaders", () => {
     expect(snapshot.fallbackWarnings.map((entry) => entry.code)).toContain(
       "missing_items",
     );
+  });
+
+  it("prefers truncated codex local message history when remote resume drops the prior assistant turn", async () => {
+    const loader = createCodexHistoryLoader({
+      workspaceId: "ws-codex-rewind-local-truth",
+      resumeThread: vi.fn().mockResolvedValue({
+        result: {
+          thread: {
+            turns: [
+              {
+                id: "turn-1",
+                items: [
+                  {
+                    id: "remote-user-1",
+                    type: "userMessage",
+                    content: [{ type: "text", text: "First request" }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+      loadCodexSession: vi.fn().mockResolvedValue({
+        entries: [
+          {
+            type: "event_msg",
+            payload: {
+              type: "user_message",
+              message: "First request",
+            },
+          },
+          {
+            type: "event_msg",
+            payload: {
+              type: "agent_message",
+              message: "First reply",
+            },
+          },
+        ],
+      }),
+    });
+
+    const snapshot = await loader.load("thread-codex-rewind-local-truth");
+    expect(
+      snapshot.items.filter(
+        (item) => item.kind === "message" && item.role === "assistant",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        kind: "message",
+        role: "assistant",
+        text: "First reply",
+      }),
+    ]);
+  });
+
+  it("prefers truncated codex local message history when remote resume still contains rewound tail messages", async () => {
+    const loader = createCodexHistoryLoader({
+      workspaceId: "ws-codex-rewind-tail-truncation",
+      resumeThread: vi.fn().mockResolvedValue({
+        result: {
+          thread: {
+            turns: [
+              {
+                id: "turn-1",
+                items: [
+                  {
+                    id: "remote-user-1",
+                    type: "userMessage",
+                    content: [{ type: "text", text: "First request" }],
+                  },
+                  {
+                    id: "remote-assistant-1",
+                    type: "agentMessage",
+                    text: "First reply",
+                  },
+                ],
+              },
+              {
+                id: "turn-2",
+                items: [
+                  {
+                    id: "remote-user-2",
+                    type: "userMessage",
+                    content: [{ type: "text", text: "Second request" }],
+                  },
+                  {
+                    id: "remote-assistant-2",
+                    type: "agentMessage",
+                    text: "Second reply",
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+      loadCodexSession: vi.fn().mockResolvedValue({
+        entries: [
+          {
+            type: "event_msg",
+            payload: {
+              type: "user_message",
+              message: "First request",
+            },
+          },
+          {
+            type: "event_msg",
+            payload: {
+              type: "agent_message",
+              message: "First reply",
+            },
+          },
+        ],
+      }),
+    });
+
+    const snapshot = await loader.load("thread-codex-rewind-tail-truncation");
+    expect(
+      snapshot.items.filter((item) => item.kind === "message").map((item) => item.text),
+    ).toEqual(["First request", "First reply"]);
   });
 });

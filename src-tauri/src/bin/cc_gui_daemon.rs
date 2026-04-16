@@ -12,6 +12,8 @@ mod codex_collaboration_policy;
 mod codex_config;
 #[path = "../codex/home.rs"]
 mod codex_home;
+#[path = "../codex/rewind.rs"]
+mod codex_rewind;
 #[path = "../codex/thread_mode_state.rs"]
 mod codex_thread_mode_state;
 #[path = "cc_gui_daemon/daemon_state.rs"]
@@ -71,6 +73,9 @@ mod codex {
     }
     pub(crate) mod home {
         pub(crate) use crate::codex_home::*;
+    }
+    pub(crate) mod rewind {
+        pub(crate) use crate::codex_rewind::*;
     }
     pub(crate) mod collaboration_policy {
         pub(crate) use crate::codex_collaboration_policy::*;
@@ -2458,6 +2463,28 @@ async fn handle_rpc_request(
             let thread_id = parse_string(&params, "threadId")?;
             let message_id = parse_optional_string(&params, "messageId");
             state.fork_thread(workspace_id, thread_id, message_id).await
+        }
+        "rewind_codex_thread" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let thread_id = parse_string(&params, "threadId")?;
+            let message_id = parse_optional_string(&params, "messageId");
+            let target_user_turn_index = parse_optional_u32(&params, "targetUserTurnIndex")
+                .ok_or_else(|| "targetUserTurnIndex is required".to_string())?;
+            let target_user_message_text = parse_optional_string(&params, "targetUserMessageText");
+            let target_user_message_occurrence =
+                parse_optional_u32(&params, "targetUserMessageOccurrence");
+            let local_user_message_count = parse_optional_u32(&params, "localUserMessageCount");
+            state
+                .rewind_codex_thread(
+                    workspace_id,
+                    thread_id,
+                    message_id,
+                    target_user_turn_index,
+                    target_user_message_text,
+                    target_user_message_occurrence,
+                    local_user_message_count,
+                )
+                .await
         }
         "list_threads" => {
             let workspace_id = parse_string(&params, "workspaceId")?;

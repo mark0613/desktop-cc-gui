@@ -74,6 +74,9 @@ const PROJECT_MEMORY_BLOCK_REGEX = /^<project-memory>[\s\S]*?<\/project-memory>\
 const MODE_FALLBACK_PREFIX_REGEX =
   /^(?:collaboration mode:\s*code\.|execution policy \(default mode\):|execution policy \(plan mode\):)/i;
 const MODE_FALLBACK_MARKER_REGEX = /User request\s*:\s*/i;
+const AGENT_PROMPT_HEADER = "## Agent Role and Instructions";
+const AGENT_PROMPT_NAME_PREFIX_REGEX = /^Agent Name:\s*\S+/i;
+const AGENT_PROMPT_ICON_PREFIX_REGEX = /^Agent Icon:\s*\S+/i;
 const SHARED_SESSION_SYNC_PREFIX_REGEX =
   /^Shared session context sync\.\s*Continue from these recent turns before answering the new request:\s*/i;
 const SHARED_SESSION_CURRENT_REQUEST_MARKER_REGEX =
@@ -140,6 +143,27 @@ function stripModeFallbackBlock(text: string): string {
   return extracted.trim().length > 0 ? extracted : text;
 }
 
+function stripSelectedAgentPromptBlock(text: string): string {
+  const headerIndex = text.lastIndexOf(AGENT_PROMPT_HEADER);
+  if (headerIndex < 0) {
+    return text;
+  }
+  const prefix = text.slice(0, headerIndex);
+  const suffix = text
+    .slice(headerIndex + AGENT_PROMPT_HEADER.length)
+    .replace(/^\s+/, "");
+  if (!suffix) {
+    return text;
+  }
+  const looksInjectedAgentBlock =
+    AGENT_PROMPT_NAME_PREFIX_REGEX.test(suffix) ||
+    AGENT_PROMPT_ICON_PREFIX_REGEX.test(suffix);
+  if (!looksInjectedAgentBlock) {
+    return text;
+  }
+  return prefix.replace(/\s+$/, "");
+}
+
 function stripSharedSessionContextSyncWrapper(text: string): string {
   if (!SHARED_SESSION_SYNC_PREFIX_REGEX.test(text.trimStart())) {
     return text;
@@ -156,7 +180,9 @@ function stripSharedSessionContextSyncWrapper(text: string): string {
 function normalizeComparableUserText(text: string) {
   const latestUserInput = extractLatestUserInputTextPreserveFormatting(text);
   const normalized = stripSharedSessionContextSyncWrapper(
-    stripModeFallbackBlock(stripInjectedProjectMemoryBlock(latestUserInput)),
+    stripSelectedAgentPromptBlock(
+      stripModeFallbackBlock(stripInjectedProjectMemoryBlock(latestUserInput)),
+    ),
   );
   return normalized.replace(/\s+/g, " ").trim();
 }

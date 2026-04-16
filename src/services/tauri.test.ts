@@ -5,6 +5,7 @@ import {
   forkClaudeSession,
   forkClaudeSessionFromMessage,
   forkThread,
+  rewindCodexThread,
   generateThreadTitle,
   getGitHubIssues,
   getGitLog,
@@ -216,6 +217,55 @@ describe("tauri invoke wrappers", () => {
       threadId: "thread-9",
       messageId: null,
     });
+  });
+
+  it("maps codex rewind params to rewind_codex_thread", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await rewindCodexThread("ws-9", "thread-9", 2, "user-2", {
+      targetUserMessageText: "1+1",
+      targetUserMessageOccurrence: 1,
+      localUserMessageCount: 3,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("rewind_codex_thread", {
+      workspaceId: "ws-9",
+      threadId: "thread-9",
+      messageId: "user-2",
+      targetUserTurnIndex: 2,
+      targetUserMessageText: "1+1",
+      targetUserMessageOccurrence: 1,
+      localUserMessageCount: 3,
+    });
+  });
+
+  it("normalizes codex rewind index/messageId payload", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await rewindCodexThread("ws-9", "thread-9", 2.8, "  user-2  ", {
+      targetUserMessageText: " 1+1 ",
+      targetUserMessageOccurrence: Number.POSITIVE_INFINITY,
+      localUserMessageCount: Number.POSITIVE_INFINITY,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("rewind_codex_thread", {
+      workspaceId: "ws-9",
+      threadId: "thread-9",
+      messageId: "user-2",
+      targetUserTurnIndex: 2,
+      targetUserMessageText: "1+1",
+    });
+  });
+
+  it("rejects codex rewind when targetUserTurnIndex is invalid", async () => {
+    const invokeMock = vi.mocked(invoke);
+
+    await expect(rewindCodexThread("ws-9", "thread-9", 0, "user-2")).rejects.toThrow(
+      "targetUserTurnIndex must be >= 1 for codex rewind",
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it("maps optional messageId for fork_thread", async () => {

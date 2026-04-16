@@ -349,6 +349,13 @@ function shouldIgnoreAgentMessageSnapshot(params: {
   return Boolean(threadAgentDeltaSeenRef.current[threadId]);
 }
 
+function hasAgentMessageSnapshotText(item: Record<string, unknown>): boolean {
+  const text = asString(
+    item.text ?? item.content ?? item.output_text ?? item.outputText ?? "",
+  ).trim();
+  return text.length > 0;
+}
+
 function extractTokenUsageFromNormalizedEvent(
   event: NormalizedThreadEvent,
 ): Record<string, unknown> | null {
@@ -1408,6 +1415,12 @@ export function useAppServerEvents(
           ) {
             return;
           }
+          if (
+            String(item.type ?? "") === "agentMessage" &&
+            hasAgentMessageSnapshotText(item)
+          ) {
+            threadAgentDeltaSeenRef.current[threadId] = true;
+          }
           handlers.onItemStarted?.(workspace_id, threadId, item);
         }
         return;
@@ -1440,6 +1453,12 @@ export function useAppServerEvents(
             })
           ) {
             return;
+          }
+          if (
+            String(item.type ?? "") === "agentMessage" &&
+            hasAgentMessageSnapshotText(item)
+          ) {
+            threadAgentDeltaSeenRef.current[threadId] = true;
           }
           handlers.onItemUpdated?.(workspace_id, threadId, item);
         }

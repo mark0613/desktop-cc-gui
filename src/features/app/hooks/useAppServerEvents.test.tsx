@@ -1473,6 +1473,239 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("does not emit fallback completion when agentMessage snapshot already arrived via item/updated", async () => {
+    const handlers: Handlers = {
+      onAgentMessageCompleted: vi.fn(),
+      onTurnCompleted: vi.fn(),
+      onItemUpdated: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "item/updated",
+          params: {
+            threadId: "codex:thread-1",
+            item: { type: "agentMessage", id: "item-1", text: "final response" },
+          },
+        },
+      });
+    });
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "codex:thread-1",
+            turnId: "turn-1",
+            result: { text: "final response" },
+          },
+        },
+      });
+    });
+
+    expect(handlers.onItemUpdated).toHaveBeenCalledTimes(1);
+    expect(handlers.onAgentMessageCompleted).not.toHaveBeenCalled();
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-1",
+      "codex:thread-1",
+      "turn-1",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("keeps turn/completed fallback when agentMessage snapshot text is empty", async () => {
+    const handlers: Handlers = {
+      onAgentMessageCompleted: vi.fn(),
+      onTurnCompleted: vi.fn(),
+      onItemUpdated: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "item/updated",
+          params: {
+            threadId: "codex:thread-1",
+            item: { type: "agentMessage", id: "item-empty", text: "" },
+          },
+        },
+      });
+    });
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "codex:thread-1",
+            turnId: "turn-2",
+            result: { text: "final response from result" },
+          },
+        },
+      });
+    });
+
+    expect(handlers.onItemUpdated).toHaveBeenCalledTimes(1);
+    expect(handlers.onAgentMessageCompleted).toHaveBeenCalledTimes(1);
+    expect(handlers.onAgentMessageCompleted).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      threadId: "codex:thread-1",
+      itemId: "turn-2",
+      text: "final response from result",
+    });
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-1",
+      "codex:thread-1",
+      "turn-2",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("does not emit fallback completion in shared session when agentMessage snapshot already has text", async () => {
+    const handlers: Handlers = {
+      onAgentMessageCompleted: vi.fn(),
+      onTurnCompleted: vi.fn(),
+      onItemUpdated: vi.fn(),
+    };
+    registerSharedSessionNativeBinding({
+      workspaceId: "ws-shared-codex-turn",
+      sharedThreadId: "shared:thread-codex-turn",
+      nativeThreadId: "codex-native-thread-turn",
+      engine: "codex",
+    });
+    const { root } = await mount(handlers);
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-shared-codex-turn",
+        message: {
+          method: "item/updated",
+          params: {
+            threadId: "codex-native-thread-turn",
+            item: { type: "agentMessage", id: "item-1", text: "shared final response" },
+          },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-shared-codex-turn",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "codex-native-thread-turn",
+            turnId: "turn-shared-1",
+            result: { text: "shared final response" },
+          },
+        },
+      });
+    });
+
+    expect(handlers.onItemUpdated).toHaveBeenCalledWith(
+      "ws-shared-codex-turn",
+      "shared:thread-codex-turn",
+      expect.objectContaining({
+        type: "agentMessage",
+        id: "item-1",
+        text: "shared final response",
+      }),
+    );
+    expect(handlers.onAgentMessageCompleted).not.toHaveBeenCalled();
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-shared-codex-turn",
+      "shared:thread-codex-turn",
+      "turn-shared-1",
+    );
+
+    clearSharedSessionBindingsForSharedThread(
+      "ws-shared-codex-turn",
+      "shared:thread-codex-turn",
+    );
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("keeps shared-session turn/completed fallback when snapshot text is empty", async () => {
+    const handlers: Handlers = {
+      onAgentMessageCompleted: vi.fn(),
+      onTurnCompleted: vi.fn(),
+      onItemUpdated: vi.fn(),
+    };
+    registerSharedSessionNativeBinding({
+      workspaceId: "ws-shared-codex-empty",
+      sharedThreadId: "shared:thread-codex-empty",
+      nativeThreadId: "codex-native-thread-empty",
+      engine: "codex",
+    });
+    const { root } = await mount(handlers);
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-shared-codex-empty",
+        message: {
+          method: "item/updated",
+          params: {
+            threadId: "codex-native-thread-empty",
+            item: { type: "agentMessage", id: "item-empty", text: "" },
+          },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-shared-codex-empty",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "codex-native-thread-empty",
+            turnId: "turn-shared-empty-1",
+            result: { text: "shared fallback response" },
+          },
+        },
+      });
+    });
+
+    expect(handlers.onItemUpdated).toHaveBeenCalledWith(
+      "ws-shared-codex-empty",
+      "shared:thread-codex-empty",
+      expect.objectContaining({
+        type: "agentMessage",
+        id: "item-empty",
+      }),
+    );
+    expect(handlers.onAgentMessageCompleted).toHaveBeenCalledTimes(1);
+    expect(handlers.onAgentMessageCompleted).toHaveBeenCalledWith({
+      workspaceId: "ws-shared-codex-empty",
+      threadId: "shared:thread-codex-empty",
+      itemId: "turn-shared-empty-1",
+      text: "shared fallback response",
+    });
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-shared-codex-empty",
+      "shared:thread-codex-empty",
+      "turn-shared-empty-1",
+    );
+
+    clearSharedSessionBindingsForSharedThread(
+      "ws-shared-codex-empty",
+      "shared:thread-codex-empty",
+    );
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("keeps multiple agent completions in the same thread when item ids differ", async () => {
     const handlers: Handlers = {
       onAgentMessageCompleted: vi.fn(),

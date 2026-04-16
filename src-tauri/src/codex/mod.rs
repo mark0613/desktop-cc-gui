@@ -14,6 +14,7 @@ pub(crate) mod args;
 pub(crate) mod collaboration_policy;
 pub(crate) mod config;
 pub(crate) mod home;
+pub(crate) mod rewind;
 pub(crate) mod thread_mode_state;
 
 use self::args::resolve_workspace_codex_args;
@@ -29,6 +30,7 @@ use crate::event_sink::TauriEventSink;
 use crate::local_usage;
 use crate::remote_backend;
 use crate::shared::{codex_core, thread_titles_core};
+use crate::shared::workspaces_core::disconnect_workspace_session_core;
 use crate::state::AppState;
 use crate::types::{LocalUsageSessionSummary, WorkspaceEntry};
 
@@ -825,8 +827,68 @@ pub(crate) async fn fork_thread(
 
     // Ensure Codex session exists before forking thread
     ensure_codex_session(&workspace_id, &state, &app).await?;
-
     codex_core::fork_thread_core(&state.sessions, workspace_id, thread_id, message_id).await
+}
+
+#[tauri::command]
+pub(crate) async fn rewind_codex_thread(
+    workspace_id: String,
+    thread_id: String,
+    message_id: Option<String>,
+    target_user_turn_index: u32,
+    target_user_message_text: Option<String>,
+    target_user_message_occurrence: Option<u32>,
+    local_user_message_count: Option<u32>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "rewind_codex_thread",
+            json!({
+                "workspaceId": workspace_id,
+                "threadId": thread_id,
+                "messageId": message_id,
+                "targetUserTurnIndex": target_user_turn_index,
+                "targetUserMessageText": target_user_message_text,
+                "targetUserMessageOccurrence": target_user_message_occurrence,
+                "localUserMessageCount": local_user_message_count
+            }),
+        )
+        .await;
+    }
+
+    ensure_codex_session(&workspace_id, &state, &app).await?;
+    let rewind_response = rewind::rewind_thread_from_message(
+        &state.sessions,
+        &state.workspaces,
+        workspace_id.clone(),
+        thread_id,
+        message_id,
+        target_user_turn_index,
+        target_user_message_text,
+        target_user_message_occurrence,
+        local_user_message_count,
+    )
+    .await?;
+
+    let rewound_thread_id = rewind_response
+        .get("thread")
+        .and_then(|thread| thread.get("id"))
+        .or_else(|| rewind_response.get("threadId"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+        .ok_or_else(|| "codex rewind response missing child thread id".to_string())?;
+
+    disconnect_workspace_session_core(&state.sessions, &workspace_id).await;
+    ensure_codex_session(&workspace_id, &state, &app).await?;
+    codex_core::resume_thread_core(&state.sessions, workspace_id, rewound_thread_id).await?;
+
+    Ok(rewind_response)
 }
 
 #[tauri::command]
