@@ -218,7 +218,8 @@ python3 ./.trellis/scripts/task.py create "<title>" --slug <task-name>
    --> git commit -m "type(scope): description"
        Format: feat/fix/docs/refactor/test/chore
 
-7. Record session (one command)
+7. Record session (mandatory after successful commit)
+   --> If the AI executed `git commit`, it MUST continue into this step automatically unless the user explicitly opts out
    --> python3 ./.trellis/scripts/add_session.py --title "Title" --commit "hash"
 
 8. Verify and close spec loop
@@ -363,6 +364,7 @@ python3 ./.trellis/scripts/task.py list-archive    # List archived tasks
    - After fix bug, use `/trellis:break-loop` for deep analysis
    - Human commits after testing passes
    - Use `add_session.py` to record progress
+   - If the AI itself performed `git commit`, do not end the workflow before `add_session.py` is executed unless the user explicitly says to skip recording
 
 ### [X] DON'T - Should Not Do
 

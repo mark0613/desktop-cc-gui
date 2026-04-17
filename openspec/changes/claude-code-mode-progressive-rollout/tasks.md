@@ -34,6 +34,9 @@
 ### Batch E [P1] 后续阶段
 
 - [ ] E.1 继续收敛 Claude 原生命令审批 shape，避免非文件工具仍退化
+  - [x] E.1.a 已识别的 command execution / shell denial 先统一映射到 `modeBlocked` 诊断链
+  - [ ] E.1.b 继续抓 Claude 原生命令审批 payload，补齐非文件工具与 shell/native command 的 permission shape
+  - [ ] E.1.c 评估哪些非文件工具可以安全进入下一阶段 synthetic bridge
 - [x] E.2 校验并对齐 `acceptEdits` 的真实 CLI 语义
 - [ ] E.3 在语义确认后开放 Claude `acceptEdits`
 
@@ -47,6 +50,7 @@
   - `full-access` 不进入审批链
   - `default` 触发单文件审批、批量审批、审批后继续执行
   - 历史重开后仍能恢复 `File changes` 卡片
+  - `default` 命中 command execution / shell 权限阻塞时进入 `modeBlocked` 诊断
   - `acceptEdits` 在开放前保持禁用
 
 ## 2. 回滚策略

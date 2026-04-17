@@ -8,9 +8,10 @@
   - `plan` -> `read-only` -> `--permission-mode plan`
   - `full-access` -> `--dangerously-skip-permissions`
   - `default` 可触发真实文件审批路径，并在审批后继续执行
+  - `ExitPlanMode` 已有稳定的 GUI 承接卡片，计划内容可折叠并按 Markdown 渲染
 - 仍待继续收敛
   - `acceptEdits` 未开放
-  - Claude 更广义的原生命令审批 shape 仍未完全标准化
+  - Claude 更广义的原生命令审批 shape 仍未完全标准化，但已识别的 command execution denial 会进入 `modeBlocked`
   - synthetic local apply 当前只覆盖受支持的文件工具
 
 因此本 design 不再描述“未来可能接 bridge”，而是聚焦当前 bridge 的结构、边界和后续扩展约束。
@@ -148,10 +149,44 @@
 - approval 相关状态机、resume marker、local apply 收敛进 `approval.rs`。
 - stream / resume tests 独立到 `tests_stream.rs`。
 
+### Decision 7: 非文件工具权限阻塞先进入稳定诊断链，而不是冒进接入通用 synthetic approval
+
+**Decision**
+
+- 对 command execution / shell / native command 这类当前未被本地 apply 支持的权限阻塞，runtime 先统一映射为 `modeBlocked` 诊断事件。
+
+**Why**
+
+- 当前 bridge 的核心价值是补齐受支持文件工具的审批闭环，不是把所有 Claude 原生命令都接到本地执行器。
+- 非文件工具如果继续只保留原始文本报错，用户无法判断是 CLI 权限限制、GUI 没接住，还是命令本身失败。
+
+**Implementation shape**
+
+- `event_conversion.rs` 识别 Claude permission denial 中的 command-execution shape。
+- `events.rs` 将 `item/commandExecution/requestApproval` 统一映射到 `collaboration/modeBlocked`。
+- 前端显示 recoverable diagnostics，指导用户切换 `full-access` 或改写为受支持文件工具。
+
+### Decision 8: Plan 阶段退出后的承接卡片属于 rollout 可用性基线的一部分
+
+**Decision**
+
+- `ExitPlanMode` 不再只显示原始工具文本，而是使用可折叠、扁平化的计划承接卡片渲染，并对 `PLAN` / `PLANFILEPATH` 或 JSON payload 做 Markdown 级提取。
+
+**Why**
+
+- rollout 不只是 runtime flag 和 approval bridge；如果计划结束后的输出无法稳定消费，用户仍然无法顺畅从 `plan` 切换到执行。
+- Claude / Codex 在协作模式里都依赖计划内容的复读与人工确认，因此该卡片是产品层回归基线，而不是纯视觉细节。
+
+**Implementation shape**
+
+- `GenericToolBlock.tsx` 对 `exitplanmode` 特判提取结构化计划内容。
+- 卡片默认可折叠，header 保持单行，原始计划内容按 Markdown 渲染。
+- 深色主题下保留层次对比，但避免额外装饰性包围。
+
 ## Risks / Trade-offs
 
 - [Risk] synthetic approval 当前只覆盖文件工具，命令审批仍可能退化
-  - Mitigation: 保持 `acceptEdits` 未开放，并继续把 Claude command approval 视为后续阶段工作。
+  - Mitigation: 保持 `acceptEdits` 未开放；已识别的命令阻塞统一进入 `modeBlocked`，至少保证可诊断和可恢复建议。
 
 - [Risk] resume 依赖 marker 协议，若 marker 泄漏到用户历史会产生噪音
   - Mitigation: loader 和 thread item parser 必须先 strip 再渲染。
@@ -173,12 +208,14 @@
 - 批准单个文件变更后，应完成本地写入并发出 completion / resume。
 - 批准多个文件变更后，应只在最后一个批准完成时 finalize turn，并继续 resume。
 - 拒绝文件变更时，不得写文件，且会话仍可继续交互。
+- Claude `default` 命中已识别的 command execution 权限阻塞时，应进入 `modeBlocked` 而不是只显示原始失败文本。
 
 ### History / lifecycle
 
 - synthetic approval resume marker 不得直接显示在历史消息中。
 - 重开线程后，应恢复结构化 `File changes` 卡片。
 - 批准后的中间态应可见，避免“点击后无反馈”的体验断层。
+- `ExitPlanMode` 输出应渲染为稳定的计划卡片，且原始计划内容在重开线程后仍具备基本可读性。
 
 ### Edge cases
 

@@ -63,6 +63,7 @@ Keep this managed block so 'trellis update' can refresh the instructions.
 ## Trellis Session Record Gate
 
 - 当 AI 在本仓库完成一次代码或规范提交后，必须立即执行 Trellis session record，将本次交付写入当前 active developer 对应的 `.trellis/workspace/<developer>/`。
+- 这是 **AI commit workflow invariant**，不是“可选收尾动作”：只要 AI 在本仓库成功执行了 `git commit`，就不得直接结束回合或切回普通对话，必须继续尝试执行 Trellis session record，除非用户明确要求跳过。
 - 记录时机：仅在 commit 已完成后执行；普通问答、方案讨论、未提交的中间态不写入 workspace，避免 journal 变成聊天流水账。
 - 适用范围：所有开发者 workspace 都遵守同一规则，包括 `.trellis/workspace/chenxiangning/` 与 `.trellis/workspace/zhukunpenglinyutong/`。
 - 前置检查：执行 record 前必须先运行 `python3 ./.trellis/scripts/get_context.py --mode record`。
@@ -76,6 +77,7 @@ Keep this managed block so 'trellis update' can refresh the instructions.
 - `add_session.py` 会自动更新 `.trellis/workspace` 并提交 Trellis 元数据，因此一次业务提交后通常会跟随一个独立的 Trellis session 记录提交。
 - 如果用户明确要求“不记录 Trellis session”，则跳过记录，并在最终回复中说明。
 - 禁止把该流程放入 Git `post-commit` hook；该脚本会产生提交，hook 方案容易导致递归提交和低质量记录。
+- 对任何处理 Git commit 的 skill / workflow（包括但不限于 `git-flow`、自定义 commit helper、直接 shell commit）都必须遵守这一规则；如果 skill 自身未显式提及，仍以本项目规则为准自动补执行。
 
 ## PlanFirst 执行约束
 

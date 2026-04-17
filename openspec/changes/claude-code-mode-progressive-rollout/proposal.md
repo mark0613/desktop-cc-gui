@@ -49,9 +49,15 @@
   - 支持 `Write` / `CreateFile` / `CreateDirectory`
   - 支持缺失父目录创建
   - 支持 Windows / macOS 路径归一化与 workspace 越界防护
+- 明确非文件工具当前仍未进入完整 synthetic approval bridge，但 command execution / shell 类权限阻塞已进入可诊断状态：
+  - runtime 会把已识别的命令执行权限阻塞映射为 `modeBlocked`
+  - UI 需要向用户明确提示“当前需切到 full-access 或改写为受支持文件工具”，而不是只停留在原始错误文本
 - 把 large-file governance 的实际治理结果写入 proposal：
   - `src-tauri/src/engine/claude.rs` 已拆分出 `claude/approval.rs`、`claude/manager.rs`、`claude/tests_stream.rs`
   - `claude.rs` 已降到 3000 行门禁内
+- 把 plan mode 退出后的用户可见承接写入 rollout 基线：
+  - `ExitPlanMode` 工具卡片使用可折叠的平面卡片承接
+  - 原始计划内容按 Markdown 渲染，便于人工回归与后续实现切换
 
 ## 技术方案对比与取舍
 
@@ -73,6 +79,7 @@
 - Claude mode selection 必须继续保持 runtime-effective，不得被产品层静默改写。
 - Claude approval-dependent mode 已从“future bridge”升级为“已有 synthetic approval bridge，但能力有边界”。
 - Conversation lifecycle 必须承认 synthetic approval resume marker、历史恢复和多次审批后的继续执行。
+- Plan 阶段结束后的承接卡片必须具备稳定、可回归的基础可读性，避免计划存在但用户无法高效消费。
 
 ## 验收标准
 
@@ -88,6 +95,9 @@
 - Claude history replay 时：
   - synthetic approval marker 不得原样泄漏到用户文本
   - 仍需恢复为结构化 `File changes` 卡片
+- Claude 遇到非文件工具权限阻塞时：
+  - 已识别的 command execution / shell denial 必须进入 `modeBlocked` 诊断链
+  - 用户必须能看到明确的恢复方向，而不是只看到模糊失败文本
 - approval reducer 不得只按单一 `request_id` 删除，必须避免多审批并发误删
 - `npm run check:large-files:gate` 必须继续通过，`claude.rs` 不得重新越过 3000 行门槛
 
