@@ -1023,6 +1023,8 @@ pub(crate) struct WorkspaceSession {
     pub(crate) entry: WorkspaceEntry,
     pub(crate) child: Mutex<Child>,
     pub(crate) stdin: Mutex<ChildStdin>,
+    pub(crate) wrapper_kind: String,
+    pub(crate) resolved_bin: String,
     pub(crate) pending: Mutex<HashMap<u64, oneshot::Sender<Value>>>,
     timed_out_requests: Mutex<HashMap<u64, TimedOutRequest>>,
     pub(crate) next_id: AtomicU64,
@@ -1038,6 +1040,19 @@ pub(crate) struct WorkspaceSession {
 }
 
 impl WorkspaceSession {
+    fn configure_spawn_command(cmd: &mut tokio::process::Command) {
+        #[cfg(unix)]
+        unsafe {
+            cmd.pre_exec(|| {
+                if libc::setpgid(0, 0) == 0 {
+                    Ok(())
+                } else {
+                    Err(std::io::Error::last_os_error())
+                }
+            });
+        }
+    }
+
     async fn record_timed_out_request(&self, id: u64, method: &str, thread_id: Option<String>) {
         let now = now_millis();
         let mut timed_out_requests = self.timed_out_requests.lock().await;
@@ -1737,6 +1752,7 @@ async fn spawn_workspace_session_once<E: EventSink>(
     hide_console: bool,
 ) -> Result<Arc<WorkspaceSession>, String> {
     let mut command = build_codex_command_from_launch_context(launch_context, hide_console);
+    WorkspaceSession::configure_spawn_command(&mut command);
     let skip_spec_hint_injection = codex_args_override_instructions(codex_args.as_deref());
     apply_codex_args(&mut command, codex_args.as_deref())?;
     if !skip_spec_hint_injection {
@@ -1761,6 +1777,8 @@ async fn spawn_workspace_session_once<E: EventSink>(
         entry: entry.clone(),
         child: Mutex::new(child),
         stdin: Mutex::new(stdin),
+        wrapper_kind: launch_context.wrapper_kind.to_string(),
+        resolved_bin: launch_context.resolved_bin.clone(),
         pending: Mutex::new(HashMap::new()),
         timed_out_requests: Mutex::new(HashMap::new()),
         next_id: AtomicU64::new(1),

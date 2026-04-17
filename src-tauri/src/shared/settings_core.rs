@@ -122,6 +122,7 @@ pub(crate) async fn restart_codex_sessions_for_app_settings_change_core<F, Fut>(
         std::collections::HashMap<String, Arc<crate::backend::app_server::WorkspaceSession>>,
     >,
     app_settings: &Mutex<AppSettings>,
+    runtime_manager: Option<&crate::runtime::RuntimeManager>,
     spawn_session: F,
 ) -> Result<(), String>
 where
@@ -135,6 +136,7 @@ where
         workspaces,
         sessions,
         app_settings,
+        runtime_manager,
         spawn_session,
     )
     .await

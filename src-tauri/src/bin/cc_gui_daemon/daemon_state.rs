@@ -419,6 +419,7 @@ impl DaemonState {
             &self.workspaces,
             &self.sessions,
             &self.app_settings,
+            None,
             move |entry, default_bin, codex_args, codex_home| {
                 spawn_with_client(
                     self.event_sink.clone(),
@@ -456,6 +457,7 @@ impl DaemonState {
                 &self.workspaces,
                 &self.sessions,
                 &self.app_settings,
+                None,
                 |entry, default_bin, codex_args, codex_home| {
                     spawn_with_client(
                         self.event_sink.clone(),
@@ -518,6 +520,7 @@ impl DaemonState {
             &self.workspaces,
             &self.sessions,
             &self.app_settings,
+            None,
             |entry, default_bin, codex_args, codex_home| {
                 spawn_with_client(
                     self.event_sink.clone(),
@@ -1667,7 +1670,8 @@ impl DaemonState {
             .map(ToString::to_string)
             .ok_or_else(|| "codex rewind response missing child thread id".to_string())?;
 
-        workspaces_core::disconnect_workspace_session_core(&self.sessions, &workspace_id).await;
+        workspaces_core::disconnect_workspace_session_core(&self.sessions, None, &workspace_id)
+            .await;
         self.ensure_codex_session_for_workspace(&workspace_id)
             .await?;
         codex_core::resume_thread_core(&self.sessions, workspace_id, rewound_thread_id).await?;

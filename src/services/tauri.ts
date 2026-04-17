@@ -10,6 +10,7 @@ import type {
   DictationSessionState,
   LocalUsageSnapshot,
   LocalUsageStatistics,
+  RuntimePoolSnapshot,
   WorkspaceInfo,
   WorkspaceSettings,
   EngineStatus,
@@ -415,6 +416,22 @@ export async function writePanelLockPasswordFile(
 
 export async function connectWorkspace(id: string): Promise<void> {
   return invoke("connect_workspace", { id });
+}
+
+export async function ensureRuntimeReady(workspaceId: string): Promise<void> {
+  return invoke("ensure_runtime_ready", { workspaceId });
+}
+
+export async function getRuntimePoolSnapshot(): Promise<RuntimePoolSnapshot> {
+  return invoke("get_runtime_pool_snapshot");
+}
+
+export async function mutateRuntimePool(mutation: {
+  action: "close" | "releaseToCold" | "pin";
+  workspaceId: string;
+  pinned?: boolean;
+}): Promise<RuntimePoolSnapshot> {
+  return invoke("mutate_runtime_pool", { mutation });
 }
 
 export async function startThread(workspaceId: string) {

@@ -2594,6 +2594,8 @@ export function AppShell() {
     hasLoaded,
     connectWorkspace,
     activeWorkspaceId,
+    restoreThreadsOnlyOnLaunch:
+      appSettings.runtimeRestoreThreadsOnlyOnLaunch !== false,
     listThreadsForWorkspace: listThreadsForWorkspaceTracked,
   });
   useWorkspaceRefreshOnFocus({

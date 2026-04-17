@@ -42,6 +42,7 @@ describe("useWorkspaceRestore", () => {
         workspaces: [visibleWorkspace, collapsedWorkspace, activeWorkspace],
         hasLoaded: true,
         activeWorkspaceId: activeWorkspace.id,
+        restoreThreadsOnlyOnLaunch: false,
         connectWorkspace,
         listThreadsForWorkspace,
       }),
@@ -56,5 +57,35 @@ describe("useWorkspaceRestore", () => {
     expect(
       listThreadsForWorkspace.mock.calls.map((call) => call[0].id),
     ).toEqual(["ws-active", "ws-visible"]);
+  });
+
+  it("开启线程恢复模式时不会在启动阶段批量连接 runtime", async () => {
+    const activeWorkspace = createWorkspace({
+      id: "ws-active",
+      connected: false,
+    });
+    const visibleWorkspace = createWorkspace({
+      id: "ws-visible",
+      connected: false,
+    });
+    const connectWorkspace = vi.fn().mockResolvedValue(undefined);
+    const listThreadsForWorkspace = vi.fn().mockResolvedValue(undefined);
+
+    renderHook(() =>
+      useWorkspaceRestore({
+        workspaces: [visibleWorkspace, activeWorkspace],
+        hasLoaded: true,
+        activeWorkspaceId: activeWorkspace.id,
+        restoreThreadsOnlyOnLaunch: true,
+        connectWorkspace,
+        listThreadsForWorkspace,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(listThreadsForWorkspace).toHaveBeenCalledTimes(2);
+    });
+
+    expect(connectWorkspace).not.toHaveBeenCalled();
   });
 });

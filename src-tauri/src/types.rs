@@ -877,6 +877,36 @@ pub(crate) struct AppSettings {
     pub(crate) open_app_targets: Vec<OpenAppTarget>,
     #[serde(default = "default_selected_open_app_id", rename = "selectedOpenAppId")]
     pub(crate) selected_open_app_id: String,
+    #[serde(
+        default = "default_runtime_restore_threads_only_on_launch",
+        rename = "runtimeRestoreThreadsOnlyOnLaunch"
+    )]
+    pub(crate) runtime_restore_threads_only_on_launch: bool,
+    #[serde(
+        default = "default_runtime_force_cleanup_on_exit",
+        rename = "runtimeForceCleanupOnExit"
+    )]
+    pub(crate) runtime_force_cleanup_on_exit: bool,
+    #[serde(
+        default = "default_runtime_orphan_sweep_on_launch",
+        rename = "runtimeOrphanSweepOnLaunch"
+    )]
+    pub(crate) runtime_orphan_sweep_on_launch: bool,
+    #[serde(
+        default = "default_codex_max_hot_runtimes",
+        rename = "codexMaxHotRuntimes"
+    )]
+    pub(crate) codex_max_hot_runtimes: u8,
+    #[serde(
+        default = "default_codex_max_warm_runtimes",
+        rename = "codexMaxWarmRuntimes"
+    )]
+    pub(crate) codex_max_warm_runtimes: u8,
+    #[serde(
+        default = "default_codex_warm_ttl_seconds",
+        rename = "codexWarmTtlSeconds"
+    )]
+    pub(crate) codex_warm_ttl_seconds: u16,
     /// Default engine type: "claude", "codex", or "opencode". If not set, auto-detect.
     #[serde(default, rename = "defaultEngine")]
     pub(crate) default_engine: Option<String>,
@@ -1198,6 +1228,30 @@ fn default_selected_open_app_id() -> String {
     "vscode".to_string()
 }
 
+fn default_runtime_restore_threads_only_on_launch() -> bool {
+    true
+}
+
+fn default_runtime_force_cleanup_on_exit() -> bool {
+    true
+}
+
+fn default_runtime_orphan_sweep_on_launch() -> bool {
+    true
+}
+
+fn default_codex_max_hot_runtimes() -> u8 {
+    1
+}
+
+fn default_codex_max_warm_runtimes() -> u8 {
+    1
+}
+
+fn default_codex_warm_ttl_seconds() -> u16 {
+    90
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -1278,6 +1332,13 @@ impl Default for AppSettings {
             workspace_groups: default_workspace_groups(),
             open_app_targets: default_open_app_targets(),
             selected_open_app_id: default_selected_open_app_id(),
+            runtime_restore_threads_only_on_launch:
+                default_runtime_restore_threads_only_on_launch(),
+            runtime_force_cleanup_on_exit: default_runtime_force_cleanup_on_exit(),
+            runtime_orphan_sweep_on_launch: default_runtime_orphan_sweep_on_launch(),
+            codex_max_hot_runtimes: default_codex_max_hot_runtimes(),
+            codex_max_warm_runtimes: default_codex_max_warm_runtimes(),
+            codex_warm_ttl_seconds: default_codex_warm_ttl_seconds(),
         }
     }
 }

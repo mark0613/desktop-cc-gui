@@ -242,11 +242,70 @@ export type AppSettings = {
   workspaceGroups: WorkspaceGroup[];
   openAppTargets: OpenAppTarget[];
   selectedOpenAppId: string;
+  runtimeRestoreThreadsOnlyOnLaunch: boolean;
+  runtimeForceCleanupOnExit: boolean;
+  runtimeOrphanSweepOnLaunch: boolean;
+  codexMaxHotRuntimes: number;
+  codexMaxWarmRuntimes: number;
+  codexWarmTtlSeconds: number;
   streamingEnabled?: boolean;
   autoOpenFileEnabled?: boolean;
   diffExpandedByDefault?: boolean;
   commitPrompt?: string;
   sendShortcut?: "enter" | "cmdEnter";
+};
+
+export type RuntimePoolState =
+  | "starting"
+  | "hot"
+  | "warm"
+  | "busy"
+  | "stopping"
+  | "failed"
+  | "zombie-suspected";
+
+export type RuntimePoolRow = {
+  workspaceId: string;
+  workspaceName: string;
+  workspacePath: string;
+  engine: string;
+  state: RuntimePoolState;
+  pid: number | null;
+  wrapperKind: string | null;
+  resolvedBin: string | null;
+  startedAtMs: number | null;
+  lastUsedAtMs: number;
+  pinned: boolean;
+  leaseSources: string[];
+  error: string | null;
+};
+
+export type RuntimePoolSnapshot = {
+  rows: RuntimePoolRow[];
+  summary: {
+    totalRuntimes: number;
+    hotRuntimes: number;
+    warmRuntimes: number;
+    busyRuntimes: number;
+    pinnedRuntimes: number;
+    codexRuntimes: number;
+  };
+  budgets: {
+    maxHotCodex: number;
+    maxWarmCodex: number;
+    warmTtlSeconds: number;
+    restoreThreadsOnlyOnLaunch: boolean;
+    forceCleanupOnExit: boolean;
+    orphanSweepOnLaunch: boolean;
+  };
+  diagnostics: {
+    orphanEntriesFound: number;
+    orphanEntriesCleaned: number;
+    orphanEntriesFailed: number;
+    forceKillCount: number;
+    lastOrphanSweepAtMs: number | null;
+    lastShutdownAtMs: number | null;
+  };
 };
 
 export type CodexDoctorResult = {

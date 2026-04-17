@@ -884,7 +884,12 @@ pub(crate) async fn rewind_codex_thread(
         .map(ToString::to_string)
         .ok_or_else(|| "codex rewind response missing child thread id".to_string())?;
 
-    disconnect_workspace_session_core(&state.sessions, &workspace_id).await;
+    disconnect_workspace_session_core(
+        &state.sessions,
+        Some(&state.runtime_manager),
+        &workspace_id,
+    )
+    .await;
     ensure_codex_session(&workspace_id, &state, &app).await?;
     codex_core::resume_thread_core(&state.sessions, workspace_id, rewound_thread_id).await?;
 
@@ -1267,6 +1272,10 @@ pub(crate) async fn ensure_codex_session(
     {
         let sessions = state.sessions.lock().await;
         if sessions.contains_key(workspace_id) {
+            state
+                .runtime_manager
+                .touch(workspace_id, "ensure-runtime-ready", false)
+                .await;
             return Ok(());
         }
     }
@@ -1304,17 +1313,44 @@ pub(crate) async fn ensure_codex_session(
         settings.codex_mode_enforcement_enabled
     };
 
-    let session = spawn_workspace_session(
+    state
+        .runtime_manager
+        .record_starting(&entry, "codex", "ensure-runtime-ready")
+        .await;
+
+    let session = match spawn_workspace_session(
         entry.clone(),
         default_bin,
         codex_args,
         app.clone(),
         codex_home,
     )
-    .await?;
+    .await
+    {
+        Ok(session) => session,
+        Err(error) => {
+            state
+                .runtime_manager
+                .record_failure(
+                    &entry,
+                    "codex",
+                    "ensure-runtime-ready",
+                    error.clone(),
+                )
+                .await;
+            return Err(error);
+        }
+    };
     session.set_mode_enforcement_enabled(mode_enforcement_enabled);
 
-    state.sessions.lock().await.insert(entry.id, session);
+    crate::runtime::replace_workspace_session(
+        &state.sessions,
+        Some(&state.runtime_manager),
+        entry.id,
+        session,
+        "ensure-runtime-ready",
+    )
+    .await?;
     Ok(())
 }
 

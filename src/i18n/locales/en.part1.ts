@@ -1155,6 +1155,25 @@ const enPart1 = {
     codexRuntimeReloadAppliedCount: "Reloaded {{count}} connected workspace session(s)",
     codexRuntimeReloadHint:
       "When switching provider/source externally, click this button in the client to refresh.",
+    runtimePoolTitle: "Runtime Pool Console",
+    runtimePoolDescription:
+      "Inspect managed Codex runtimes, adjust pool budgets, and manually close or pin active runtimes.",
+    runtimeRestoreThreadsOnlyOnLaunch: "Restore thread metadata only on launch",
+    runtimeForceCleanupOnExit: "Force cleanup managed runtimes on exit",
+    runtimeOrphanSweepOnLaunch: "Sweep orphan runtimes on next launch",
+    runtimeMaxHot: "Codex hot limit",
+    runtimeMaxWarm: "Codex warm limit",
+    runtimeWarmTtl: "Warm TTL (seconds)",
+    runtimePoolSummary: "Runtime pool summary",
+    runtimeSummaryLine:
+      "Total {{total}} · Hot {{hot}} · Warm {{warm}} · Busy {{busy}} · Pinned {{pinned}}",
+    runtimeDiagnosticsLine:
+      "Orphan cleaned {{cleaned}} · Orphan failed {{failed}} · Forced kill {{forced}}",
+    runtimePoolEmpty: "No managed runtime is active right now.",
+    runtimePin: "Pin",
+    runtimeUnpin: "Unpin",
+    runtimeRelease: "Release",
+    runtimeClose: "Close",
     running: "Running...",
     codexLooksGood: "Codex looks good",
     codexIssueDetected: "Codex issue detected",

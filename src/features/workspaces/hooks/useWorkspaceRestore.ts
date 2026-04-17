@@ -5,6 +5,7 @@ type WorkspaceRestoreOptions = {
   workspaces: WorkspaceInfo[];
   hasLoaded: boolean;
   activeWorkspaceId: string | null;
+  restoreThreadsOnlyOnLaunch: boolean;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   listThreadsForWorkspace: (
     workspace: WorkspaceInfo,
@@ -16,6 +17,7 @@ export function useWorkspaceRestore({
   workspaces,
   hasLoaded,
   activeWorkspaceId,
+  restoreThreadsOnlyOnLaunch,
   connectWorkspace,
   listThreadsForWorkspace,
 }: WorkspaceRestoreOptions) {
@@ -47,7 +49,7 @@ export function useWorkspaceRestore({
       if (cancelled) {
         return;
       }
-      if (!workspace.connected) {
+      if (!restoreThreadsOnlyOnLaunch && !workspace.connected) {
         await connectWorkspace(workspace);
       }
       await listThreadsForWorkspace(workspace);
@@ -70,6 +72,7 @@ export function useWorkspaceRestore({
     connectWorkspace,
     hasLoaded,
     listThreadsForWorkspace,
+    restoreThreadsOnlyOnLaunch,
     workspaces,
   ]);
 }

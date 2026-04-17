@@ -33,19 +33,27 @@ mod git_utils;
 // workspace-backed filesystem helpers, so a minimal stub keeps the shared
 // module compilable here without pulling the full desktop app state graph.
 mod state {
+    use std::sync::Arc;
     use std::collections::HashMap;
     use tokio::sync::Mutex;
 
-    use crate::types::WorkspaceEntry;
+    use crate::backend::app_server::WorkspaceSession;
+    use crate::runtime::RuntimeManager;
+    use crate::types::{AppSettings, WorkspaceEntry};
 
     pub(crate) struct AppState {
         pub(crate) workspaces: Mutex<HashMap<String, WorkspaceEntry>>,
+        pub(crate) sessions: Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+        pub(crate) app_settings: Mutex<AppSettings>,
+        pub(crate) runtime_manager: RuntimeManager,
     }
 }
 #[path = "../local_usage.rs"]
 mod local_usage;
 #[path = "../rules.rs"]
 mod rules;
+#[path = "../runtime/mod.rs"]
+mod runtime;
 #[path = "../shared/mod.rs"]
 mod shared;
 #[path = "../storage.rs"]
@@ -65,6 +73,13 @@ mod workspace_settings;
 // Provide feature-style module paths for shared cores when compiled in the daemon.
 mod codex {
     pub(crate) type WorkspaceSession = crate::backend::app_server::WorkspaceSession;
+    pub(crate) async fn ensure_codex_session(
+        _workspace_id: &str,
+        _state: &crate::state::AppState,
+        _app: &tauri::AppHandle,
+    ) -> Result<(), String> {
+        Err("runtime control commands are unavailable in daemon mode".to_string())
+    }
     pub(crate) mod args {
         pub(crate) use crate::codex_args::*;
     }
