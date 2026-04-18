@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 19
+- **Total Sessions**: 20
 - **Last Active**: 2026-04-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1079 | Active |
+| `journal-1.md` | ~1134 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 20 | 2026-04-18 | 修复会话继续时失效线程恢复 | `2e3a5b08c1a4c721c9a44502191f773d205b8944` | `feature/vvvv0.4.3` |
 | 19 | 2026-04-18 | 优化 runtime 恢复提示与预算设置边界处理 | `d7b0c02212d50a0af37f473ea15897a2a6226d38` | `feature/vvvv0.4.3` |
 | 18 | 2026-04-18 | 运行时编排与进程治理重构 | `8d617b60dd0c6b746e36610f41fe4c8aa111c8fa` | `feature/vvvv0.4.3` |
 | 17 | 2026-04-18 | dedicated runtime pool settings panel | `520e706406350f6166e0bcb34e01ceeb3623856f` | `feature/vvvv0.4.3` |

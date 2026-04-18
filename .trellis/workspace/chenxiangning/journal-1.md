@@ -1077,3 +1077,58 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 20: 修复会话继续时失效线程恢复
+
+**Date**: 2026-04-18
+**Task**: 修复会话继续时失效线程恢复
+**Branch**: `feature/vvvv0.4.3`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+任务目标：修复当前会话继续对话时因旧 threadId 失效导致的 thread not found / session_not_found 错误，并确保不破坏已有成功链路。
+
+主要改动：
+- 在 unified history loader 恢复路径中增加 stale thread 恢复逻辑，仅针对失效线程错误触发。
+- 为 Codex 恢复增加有限分页扫描，避免线程较多时只扫描第一页导致无法恢复。
+- 为 OpenCode 恢复增加基于本地 session 列表的候选重建。
+- 恢复成功后建立旧线程到新线程的 alias，并同步切换 active thread。
+- 清理旧线程上残留的 user input 请求状态，避免 UI 切换后仍残留孤儿请求。
+- 更新 hook 测试，覆盖 Codex 恢复、OpenCode 恢复、无安全候选保守回退、以及候选位于后续分页的场景。
+
+涉及模块：
+- src/features/threads/hooks/useThreadActions.ts
+- src/features/threads/hooks/useThreads.ts
+- src/features/threads/hooks/useThreadActions.test.tsx
+
+验证结果：
+- npx vitest run src/features/threads/hooks/useThreadActions.test.tsx 通过
+- npm run typecheck 通过
+
+后续事项：
+- 当前工作区仍有 OpenSpec、RuntimePoolSection 与 i18n 的未提交改动，本次未纳入该业务提交。
+- 如后续继续演进，可考虑把 useThreadActions 的恢复辅助逻辑进一步拆分，降低超大文件维护成本。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2e3a5b08c1a4c721c9a44502191f773d205b8944` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
