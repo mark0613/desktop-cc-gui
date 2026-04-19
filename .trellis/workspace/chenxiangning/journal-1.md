@@ -1637,3 +1637,73 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 30: 修复项目会话管理批量删除慢与查询缺失
+
+**Date**: 2026-04-19
+**Task**: 修复项目会话管理批量删除慢与查询缺失
+**Branch**: `feature/vvvv0.4.3`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+任务目标:
+- 修复设置页“项目会话管理”查询慢、部分会话查不出、批量删除极慢的问题。
+- 保持线程管理重构主链不回退，只补查询/删除适配层。
+
+主要改动:
+- 新增 Codex 批量删除 command，并补齐 desktop/remote/daemon 三条执行路径。
+- 将 local_usage 中的 session 删除与文件匹配逻辑拆到 local_usage/session_delete.rs，降低大文件风险。
+- 扩展本地会话 cwd 提取兼容 root.sessionMeta、payload.context、turnContext、turn_context 等元数据形态，修复部分会话查不出。
+- 设置页删除改走 removeThreads fast path，批量删除 Codex 会话时复用一次扫描。
+- 删除前的 archive 改为 2 秒 best-effort 超时，避免线程/archive RPC 把删除拖到 300 秒默认超时。
+- 设置页加载中保留已有会话列表，避免空白等待。
+
+涉及模块:
+- src-tauri/src/codex/mod.rs
+- src-tauri/src/bin/cc_gui_daemon.rs
+- src-tauri/src/bin/cc_gui_daemon/daemon_state.rs
+- src-tauri/src/shared/codex_core.rs
+- src-tauri/src/local_usage.rs
+- src-tauri/src/local_usage/session_delete.rs
+- src/features/threads/hooks/useThreads.ts
+- src/app-shell-parts/useAppShellSections.ts
+- src/features/settings/components/ProjectSessionManagementSection.tsx
+- src/services/tauri.ts
+- 相关测试文件
+
+验证结果:
+- npm run typecheck 通过
+- npx vitest run src/features/threads/hooks/useThreads.sidebar-cache.test.tsx src/features/settings/components/SettingsView.test.tsx 通过
+- cargo test --manifest-path src-tauri/Cargo.toml delete_codex_session_for_workspace_physically_removes_matching_file -- --nocapture 通过
+- cargo test --manifest-path src-tauri/Cargo.toml delete_codex_sessions_for_workspace_reuses_single_scan_for_multiple_targets -- --nocapture 通过
+- cargo test --manifest-path src-tauri/Cargo.toml parse_codex_session_summary_reads_root_session_meta_cwd -- --nocapture 通过
+- npm run check:large-files:near-threshold 通过
+- npm run check:large-files:gate 通过
+
+后续事项:
+- 建议人工再验证一次设置页删除 3-5 条 Codex 会话的真实耗时，确认已从分钟级降到秒级。
+- 如仍感知等待，可继续补前端删除进度提示与 archive skipped 文案。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7384c6a4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

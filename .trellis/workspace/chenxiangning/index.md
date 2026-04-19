@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 29
+- **Total Sessions**: 30
 - **Last Active**: 2026-04-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1639 | Active |
+| `journal-1.md` | ~1709 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 30 | 2026-04-19 | 修复项目会话管理批量删除慢与查询缺失 | `7384c6a4` | `feature/vvvv0.4.3` |
 | 29 | 2026-04-19 | 纳入 thread not found 会话恢复卡片 | `99e82f29` | `feature/vvvv0.4.3` |
 | 28 | 2026-04-19 | 修复 Claude stop 后晚到事件回流 | `b2043039` | `feature/vvvv0.4.3` |
 | 27 | 2026-04-19 | 对齐 Claude explore 卡片隐藏行为 | `8df6ed06` | `feature/vvvv0.4.3` |
