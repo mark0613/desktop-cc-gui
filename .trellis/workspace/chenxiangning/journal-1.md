@@ -1768,3 +1768,59 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 32: 修复批量删除后项目会话刷新卡死
+
+**Date**: 2026-04-19
+**Task**: 修复批量删除后项目会话刷新卡死
+**Branch**: `feature/vvvv0.4.3`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+任务目标:
+- 修复项目会话管理中批量删除后重新拉取可能一直停留在“正在加载会话...”的问题。
+
+主要改动:
+- 在 Rust 主进程 src-tauri/src/codex/mod.rs 为 live thread/list 增加 1500ms timeout，超时后返回可收敛错误或局部结果，避免无限阻塞。
+- 在本地 daemon src-tauri/src/bin/cc_gui_daemon/daemon_state.rs 对齐相同的 live thread/list timeout 行为，保持两条运行路径一致。
+- 在 src/app-shell.tsx 将设置页项目会话刷新入口改为 force=true + preserveState=false，确保删除后的刷新走显式 loading 收敛路径。
+- 在 src/features/threads/hooks/useThreadActions.ts 为前端 live listThreadsService 增加 timeout 和 debug 标记，防止 promise 卡死导致 UI loading 无法结束。
+- 在 src/features/threads/hooks/useThreadActions.test.tsx 补充 live thread/list timeout 后 loading 结束的回归测试。
+- 在 src/features/settings/components/SettingsView.test.tsx 补充 other 区域进入与 workspace 切换都会触发项目会话刷新的回归测试。
+
+涉及模块:
+- 设置页项目会话管理刷新入口
+- thread list 前端 orchestrator
+- Codex thread/list Rust command 与 daemon 对齐逻辑
+- SettingsView / useThreadActions 测试
+
+验证结果:
+- pnpm vitest run src/features/settings/components/SettingsView.test.tsx src/features/threads/hooks/useThreadActions.test.tsx 通过
+- cargo test --manifest-path src-tauri/Cargo.toml --no-run 通过
+
+后续事项:
+- 可继续补 app-shell 级别更高层的参数契约测试，锁定 settings 刷新入口必须走 force refresh。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1fe3531a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
