@@ -11,18 +11,17 @@ import Terminal from "lucide-react/dist/esm/icons/terminal";
 import { AgentIcon } from "../../../components/AgentIcon";
 import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
 import type {
+  AccessMode,
   ApprovalRequest,
   ConversationItem,
   OpenAppTarget,
+  QueuedMessage,
   RequestUserInputRequest,
   RequestUserInputResponse,
   TurnPlan,
   WorkspaceInfo,
 } from "../../../types";
-import type {
-  ConversationEngine,
-  ConversationState,
-} from "../../threads/contracts/conversationCurtainContracts";
+import type { ConversationEngine, ConversationState } from "../../threads/contracts/conversationCurtainContracts";
 import type { AgentTaskScrollRequest } from "../types";
 import { Markdown } from "./Markdown";
 import { CollapsibleUserTextBlock } from "./CollapsibleUserTextBlock";
@@ -55,14 +54,8 @@ import {
   writeLocalBooleanFlag,
 } from "../constants/liveCanvasControls";
 import { normalizeAgentIcon } from "../../../utils/agentIcons";
-import {
-  parseInjectedMemoryPrefixFromUser,
-  parseMemoryContextSummary,
-} from "./messagesMemoryContext";
-import {
-  useStreamActivityPhase,
-  type StreamActivityPhase,
-} from "../../threads/hooks/useStreamActivityPhase";
+import { parseInjectedMemoryPrefixFromUser, parseMemoryContextSummary } from "./messagesMemoryContext";
+import { useStreamActivityPhase, type StreamActivityPhase } from "../../threads/hooks/useStreamActivityPhase";
 import {
   collapseConsecutiveReasoningRuns,
   compactComparableReasoningText,
@@ -71,7 +64,9 @@ import {
   parseReasoning,
 } from "./messagesReasoning";
 import { parseAgentTaskNotification } from "../utils/agentTaskNotification";
-
+import { dedupeExitPlanItemsKeepFirst } from "./messagesExitPlan";
+import { RuntimeReconnectCard } from "./RuntimeReconnectCard";
+import { resolveAssistantRuntimeReconnectHint, resolveRetryMessageForReconnectItem } from "./runtimeReconnect";
 
 type MessagesProps = {
   items: ConversationItem[];
@@ -108,10 +103,22 @@ type MessagesProps = {
   isPlanProcessing?: boolean;
   onOpenDiffPath?: (path: string) => void;
   onOpenPlanPanel?: () => void;
+  onExitPlanModeExecute?: (
+    mode: Extract<AccessMode, "default" | "full-access">,
+  ) => Promise<void> | void;
   conversationState?: ConversationState | null;
   presentationProfile?: PresentationProfile | null;
   onOpenWorkspaceFile?: (path: string) => void;
   agentTaskScrollRequest?: AgentTaskScrollRequest | null;
+  onRecoverThreadRuntime?: (
+    workspaceId: string,
+    threadId: string,
+  ) => Promise<string | null | void> | string | null | void;
+  onRecoverThreadRuntimeAndResend?: (
+    workspaceId: string,
+    threadId: string,
+    message: Pick<QueuedMessage, "text" | "images">,
+  ) => Promise<string | null | void> | string | null | void;
 };
 
 type WorkingIndicatorProps = {
@@ -134,11 +141,23 @@ type WorkingIndicatorProps = {
 type MessageRowProps = {
   item: Extract<ConversationItem, { kind: "message" }>;
   workspaceId?: string | null;
+  threadId?: string | null;
   isStreaming?: boolean;
   activeEngine?: "claude" | "codex" | "gemini" | "opencode";
   activeCollaborationModeId?: string | null;
   enableCollaborationBadge?: boolean;
   presentationProfile?: PresentationProfile | null;
+  showRuntimeReconnectCard?: boolean;
+  onRecoverThreadRuntime?: (
+    workspaceId: string,
+    threadId: string,
+  ) => Promise<string | null | void> | string | null | void;
+  onRecoverThreadRuntimeAndResend?: (
+    workspaceId: string,
+    threadId: string,
+    message: Pick<QueuedMessage, "text" | "images">,
+  ) => Promise<string | null | void> | string | null | void;
+  retryMessage?: Pick<QueuedMessage, "text" | "images"> | null;
   isCopied: boolean;
   onCopy: (
     item: Extract<ConversationItem, { kind: "message" }>,
@@ -222,10 +241,16 @@ function areMessageRowPropsEqual(
   return (
     areMessageItemsEqual(previous.item, next.item) &&
     previous.workspaceId === next.workspaceId &&
+    previous.threadId === next.threadId &&
     previous.isStreaming === next.isStreaming &&
     previous.activeEngine === next.activeEngine &&
     previous.enableCollaborationBadge === next.enableCollaborationBadge &&
     previous.presentationProfile === next.presentationProfile &&
+    previous.showRuntimeReconnectCard === next.showRuntimeReconnectCard &&
+    previous.onRecoverThreadRuntime === next.onRecoverThreadRuntime &&
+    previous.onRecoverThreadRuntimeAndResend === next.onRecoverThreadRuntimeAndResend &&
+    previous.retryMessage?.text === next.retryMessage?.text &&
+    areMessageImagesEqual(previous.retryMessage?.images, next.retryMessage?.images) &&
     previous.isCopied === next.isCopied &&
     previous.onCopy === next.onCopy &&
     previous.codeBlockCopyUseModifier === next.codeBlockCopyUseModifier &&
@@ -677,6 +702,15 @@ function shouldHideCodexCanvasCommandCard(
   if (activeEngine !== "codex" && activeEngine !== "claude") {
     return false;
   }
+  const normalizedToolName = extractToolName(item.title)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  if (
+    normalizedToolName === "exitplanmode" ||
+    normalizedToolName.endsWith("exitplanmode")
+  ) {
+    return false;
+  }
   if (item.toolType === "commandExecution") {
     return true;
   }
@@ -940,10 +974,15 @@ const WorkingIndicator = memo(function WorkingIndicator({
 const MessageRow = memo(function MessageRow({
   item,
   workspaceId = null,
+  threadId = null,
   isStreaming = false,
   activeEngine = "claude",
   enableCollaborationBadge = false,
   presentationProfile = null,
+  showRuntimeReconnectCard = false,
+  onRecoverThreadRuntime,
+  onRecoverThreadRuntimeAndResend,
+  retryMessage = null,
   isCopied,
   onCopy,
   codeBlockCopyUseModifier,
@@ -1084,6 +1123,14 @@ const MessageRow = memo(function MessageRow({
       .filter(Boolean) as MessageImage[];
   }, [item.images]);
   const provenanceLabel = resolveProvenanceEngineLabel(item.engineSource);
+  const runtimeReconnectHint = useMemo(
+    () => (
+      item.role === "assistant"
+        ? resolveAssistantRuntimeReconnectHint(item, Boolean(agentTaskNotification))
+        : null
+    ),
+    [agentTaskNotification, item],
+  );
 
   const bubbleNode = (
     <div className={`bubble message-bubble${agentTaskNotification ? " message-bubble-agent-task" : ""}`}>
@@ -1165,10 +1212,20 @@ const MessageRow = memo(function MessageRow({
           )}
         </div>
       ) : null}
+      {runtimeReconnectHint && showRuntimeReconnectCard ? (
+        <RuntimeReconnectCard
+          hint={runtimeReconnectHint}
+          workspaceId={workspaceId}
+          threadId={threadId}
+          onRecoverThreadRuntime={onRecoverThreadRuntime}
+          retryMessage={retryMessage}
+          onRecoverThreadRuntimeAndResend={onRecoverThreadRuntimeAndResend}
+        />
+      ) : null}
       {hasText && (
         item.role === "user" && !agentTaskNotification ? (
           <CollapsibleUserTextBlock content={displayText} />
-        ) : (
+        ) : runtimeReconnectHint && showRuntimeReconnectCard ? null : (
           <Markdown
             value={displayText}
             className={resolvedMarkdownClassName}
@@ -1457,7 +1514,10 @@ export const Messages = memo(function Messages({
   conversationState = null,
   presentationProfile = null,
   onOpenWorkspaceFile,
+  onExitPlanModeExecute,
   agentTaskScrollRequest = null,
+  onRecoverThreadRuntime,
+  onRecoverThreadRuntimeAndResend,
 }: MessagesProps) {
   const { t } = useTranslation();
   const fallbackConversationState = useMemo<ConversationState>(
@@ -1500,6 +1560,27 @@ export const Messages = memo(function Messages({
   const userInputRequests = effectiveState.userInputQueue;
   const workspaceId = effectiveState.meta.workspaceId || legacyWorkspaceId;
   const threadId = effectiveState.meta.threadId || legacyThreadId;
+  const latestRuntimeReconnectItemId = useMemo(() => {
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const item = items[index];
+      if (!item || item.kind !== "message" || item.role !== "assistant") {
+        continue;
+      }
+      if (
+        resolveAssistantRuntimeReconnectHint(
+          item,
+          Boolean(parseAgentTaskNotification(item.text)),
+        )
+      ) {
+        return item.id;
+      }
+    }
+    return null;
+  }, [items]);
+  const latestRetryMessage = useMemo(
+    () => resolveRetryMessageForReconnectItem(items, latestRuntimeReconnectItemId),
+    [items, latestRuntimeReconnectItemId],
+  );
   const activeEngine = toConversationEngine(effectiveState.meta.engine);
   const isThinking = conversationState
     ? effectiveState.meta.isThinking
@@ -1525,7 +1606,10 @@ export const Messages = memo(function Messages({
     heartbeatPulse: number;
     threadId: string | null;
   } | null>(null);
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(() => new Set());
+  const [selectedExitPlanExecutionByItemKey, setSelectedExitPlanExecutionByItemKey] = useState<
+    Record<string, Extract<AccessMode, "default" | "full-access">>
+  >({});
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
   const [showAllHistoryItems, setShowAllHistoryItems] = useState(false);
@@ -1544,9 +1628,12 @@ export const Messages = memo(function Messages({
   const frozenItemsRef = useRef<ConversationItem[] | null>(null);
   const latestItemsRef = useRef(items);
   latestItemsRef.current = items;
-  const effectiveItems = isSelectionFrozen
-    ? frozenItemsRef.current ?? items
-    : items;
+  const effectiveItems = useMemo(() => {
+    const baseItems = isSelectionFrozen
+      ? frozenItemsRef.current ?? items
+      : items;
+    return dedupeExitPlanItemsKeepFirst(baseItems);
+  }, [isSelectionFrozen, items]);
   const firstItemIdRef = useRef<string | null>(items[0]?.id ?? null);
   const activeUserInputRequestId =
     threadId && userInputRequests.length
@@ -1769,6 +1856,25 @@ export const Messages = memo(function Messages({
       return next;
     });
   }, []);
+  const handleExitPlanModeExecuteForItem = useCallback(
+    async (
+      itemId: string,
+      mode: Extract<AccessMode, "default" | "full-access">,
+    ) => {
+      const selectionKey = `${threadId ?? "no-thread"}:${itemId}`;
+      setSelectedExitPlanExecutionByItemKey((prev) => {
+        if (prev[selectionKey] === mode) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [selectionKey]: mode,
+        };
+      });
+      await onExitPlanModeExecute?.(mode);
+    },
+    [onExitPlanModeExecute, threadId],
+  );
   useEffect(() => {
     if (isThinking) {
       return;
@@ -2036,7 +2142,7 @@ export const Messages = memo(function Messages({
   const visibleItems = useMemo(() => {
     const filtered = effectiveItems.filter((item) => {
       if (
-        activeEngine === "codex" &&
+        (activeEngine === "codex" || activeEngine === "claude") &&
         item.kind === "explore" &&
         item.status === "exploring"
       ) {
@@ -2613,6 +2719,7 @@ export const Messages = memo(function Messages({
             <MessageRow
               item={item}
               workspaceId={workspaceId}
+              threadId={threadId}
               isStreaming={
                 activeEngine === "claude" &&
                 isThinking &&
@@ -2623,6 +2730,14 @@ export const Messages = memo(function Messages({
               activeCollaborationModeId={activeCollaborationModeId}
               enableCollaborationBadge={activeEngine === "codex"}
               presentationProfile={presentationProfile}
+              showRuntimeReconnectCard={item.id === latestRuntimeReconnectItemId}
+              onRecoverThreadRuntime={onRecoverThreadRuntime}
+              onRecoverThreadRuntimeAndResend={onRecoverThreadRuntimeAndResend}
+              retryMessage={
+                item.id === latestRuntimeReconnectItemId
+                  ? latestRetryMessage
+                  : null
+              }
               isCopied={isCopied}
               onCopy={handleCopyMessage}
               codeBlockCopyUseModifier={codeBlockCopyUseModifier}
@@ -2686,6 +2801,8 @@ export const Messages = memo(function Messages({
         return null;
       }
       const isExpanded = expandedItems.has(item.id);
+      const selectedExitPlanExecutionMode =
+        selectedExitPlanExecutionByItemKey[`${threadId ?? "no-thread"}:${item.id}`] ?? null;
       const provenanceLabel = resolveProvenanceEngineLabel(item.engineSource);
       return (
         <div key={`tool:${item.id}`} className="message-tool-block-shell">
@@ -2704,6 +2821,8 @@ export const Messages = memo(function Messages({
             activeEngine={activeEngine}
             hasPendingUserInputRequest={activeUserInputRequestId !== null}
             onOpenDiffPath={onOpenDiffPath}
+            selectedExitPlanExecutionMode={selectedExitPlanExecutionMode}
+            onExitPlanModeExecute={handleExitPlanModeExecuteForItem}
           />
         </div>
       );
@@ -2813,7 +2932,6 @@ export const Messages = memo(function Messages({
         onScroll={updateAutoScroll}
       >
         <div className="messages-full">
-          {approvalNode}
           {shouldCollapseHistoryItems && (
             <div
               className="messages-collapsed-indicator"
@@ -2864,6 +2982,7 @@ export const Messages = memo(function Messages({
               {t("messages.emptyThread")}
             </div>
           )}
+          {approvalNode}
           <div ref={bottomRef} />
         </div>
       </div>

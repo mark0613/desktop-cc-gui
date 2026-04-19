@@ -10,6 +10,7 @@ import type {
   DictationSessionState,
   LocalUsageSnapshot,
   LocalUsageStatistics,
+  RuntimePoolSnapshot,
   WorkspaceInfo,
   WorkspaceSettings,
   EngineStatus,
@@ -35,11 +36,9 @@ import type {
   GitPushPreviewResponse,
   ReviewTarget,
 } from "../types";
-import type {
-  ClaudeCurrentConfig as VendorClaudeCurrentConfig,
-  CodexProviderConfig as VendorCodexProviderConfig,
-  ProviderConfig as VendorProviderConfig,
-} from "../features/vendors/types";
+import type { ClaudeCurrentConfig as VendorClaudeCurrentConfig, CodexProviderConfig as VendorCodexProviderConfig, ProviderConfig as VendorProviderConfig } from "../features/vendors/types";
+export type { WorkspaceSessionCatalogEntry, WorkspaceSessionCatalogQuery, WorkspaceSessionCatalogPage, WorkspaceSessionBatchMutationResult, WorkspaceSessionBatchMutationResponse } from "./tauri/sessionManagement";
+export { archiveWorkspaceSessions, deleteWorkspaceSessions, listWorkspaceSessions, unarchiveWorkspaceSessions } from "./tauri/sessionManagement";
 
 function isMissingTauriInvokeError(error: unknown) {
   return (
@@ -415,6 +414,29 @@ export async function writePanelLockPasswordFile(
 
 export async function connectWorkspace(id: string): Promise<void> {
   return invoke("connect_workspace", { id });
+}
+
+export async function ensureRuntimeReady(workspaceId: string): Promise<void> {
+  return invoke("ensure_runtime_ready", { workspaceId });
+}
+
+export async function getRuntimePoolSnapshot(): Promise<RuntimePoolSnapshot> {
+  return invoke("get_runtime_pool_snapshot");
+}
+
+export async function mutateRuntimePool(mutation: {
+  action: "close" | "releaseToCold" | "pin";
+  workspaceId: string;
+  engine?: string;
+  pinned?: boolean;
+}): Promise<RuntimePoolSnapshot> {
+  const { workspaceId, ...rest } = mutation;
+  return invoke("mutate_runtime_pool", {
+    mutation: {
+      ...rest,
+      workspace_id: workspaceId,
+    },
+  });
 }
 
 export async function startThread(workspaceId: string) {
@@ -2150,10 +2172,7 @@ export async function archiveThread(workspaceId: string, threadId: string) {
   });
 }
 
-export async function deleteCodexSession(
-  workspaceId: string,
-  sessionId: string,
-) {
+export async function deleteCodexSession(workspaceId: string, sessionId: string) {
   return invoke<{
     deleted: boolean;
     deletedCount: number;
@@ -2164,11 +2183,22 @@ export async function deleteCodexSession(
     sessionId,
   });
 }
-
-export async function deleteOpenCodeSession(
-  workspaceId: string,
-  sessionId: string,
-) {
+export async function deleteCodexSessions(workspaceId: string, sessionIds: string[]) {
+  return invoke<{
+    results: Array<{
+      sessionId: string;
+      deleted: boolean;
+      deletedCount: number;
+      method: "filesystem";
+      archivedBeforeDelete?: boolean;
+      error?: string | null;
+    }>;
+  }>("delete_codex_sessions", {
+    workspaceId,
+    sessionIds,
+  });
+}
+export async function deleteOpenCodeSession(workspaceId: string, sessionId: string) {
   return invoke<{ deleted: boolean; method: "cli" | "filesystem" }>(
     "opencode_delete_session",
     { workspaceId, sessionId },

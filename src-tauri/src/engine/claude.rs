@@ -21,6 +21,7 @@ use tokio::time::sleep;
 use super::claude_message_content::{build_message_content, format_ask_user_answer};
 use super::events::EngineEvent;
 use super::{EngineConfig, EngineType, SendMessageParams};
+use crate::runtime::RuntimeManager;
 #[path = "claude/approval.rs"]
 mod approval;
 #[path = "claude/event_conversion.rs"]
@@ -32,7 +33,8 @@ mod manager;
 mod stream_helpers;
 mod user_input;
 use approval::{
-    classify_claude_mode_blocked_tool, looks_like_claude_permission_denial_message,
+    classify_claude_mode_blocked_tool, command_can_apply_as_local_file_action,
+    extract_claude_command_string, looks_like_claude_permission_denial_message,
     ClaudeModeBlockedKind, SyntheticApprovalSummaryEntry,
 };
 #[cfg(test)]
@@ -85,6 +87,8 @@ pub struct ClaudeSession {
     pub workspace_path: PathBuf,
     /// Current Claude session ID (for --resume)
     session_id: RwLock<Option<String>>,
+    /// Workspace display name for runtime diagnostics
+    workspace_name: String,
     /// Event broadcaster
     event_sender: broadcast::Sender<ClaudeTurnEvent>,
     /// Custom binary path
@@ -128,6 +132,8 @@ pub struct ClaudeSession {
     user_input_notify_by_turn: StdMutex<HashMap<String, Arc<Notify>>>,
     /// Per-turn formatted AskUserQuestion answer for kill+resume mechanism
     user_input_answer_by_turn: StdMutex<HashMap<String, String>>,
+    /// Shared runtime manager for lease/process tracking
+    runtime_manager: Option<Arc<RuntimeManager>>,
 }
 
 impl ClaudeSession {
@@ -161,11 +167,32 @@ impl ClaudeSession {
         workspace_path: PathBuf,
         config: Option<EngineConfig>,
     ) -> Self {
+        Self::new_with_runtime(
+            workspace_id.clone(),
+            workspace_path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or(&workspace_id)
+                .to_string(),
+            workspace_path,
+            config,
+            None,
+        )
+    }
+
+    pub fn new_with_runtime(
+        workspace_id: String,
+        workspace_name: String,
+        workspace_path: PathBuf,
+        config: Option<EngineConfig>,
+        runtime_manager: Option<Arc<RuntimeManager>>,
+    ) -> Self {
         let (event_sender, _) = broadcast::channel(1024);
         let config = config.unwrap_or_default();
 
         Self {
             workspace_id,
+            workspace_name,
             workspace_path,
             session_id: RwLock::new(None),
             event_sender,
@@ -189,6 +216,7 @@ impl ClaudeSession {
             approval_resume_message_by_turn: StdMutex::new(HashMap::new()),
             user_input_notify_by_turn: StdMutex::new(HashMap::new()),
             user_input_answer_by_turn: StdMutex::new(HashMap::new()),
+            runtime_manager,
         }
     }
 
@@ -200,6 +228,23 @@ impl ClaudeSession {
     /// Get current session ID
     pub async fn get_session_id(&self) -> Option<String> {
         self.session_id.read().await.clone()
+    }
+
+    pub async fn active_process_count(&self) -> usize {
+        self.active_processes.lock().await.len()
+    }
+
+    pub fn workspace_name(&self) -> &str {
+        &self.workspace_name
+    }
+
+    pub async fn active_process_ids(&self) -> Vec<u32> {
+        let active = self.active_processes.lock().await;
+        active.values().filter_map(|child| child.id()).collect()
+    }
+
+    pub fn runtime_manager(&self) -> Option<Arc<RuntimeManager>> {
+        self.runtime_manager.clone()
     }
 
     fn is_disposed(&self) -> bool {
@@ -1226,7 +1271,34 @@ impl ClaudeSession {
         }
 
         let pending_tool = self.latest_pending_tool_summary(turn_id)?;
+        let tool_input = self.peek_tool_input_value(&pending_tool.tool_id);
         let blocked_kind = classify_claude_mode_blocked_tool(&pending_tool.tool_name)?;
+        let should_emit_synthetic_approval = match blocked_kind {
+            ClaudeModeBlockedKind::FileChange => true,
+            ClaudeModeBlockedKind::CommandExecution => tool_input
+                .as_ref()
+                .and_then(extract_claude_command_string)
+                .as_deref()
+                .map(command_can_apply_as_local_file_action)
+                .unwrap_or(false),
+            ClaudeModeBlockedKind::RequestUserInput => false,
+        };
+
+        if should_emit_synthetic_approval {
+            if let Ok(mut pending) = self.pending_approval_requests.lock() {
+                pending.insert(pending_tool.tool_id.clone(), turn_id.to_string());
+            }
+            return Some(EngineEvent::ApprovalRequest {
+                workspace_id: self.workspace_id.clone(),
+                request_id: Value::String(pending_tool.tool_id.clone()),
+                tool_name: pending_tool.tool_name.clone(),
+                input: tool_input,
+                message: Some(
+                    "Approve to let the GUI apply this file change locally. Preview currently supports structured file tools plus safe single-path file commands.".to_string(),
+                ),
+            });
+        }
+
         let (blocked_method, reason_code, reason, suggestion) = match blocked_kind {
             ClaudeModeBlockedKind::RequestUserInput => (
                 "item/tool/requestUserInput",

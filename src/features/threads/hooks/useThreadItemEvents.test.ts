@@ -22,6 +22,11 @@ type SetupOverrides = {
     itemId: string;
     text: string;
   }) => void;
+  onExitPlanModeToolCompleted?: (payload: {
+    workspaceId: string;
+    threadId: string;
+    itemId: string;
+  }) => void;
 };
 
 const makeOptions = (overrides: SetupOverrides = {}) => {
@@ -39,6 +44,8 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   };
   const onAgentMessageCompletedExternal =
     overrides.onAgentMessageCompletedExternal ?? undefined;
+  const onExitPlanModeToolCompleted =
+    overrides.onExitPlanModeToolCompleted ?? undefined;
 
   const { result, unmount } = renderHook(() =>
     useThreadItemEvents({
@@ -53,6 +60,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       applyCollabThreadLinks,
       interruptedThreadsRef,
       onAgentMessageCompletedExternal,
+      onExitPlanModeToolCompleted,
     }),
   );
 
@@ -68,6 +76,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     getCustomName,
     interruptedThreadsRef,
     onAgentMessageCompletedExternal,
+    onExitPlanModeToolCompleted,
   };
 };
 
@@ -196,6 +205,32 @@ describe("useThreadItemEvents", () => {
       hasCustomName: false,
     });
     expect(safeMessageActivity).toHaveBeenCalled();
+  });
+
+  it("emits a handoff callback when Claude completes an ExitPlanMode tool", () => {
+    const onExitPlanModeToolCompleted = vi.fn();
+    vi.mocked(buildConversationItem).mockReturnValue({
+      id: "exit-plan-1",
+      kind: "tool",
+      toolType: "toolCall",
+      title: "Claude / exitplanmode",
+      detail: "PLAN\n# Plan",
+      status: "completed",
+    });
+    const { result } = makeOptions({ onExitPlanModeToolCompleted });
+
+    act(() => {
+      result.current.onItemCompleted("ws-1", "claude:session-1", {
+        type: "toolCall",
+        id: "exit-plan-1",
+      });
+    });
+
+    expect(onExitPlanModeToolCompleted).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      threadId: "claude:session-1",
+      itemId: "exit-plan-1",
+    });
   });
 
   it("marks processing and appends agent deltas", () => {
@@ -435,6 +470,24 @@ describe("useThreadItemEvents", () => {
     expect(safeMessageActivity).not.toHaveBeenCalled();
   });
 
+  it("skips claude item snapshots for interrupted threads", () => {
+    const { result, dispatch, markProcessing, interruptedThreadsRef, safeMessageActivity } =
+      makeOptions();
+    interruptedThreadsRef.current.add("claude:session-1");
+
+    act(() => {
+      result.current.onItemUpdated("ws-1", "claude:session-1", {
+        type: "agentMessage",
+        id: "assistant-1",
+        text: "late arriving snapshot",
+      });
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(markProcessing).not.toHaveBeenCalled();
+    expect(safeMessageActivity).not.toHaveBeenCalled();
+  });
+
   it("skips gemini completed agent snapshots for interrupted threads", () => {
     const {
       result,
@@ -450,6 +503,30 @@ describe("useThreadItemEvents", () => {
       result.current.onAgentMessageCompleted({
         workspaceId: "ws-1",
         threadId: "gemini:session-1",
+        itemId: "assistant-1",
+        text: "late arriving text",
+      });
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(onAgentMessageCompletedExternal).not.toHaveBeenCalled();
+  });
+
+  it("skips claude completed agent snapshots for interrupted threads", () => {
+    const {
+      result,
+      dispatch,
+      interruptedThreadsRef,
+      onAgentMessageCompletedExternal,
+    } = makeOptions({
+      onAgentMessageCompletedExternal: vi.fn(),
+    });
+    interruptedThreadsRef.current.add("claude:session-1");
+
+    act(() => {
+      result.current.onAgentMessageCompleted({
+        workspaceId: "ws-1",
+        threadId: "claude:session-1",
         itemId: "assistant-1",
         text: "late arriving text",
       });

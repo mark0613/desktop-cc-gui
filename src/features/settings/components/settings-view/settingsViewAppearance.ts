@@ -6,6 +6,7 @@ export type SettingsSection =
   | "providers"
   | "projects"
   | "usage"
+  | "session-management"
   | "mcp"
   | "permissions"
   | "commit"
@@ -18,6 +19,7 @@ export type SettingsSection =
   | "open-apps"
   | "web-service"
   | "git"
+  | "runtime"
   | "other"
   | "community"
   | "vendors";

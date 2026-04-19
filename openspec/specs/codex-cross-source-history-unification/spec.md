@@ -16,6 +16,11 @@ For the same workspace scope, Codex history list MUST aggregate entries across a
 - **THEN** entries from source A MUST remain visible in unified list
 - **AND** user MUST NOT need app restart or source rollback to view source A history entries
 
+#### Scenario: session catalog query pages unified history with stable cursor
+- **WHEN** session management reads Codex history for a workspace
+- **THEN** the unified history capability MUST support cursor-based continuation over the aggregated result set
+- **AND** repeated reads with identical inputs MUST preserve deterministic ordering across pages
+
 ### Requirement: Unified History MUST Preserve Source Identity Metadata
 Unified history entries MUST include source/provider identity metadata for UI labeling and diagnostics.
 
@@ -28,6 +33,11 @@ Unified history entries MUST include source/provider identity metadata for UI la
 - **WHEN** unified list entry can be enriched from local session summary
 - **THEN** entry payload SHOULD expose `sourceLabel` for compact source/provider display
 - **AND** entry payload SHOULD expose `sizeBytes` for thread size visibility in list UI
+
+#### Scenario: unified entry exposes archive metadata when available
+- **WHEN** an entry participates in session management catalog queries
+- **THEN** the payload MUST expose archive visibility facts such as `archived` and/or `archivedAt`
+- **AND** frontend MUST be able to distinguish active and archived entries without guessing from source paths
 
 ### Requirement: Unified History MUST Apply Deterministic Deduplication And Ordering
 Aggregation MUST produce stable list behavior under repeated refresh and mixed-source duplicates.
@@ -68,3 +78,4 @@ When local session scan is unavailable, unified history MUST keep already-known 
 - **WHEN** a subsequent local scan succeeds
 - **THEN** system MUST refresh known session identifiers from latest local summaries
 - **AND** response MUST NOT keep stale `partialSource` degradation marker
+

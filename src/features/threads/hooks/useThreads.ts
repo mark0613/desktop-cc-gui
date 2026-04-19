@@ -29,6 +29,7 @@ import {
   setThreadTitle,
   projectMemoryUpdate,
   projectMemoryCreate,
+  deleteCodexSessions,
 } from "../../../services/tauri";
 import { buildAssistantOutputDigest } from "../../project-memory/utils/outputDigest";
 import {
@@ -408,6 +409,41 @@ export type ThreadDeleteResult = {
   message: string | null;
 };
 
+function mapDeleteErrorCode(errorMessage: string): ThreadDeleteErrorCode {
+  const normalized = errorMessage.toLowerCase();
+  if (normalized.includes("[engine_unsupported]")) {
+    return "ENGINE_UNSUPPORTED";
+  }
+  if (
+    normalized.includes("[workspace_not_connected]") ||
+    normalized.includes("workspace not connected") ||
+    normalized.includes("workspace not found")
+  ) {
+    return "WORKSPACE_NOT_CONNECTED";
+  }
+  if (
+    normalized.includes("[session_not_found]") ||
+    normalized.includes("session file not found") ||
+    normalized.includes("not found") ||
+    normalized.includes("thread not found")
+  ) {
+    return "SESSION_NOT_FOUND";
+  }
+  if (normalized.includes("[io_error]")) {
+    return "IO_ERROR";
+  }
+  if (normalized.includes("permission denied")) {
+    return "PERMISSION_DENIED";
+  }
+  if (normalized.includes("io") || normalized.includes("failed to delete session file")) {
+    return "IO_ERROR";
+  }
+  if (normalized.includes("unsupported")) {
+    return "ENGINE_UNSUPPORTED";
+  }
+  return "UNKNOWN";
+}
+
 export function resolvePendingThreadIdForSession({
   workspaceId,
   engine,
@@ -520,6 +556,7 @@ export function useThreads({
   const pendingAssistantCompletionRef = useRef<Record<string, PendingAssistantCompletion>>({});
   const threadIdAliasRef = useRef<Record<string, string>>({});
   const recentThreadErrorsRef = useRef<Record<string, { message: string; at: number }>>({});
+  const handledClaudeExitPlanToolIdsRef = useRef<Set<string>>(new Set());
   const sharedSessionSyncTimerByThreadRef = useRef<
     Record<string, ReturnType<typeof setTimeout> | null>
   >({});
@@ -887,6 +924,7 @@ export function useThreads({
     replaceOnResumeRef,
     applyCollabThreadLinksFromThread,
     updateThreadParent,
+    rememberThreadAlias,
     onThreadTitleMappingsLoaded: (workspaceId, titles) => {
       Object.entries(titles).forEach(([threadId, title]) => {
         if (!threadId.trim() || !title.trim()) {
@@ -922,7 +960,7 @@ export function useThreads({
         return null;
       }
     } else if (!loadedThreadsRef.current[threadId]) {
-      await resumeThreadForWorkspace(activeWorkspace.id, threadId);
+      threadId = await resumeThreadForWorkspace(activeWorkspace.id, threadId);
     }
     return threadId;
   }, [activeWorkspace, activeThreadId, activeEngine, resumeThreadForWorkspace, startThreadForWorkspace]);
@@ -941,7 +979,7 @@ export function useThreads({
           return null;
         }
       } else if (!loadedThreadsRef.current[threadId]) {
-        await resumeThreadForWorkspace(workspaceId, threadId);
+        threadId = await resumeThreadForWorkspace(workspaceId, threadId);
       }
       if (shouldActivate && currentActiveThreadId !== threadId) {
         dispatch({ type: "setActiveThreadId", workspaceId, threadId });
@@ -1763,41 +1801,6 @@ export function useThreads({
 
   const removeThread = useCallback(
     async (workspaceId: string, threadId: string): Promise<ThreadDeleteResult> => {
-      const mapDeleteErrorCode = (errorMessage: string): ThreadDeleteErrorCode => {
-        const normalized = errorMessage.toLowerCase();
-        if (normalized.includes("[engine_unsupported]")) {
-          return "ENGINE_UNSUPPORTED";
-        }
-        if (
-          normalized.includes("[workspace_not_connected]") ||
-          normalized.includes("workspace not connected") ||
-          normalized.includes("workspace not found")
-        ) {
-          return "WORKSPACE_NOT_CONNECTED";
-        }
-        if (
-          normalized.includes("[session_not_found]") ||
-          normalized.includes("session file not found") ||
-          normalized.includes("not found") ||
-          normalized.includes("thread not found")
-        ) {
-          return "SESSION_NOT_FOUND";
-        }
-        if (normalized.includes("[io_error]")) {
-          return "IO_ERROR";
-        }
-        if (normalized.includes("permission denied")) {
-          return "PERMISSION_DENIED";
-        }
-        if (normalized.includes("io") || normalized.includes("failed to delete session file")) {
-          return "IO_ERROR";
-        }
-        if (normalized.includes("unsupported")) {
-          return "ENGINE_UNSUPPORTED";
-        }
-        return "UNKNOWN";
-      };
-
       try {
         await deleteThreadForWorkspace(workspaceId, threadId);
         unpinThread(workspaceId, threadId);
@@ -1822,6 +1825,81 @@ export function useThreads({
       }
     },
     [deleteThreadForWorkspace, getThreadKind, unpinThread],
+  );
+
+  const removeThreads = useCallback(
+    async (workspaceId: string, threadIds: string[]): Promise<ThreadDeleteResult[]> => {
+      if (!workspaceId || threadIds.length === 0) {
+        return [];
+      }
+
+      const workspaceThreads = state.threadsByWorkspace[workspaceId] ?? [];
+      const codexThreadIds = threadIds.filter((threadId) => {
+        const thread = workspaceThreads.find((entry) => entry.id === threadId);
+        if (thread?.threadKind === "shared") {
+          return false;
+        }
+        if (threadId.includes("-pending-") || threadId.includes(":")) {
+          return false;
+        }
+        return thread?.engineSource !== "claude" &&
+          thread?.engineSource !== "gemini" &&
+          thread?.engineSource !== "opencode";
+      });
+
+      const codexResultByThreadId = new Map<string, ThreadDeleteResult>();
+      if (codexThreadIds.length > 1) {
+        try {
+          const response = await deleteCodexSessions(workspaceId, codexThreadIds);
+          response.results.forEach((result) => {
+            if (result.deleted) {
+              unpinThread(workspaceId, result.sessionId);
+              dispatch({
+                type: "removeThread",
+                workspaceId,
+                threadId: result.sessionId,
+              });
+              codexResultByThreadId.set(result.sessionId, {
+                threadId: result.sessionId,
+                success: true,
+                code: null,
+                message: null,
+              });
+              return;
+            }
+            const message = (result.error ?? "").trim() || "Failed to delete codex session";
+            codexResultByThreadId.set(result.sessionId, {
+              threadId: result.sessionId,
+              success: false,
+              code: mapDeleteErrorCode(message),
+              message,
+            });
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          codexThreadIds.forEach((threadId) => {
+            codexResultByThreadId.set(threadId, {
+              threadId,
+              success: false,
+              code: mapDeleteErrorCode(message),
+              message,
+            });
+          });
+        }
+      }
+
+      const results: ThreadDeleteResult[] = [];
+      for (const threadId of threadIds) {
+        const fastPathResult = codexResultByThreadId.get(threadId);
+        if (fastPathResult) {
+          results.push(fastPathResult);
+          continue;
+        }
+        results.push(await removeThread(workspaceId, threadId));
+      }
+      return results;
+    },
+    [dispatch, removeThread, state.threadsByWorkspace, unpinThread],
   );
 
   const renameThread = useCallback(
@@ -1969,6 +2047,20 @@ export function useThreads({
           });
         }
       : undefined,
+    onExitPlanModeToolCompleted: ({ threadId, itemId }) => {
+      if (threadId !== activeThreadId) {
+        return;
+      }
+      if (activeEngine !== "claude" || accessMode !== "read-only") {
+        return;
+      }
+      const handoffKey = `${threadId}:${itemId}`;
+      if (handledClaudeExitPlanToolIdsRef.current.has(handoffKey)) {
+        return;
+      }
+      handledClaudeExitPlanToolIdsRef.current.add(handoffKey);
+      void interruptTurn({ reason: "plan-handoff" });
+    },
   });
 
   useAppServerEvents(handlers, {
@@ -1998,6 +2090,7 @@ export function useThreads({
     refreshAccountInfo,
     interruptTurn,
     removeThread,
+    removeThreads,
     pinThread,
     unpinThread,
     isThreadPinned,

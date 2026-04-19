@@ -50,7 +50,7 @@ export function useAppShellLayoutNodesSection(ctx: any) {
     handleSelectOpenCodeAgent, handleSelectOpenCodeVariant, handleSelectPullRequest, handleSelectSearchResult, handleSelectWorkspaceInstance, handleSelectWorkspacePathForGitHistory, handleSend, handleSendPrompt,
     handleSendPromptToNewAgent, handleSelectStatusPanelSubagent, handleSetAccessMode, handleSetGitRoot, handleStageGitAll, handleStageGitFile, handleStartGuidedConversation, handleStartSharedConversation, handleStartWorkspaceConversation, handleSwitchAccount, handleFuseQueued,
     handleSync, handleTestNotificationSound, handleToggleDictation, handleToggleRuntimeConsole, handleToggleSearchContentFilter, handleToggleSearchPalette, handleToggleTerminal, handleToggleTerminalPanel,
-    handleUnlockPanel, handleUnstageGitFile, handleUpdatePrompt, handleUserInputSubmit, handleUserInputSubmitWithPlanApply, handleWorkspaceDragEnter, handleWorkspaceDragLeave, handleWorkspaceDragOver,
+    handleUnlockPanel, handleUnstageGitFile, handleUpdatePrompt, handleUserInputSubmit, handleUserInputSubmitWithPlanApply, handleExitPlanModeExecute, handleWorkspaceDragEnter, handleWorkspaceDragLeave, handleWorkspaceDragOver,
     handleWorkspaceDrop, handleWorktreeCreated, hasActivePlan, hasLoaded, hasPlanData, highlightedBranchIndex, highlightedCommitIndex, highlightedPresetIndex,
     historySearchItems, hydratedThreadListWorkspaceIdsRef, installedEngines, interruptTurn, isCompact, isDeleteThreadPromptBusy, isEditorFileMaximized, isFilesLoading,
     isLoadingLatestAgents, isMacDesktop, isPanelLocked, isPhone, isPlanMode, isPlanPanelDismissed, isProcessing, isProcessingNow,
@@ -202,6 +202,35 @@ export function useAppShellLayoutNodesSection(ctx: any) {
     handleApprovalBatchAccept,
     handleApprovalRemember,
     handleUserInputSubmit: handleUserInputSubmitWithPlanApply,
+    onRecoverThreadRuntime: async (workspaceId, threadId) => refreshThread(workspaceId, threadId),
+    onRecoverThreadRuntimeAndResend: async (workspaceId, threadId, message) => {
+      const workspace =
+        workspacesById[workspaceId]
+        ?? workspaces.find((entry: any) => entry.id === workspaceId)
+        ?? null;
+      if (!workspace) {
+        return null;
+      }
+      const recoveredThreadId = await refreshThread(workspaceId, threadId);
+      const targetThreadId =
+        typeof recoveredThreadId === "string" && recoveredThreadId.trim()
+          ? recoveredThreadId
+          : threadId;
+      const nextText = message.text.trim();
+      const nextImages = message.images ?? [];
+      if (!targetThreadId || (!nextText && nextImages.length === 0)) {
+        return targetThreadId || null;
+      }
+      if (!workspace.connected) {
+        await connectWorkspace(workspace);
+      }
+      await sendUserMessageToThread(workspace, targetThreadId, nextText, nextImages, {
+        suppressUserMessageRender: true,
+        skipOptimisticUserBubble: true,
+      });
+      return targetThreadId;
+    },
+    handleExitPlanModeExecute,
     onOpenSettings: () => openSettings(),
     onOpenAgentSettings: () => openSettings("agents"),
     onOpenPromptSettings: () => openSettings("prompts"),

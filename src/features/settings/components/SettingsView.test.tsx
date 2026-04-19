@@ -11,6 +11,12 @@ import {
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSettings, WorkspaceInfo } from "../../../types";
+import {
+  archiveWorkspaceSessions,
+  deleteWorkspaceSessions,
+  listWorkspaceSessions,
+  unarchiveWorkspaceSessions,
+} from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import { SettingsView } from "./SettingsView";
 
@@ -34,6 +40,19 @@ vi.mock("../../../services/toasts", () => ({
   pushErrorToast: vi.fn(),
 }));
 
+vi.mock("../../../services/tauri", async () => {
+  const actual = await vi.importActual<typeof import("../../../services/tauri")>(
+    "../../../services/tauri",
+  );
+  return {
+    ...actual,
+    listWorkspaceSessions: vi.fn(),
+    archiveWorkspaceSessions: vi.fn(),
+    unarchiveWorkspaceSessions: vi.fn(),
+    deleteWorkspaceSessions: vi.fn(),
+  };
+});
+
 const mockedLocalFonts = [
   { family: "Monaco" },
   { family: "Avenir" },
@@ -50,6 +69,14 @@ beforeEach(() => {
     () => new Promise<Array<{ family: string }>>(() => {}),
   );
   (window as any).queryLocalFonts = queryLocalFontsMock;
+  vi.mocked(listWorkspaceSessions).mockResolvedValue({
+    data: [],
+    nextCursor: null,
+    partialSource: null,
+  });
+  vi.mocked(archiveWorkspaceSessions).mockResolvedValue({ results: [] });
+  vi.mocked(unarchiveWorkspaceSessions).mockResolvedValue({ results: [] });
+  vi.mocked(deleteWorkspaceSessions).mockResolvedValue({ results: [] });
 });
 
 afterEach(() => {
@@ -120,6 +147,12 @@ const baseSettings: AppSettings = {
   notificationSoundId: "default",
   notificationSoundCustomPath: "",
   systemNotificationEnabled: true,
+  runtimeRestoreThreadsOnlyOnLaunch: true,
+  runtimeForceCleanupOnExit: true,
+  runtimeOrphanSweepOnLaunch: true,
+  codexMaxHotRuntimes: 1,
+  codexMaxWarmRuntimes: 1,
+  codexWarmTtlSeconds: 90,
   preloadGitDiffs: true,
   experimentalCollabEnabled: false,
   experimentalCollaborationModesEnabled: false,
@@ -880,19 +913,32 @@ describe("SettingsView Composer", () => {
   });
 });
 
-describe("SettingsView Other", () => {
-  it("toggles project session management collapse in other settings", async () => {
+describe("SettingsView Session management", () => {
+  it("loads session catalog entries for the active workspace", async () => {
     const workspace: WorkspaceInfo = {
       id: "ws-1",
       name: "Workspace",
       path: "/tmp/workspace",
-      connected: false,
-      codex_bin: null,
-      kind: "main",
-      parentId: null,
-      worktree: null,
-      settings: { sidebarCollapsed: false, codexArgs: null },
+      connected: true,
+      settings: { sidebarCollapsed: false },
     };
+
+    vi.mocked(listWorkspaceSessions).mockResolvedValue({
+      data: [
+        {
+          sessionId: "codex:thread-a",
+          workspaceId: "ws-1",
+          title: "Session A",
+          updatedAt: 1710000000000,
+          engine: "codex",
+          archivedAt: null,
+          threadKind: "native",
+          sourceLabel: "cli/codex",
+        },
+      ],
+      nextCursor: null,
+      partialSource: null,
+    });
 
     render(
       <SettingsView
@@ -917,16 +963,6 @@ describe("SettingsView Other", () => {
         activeEngine="codex"
         onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
         onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
-        workspaceThreadsById={{
-          "ws-1": [
-            {
-              id: "thread-a",
-              name: "Session A",
-              updatedAt: Date.now(),
-              engineSource: "codex",
-            },
-          ],
-        }}
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
@@ -934,38 +970,48 @@ describe("SettingsView Other", () => {
         onDownloadDictationModel={vi.fn()}
         onCancelDictationDownload={vi.fn()}
         onRemoveDictationModel={vi.fn()}
-        initialSection="other"
+        initialSection="session-management"
       />,
     );
 
-    const collapseButton = screen.getByTestId("settings-project-sessions-expand-toggle");
-
-    expect(screen.getByText("Session A")).toBeTruthy();
-
-    fireEvent.click(collapseButton);
-    expect(screen.queryByText("Session A")).toBeNull();
-
-    fireEvent.click(collapseButton);
     await waitFor(() => {
-      expect(screen.getByText("Session A")).toBeTruthy();
+      expect(listWorkspaceSessions).toHaveBeenCalledWith("ws-1", {
+        query: { keyword: null, engine: null, status: "active" },
+        cursor: null,
+        limit: 100,
+      });
     });
+    expect(await screen.findByText("Session A")).toBeTruthy();
   });
 
-  it("deletes selected project sessions from other settings", async () => {
+  it("deletes selected sessions and triggers workspace refresh", async () => {
     const workspace: WorkspaceInfo = {
       id: "ws-1",
       name: "Workspace",
       path: "/tmp/workspace",
-      connected: false,
-      codex_bin: null,
-      kind: "main",
-      parentId: null,
-      worktree: null,
-      settings: { sidebarCollapsed: false, codexArgs: null },
+      connected: true,
+      settings: { sidebarCollapsed: false },
     };
-    const onDeleteWorkspaceThreads = vi.fn().mockResolvedValue({
-      succeededThreadIds: ["thread-a"],
-      failed: [],
+    const onEnsureWorkspaceThreads = vi.fn();
+
+    vi.mocked(listWorkspaceSessions).mockResolvedValue({
+      data: [
+        {
+          sessionId: "codex:thread-a",
+          workspaceId: "ws-1",
+          title: "Session A",
+          updatedAt: 1710000000000,
+          engine: "codex",
+          archivedAt: null,
+          threadKind: "native",
+          sourceLabel: "cli/codex",
+        },
+      ],
+      nextCursor: null,
+      partialSource: null,
+    });
+    vi.mocked(deleteWorkspaceSessions).mockResolvedValue({
+      results: [{ sessionId: "codex:thread-a", ok: true }],
     });
 
     render(
@@ -991,17 +1037,7 @@ describe("SettingsView Other", () => {
         activeEngine="codex"
         onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
         onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
-        workspaceThreadsById={{
-          "ws-1": [
-            {
-              id: "thread-a",
-              name: "Session A",
-              updatedAt: Date.now(),
-              engineSource: "codex",
-            },
-          ],
-        }}
-        onDeleteWorkspaceThreads={onDeleteWorkspaceThreads}
+        onEnsureWorkspaceThreads={onEnsureWorkspaceThreads}
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
@@ -1009,56 +1045,55 @@ describe("SettingsView Other", () => {
         onDownloadDictationModel={vi.fn()}
         onCancelDictationDownload={vi.fn()}
         onRemoveDictationModel={vi.fn()}
-        initialSection="other"
+        initialSection="session-management"
       />,
     );
 
-    const sessionTitle = screen.getByText("Session A");
-    const sessionButton = sessionTitle.closest("button");
-    if (!sessionButton) {
-      throw new Error("Expected session selection button");
-    }
-    fireEvent.click(sessionButton);
+    const checkbox = await screen.findByRole("checkbox", { name: "Session A" });
+    fireEvent.click(checkbox);
 
     const deleteButton = screen.getByTestId("settings-project-sessions-delete-selected");
     fireEvent.click(deleteButton);
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
-      expect(onDeleteWorkspaceThreads).toHaveBeenCalledWith("ws-1", ["thread-a"]);
+      expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", ["codex:thread-a"]);
+    });
+    await waitFor(() => {
+      expect(onEnsureWorkspaceThreads).toHaveBeenCalledWith("ws-1");
     });
   });
 
-  it("switches workspace from project session picker", async () => {
-    const workspaceOne: WorkspaceInfo = {
+  it("toggles the session management section body", async () => {
+    const workspace: WorkspaceInfo = {
       id: "ws-1",
-      name: "Workspace One",
-      path: "/tmp/workspace-one",
-      connected: false,
-      codex_bin: null,
-      kind: "main",
-      parentId: null,
-      worktree: null,
-      settings: { sidebarCollapsed: false, codexArgs: null },
+      name: "Workspace",
+      path: "/tmp/workspace",
+      connected: true,
+      settings: { sidebarCollapsed: false },
     };
-    const workspaceTwo: WorkspaceInfo = {
-      id: "ws-2",
-      name: "Workspace Two",
-      path: "/tmp/workspace-two",
-      connected: false,
-      codex_bin: null,
-      kind: "main",
-      parentId: null,
-      worktree: null,
-      settings: { sidebarCollapsed: false, codexArgs: null },
-    };
+
+    vi.mocked(listWorkspaceSessions).mockResolvedValue({
+      data: [
+        {
+          sessionId: "codex:thread-a",
+          workspaceId: "ws-1",
+          title: "Session A",
+          updatedAt: 1710000000000,
+          engine: "codex",
+          archivedAt: null,
+          threadKind: "native",
+          sourceLabel: "cli/codex",
+        },
+      ],
+      nextCursor: null,
+      partialSource: null,
+    });
 
     render(
       <SettingsView
         workspaceGroups={[]}
-        groupedWorkspaces={[
-          { id: "group-1", name: "Github", workspaces: [workspaceOne, workspaceTwo] },
-        ]}
+        groupedWorkspaces={[{ id: null, name: "Ungrouped", workspaces: [workspace] }]}
         ungroupedLabel="Ungrouped"
         onClose={vi.fn()}
         onMoveWorkspace={vi.fn()}
@@ -1074,28 +1109,10 @@ describe("SettingsView Other", () => {
         openAppIconById={{}}
         onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
         onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
-        activeWorkspace={workspaceOne}
+        activeWorkspace={workspace}
         activeEngine="codex"
         onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
         onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
-        workspaceThreadsById={{
-          "ws-1": [
-            {
-              id: "thread-a",
-              name: "Session A",
-              updatedAt: Date.now(),
-              engineSource: "codex",
-            },
-          ],
-          "ws-2": [
-            {
-              id: "thread-b",
-              name: "Session B",
-              updatedAt: Date.now(),
-              engineSource: "codex",
-            },
-          ],
-        }}
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
@@ -1103,120 +1120,18 @@ describe("SettingsView Other", () => {
         onDownloadDictationModel={vi.fn()}
         onCancelDictationDownload={vi.fn()}
         onRemoveDictationModel={vi.fn()}
-        initialSection="other"
+        initialSection="session-management"
       />,
     );
 
-    expect(screen.getByText("Session A")).toBeTruthy();
-    expect(screen.queryByText("Session B")).toBeNull();
+    expect(await screen.findByText("Session A")).toBeTruthy();
 
-    fireEvent.click(screen.getByTestId("settings-project-sessions-workspace-picker-trigger"));
-    fireEvent.change(screen.getByLabelText("workspace.searchProjects"), {
-      target: { value: "two" },
-    });
-    fireEvent.click(screen.getByRole("option", { name: "Workspace Two" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Session B")).toBeTruthy();
-    });
+    const toggleButton = screen.getByTestId("settings-project-sessions-expand-toggle");
+    fireEvent.click(toggleButton);
     expect(screen.queryByText("Session A")).toBeNull();
-  });
 
-  it("shows and selects worktree entries in project session picker", async () => {
-    const workspaceRoot: WorkspaceInfo = {
-      id: "ws-root",
-      name: "codemoss",
-      path: "/tmp/codemoss",
-      connected: false,
-      codex_bin: null,
-      kind: "main",
-      parentId: null,
-      worktree: null,
-      settings: { sidebarCollapsed: false, codexArgs: null },
-    };
-    const workspaceWorktree: WorkspaceInfo = {
-      id: "ws-worktree",
-      name: "codex/feature-a",
-      path: "/tmp/codemoss/worktrees/feature-a",
-      connected: false,
-      codex_bin: null,
-      kind: "worktree",
-      parentId: "ws-root",
-      worktree: {
-        branch: "feature-a",
-      },
-      settings: { sidebarCollapsed: false, codexArgs: null },
-    };
-
-    render(
-      <SettingsView
-        workspaceGroups={[]}
-        groupedWorkspaces={[
-          { id: "group-1", name: "Github", workspaces: [workspaceRoot] },
-        ]}
-        allWorkspaces={[workspaceRoot, workspaceWorktree]}
-        ungroupedLabel="Ungrouped"
-        onClose={vi.fn()}
-        onMoveWorkspace={vi.fn()}
-        onDeleteWorkspace={vi.fn()}
-        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        reduceTransparency={false}
-        onToggleTransparency={vi.fn()}
-        appSettings={baseSettings}
-        openAppIconById={{}}
-        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
-        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
-        activeWorkspace={workspaceRoot}
-        activeEngine="codex"
-        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
-        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
-        workspaceThreadsById={{
-          "ws-root": [
-            {
-              id: "thread-root",
-              name: "Root Session",
-              updatedAt: Date.now(),
-              engineSource: "codex",
-            },
-          ],
-          "ws-worktree": [
-            {
-              id: "thread-worktree",
-              name: "Worktree Session",
-              updatedAt: Date.now(),
-              engineSource: "codex",
-            },
-          ],
-        }}
-        scaleShortcutTitle="Scale shortcut"
-        scaleShortcutText="Use Command +/-"
-        onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
-        initialSection="other"
-      />,
-    );
-
-    expect(screen.getByText("Root Session")).toBeTruthy();
-
-    fireEvent.click(screen.getByTestId("settings-project-sessions-workspace-picker-trigger"));
-    const worktreeLabel = screen.getByText("↳ codex/feature-a");
-    const worktreeOption = worktreeLabel.closest("button");
-    if (!worktreeOption) {
-      throw new Error("Expected worktree option button");
-    }
-    fireEvent.click(worktreeOption);
-
-    await waitFor(() => {
-      expect(screen.getByText("Worktree Session")).toBeTruthy();
-    });
-    expect(screen.queryByText("Root Session")).toBeNull();
+    fireEvent.click(toggleButton);
+    expect(await screen.findByText("Session A")).toBeTruthy();
   });
 });
 

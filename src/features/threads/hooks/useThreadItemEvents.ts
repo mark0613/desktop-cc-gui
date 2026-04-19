@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, MutableRefObject } from "react";
 import { buildConversationItem } from "../../../utils/threadItems";
 import { asString } from "../utils/threadNormalize";
-import type { DebugEntry } from "../../../types";
+import type { ConversationItem, DebugEntry } from "../../../types";
 import type { ThreadAction } from "./useThreadsReducer";
 import { isRealtimeBatchingEnabled } from "../utils/realtimePerfFlags";
 import {
@@ -59,11 +59,11 @@ function inferItemEngineSource(
   return isGeminiThread(threadId) ? "gemini" : null;
 }
 
-function shouldIgnoreInterruptedGeminiThread(
+function isInterruptedThread(
   interruptedThreadsRef: MutableRefObject<Set<string>>,
   threadId: string,
 ) {
-  return isGeminiThread(threadId) && interruptedThreadsRef.current.has(threadId);
+  return interruptedThreadsRef.current.has(threadId);
 }
 
 function isClaudeStreamDebugEnabled() {
@@ -118,6 +118,11 @@ type UseThreadItemEventsOptions = {
     threadId: string;
     itemId: string;
     text: string;
+  }) => void;
+  onExitPlanModeToolCompleted?: (payload: {
+    workspaceId: string;
+    threadId: string;
+    itemId: string;
   }) => void;
 };
 
@@ -175,11 +180,29 @@ export function useThreadItemEvents({
   interruptedThreadsRef,
   onDebug,
   onAgentMessageCompletedExternal,
+  onExitPlanModeToolCompleted,
 }: UseThreadItemEventsOptions) {
   const enableRealtimeBatchingRef = useRef(isRealtimeBatchingEnabled());
   const pendingRealtimeDeltaOpsRef = useRef<RealtimeDeltaOperation[]>([]);
   const realtimeFlushTimerRef = useRef<number | null>(null);
   const isFlushingRealtimeDeltaOpsRef = useRef(false);
+
+  const normalizeToolIdentifier = useCallback((value: string) => {
+    return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  }, []);
+
+  const isClaudeExitPlanModeTool = useCallback(
+    (item: Extract<ConversationItem, { kind: "tool" }>) => {
+      const normalizedToolType = normalizeToolIdentifier(item.toolType);
+      const normalizedTitle = normalizeToolIdentifier(item.title);
+      return (
+        normalizedToolType === "exitplanmode" ||
+        normalizedToolType.endsWith("exitplanmode") ||
+        normalizedTitle.includes("exitplanmode")
+      );
+    },
+    [normalizeToolIdentifier],
+  );
 
   const logReasoningRoute = useCallback(
     (
@@ -246,7 +269,7 @@ export function useThreadItemEvents({
         markedProcessingThreads?: Set<string>;
       },
     ) => {
-      if (shouldIgnoreInterruptedGeminiThread(interruptedThreadsRef, operation.threadId)) {
+      if (isInterruptedThread(interruptedThreadsRef, operation.threadId)) {
         return;
       }
       const ensuredThreads = context?.ensuredThreads;
@@ -398,7 +421,7 @@ export function useThreadItemEvents({
       shouldMarkProcessing: boolean,
       shouldIncrementAgentSegment: boolean,
     ) => {
-      if (shouldIgnoreInterruptedGeminiThread(interruptedThreadsRef, threadId)) {
+      if (isInterruptedThread(interruptedThreadsRef, threadId)) {
         return;
       }
       flushRealtimeDeltaOps();
@@ -529,6 +552,18 @@ export function useThreadItemEvents({
           item: normalizedItem,
           hasCustomName: Boolean(getCustomName(workspaceId, threadId)),
         });
+        if (
+          !shouldMarkProcessing &&
+          inferEngineFromThreadId(threadId) === "claude" &&
+          normalizedItem.kind === "tool" &&
+          isClaudeExitPlanModeTool(normalizedItem)
+        ) {
+          onExitPlanModeToolCompleted?.({
+            workspaceId,
+            threadId,
+            itemId: normalizedItem.id,
+          });
+        }
       }
       safeMessageActivity();
     },
@@ -538,9 +573,11 @@ export function useThreadItemEvents({
       flushRealtimeDeltaOps,
       getCustomName,
       interruptedThreadsRef,
+      isClaudeExitPlanModeTool,
       logReasoningRoute,
       markProcessing,
       markReviewing,
+      onExitPlanModeToolCompleted,
       resolveCollaborationUiMode,
       safeMessageActivity,
     ],
@@ -594,7 +631,7 @@ export function useThreadItemEvents({
       delta: string;
     }) => {
       // Skip late-arriving deltas for threads that have been interrupted
-      if (interruptedThreadsRef.current.has(threadId)) {
+      if (isInterruptedThread(interruptedThreadsRef, threadId)) {
         logClaudeStream("agent-delta-skipped", {
           workspaceId,
           threadId,
@@ -641,7 +678,7 @@ export function useThreadItemEvents({
       itemId: string;
       text: string;
     }) => {
-      if (shouldIgnoreInterruptedGeminiThread(interruptedThreadsRef, threadId)) {
+      if (isInterruptedThread(interruptedThreadsRef, threadId)) {
         return;
       }
       const resolvedText = applyPendingClaudeMcpOutputNoticeToAgentCompleted(
