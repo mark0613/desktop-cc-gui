@@ -1824,3 +1824,55 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 33: 重构 v0.4.3 发布说明
+
+**Date**: 2026-04-19
+**Task**: 重构 v0.4.3 发布说明
+**Branch**: `feature/vvvv0.4.3`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+任务目标：基于完整 git log 重构 CHANGELOG 中 v0.4.3 的发布说明，保留现有格式并合并同版本零散内容。
+
+主要改动：
+- 重新梳理 9d62e04a 之后属于 v0.4.3 的提交范围。
+- 将 v0.4.3 的更新说明按 Features、Improvements、Fixes 三组重写。
+- 覆盖 runtime pool console、回溯模式重构、runtime 恢复卡片、Claude plan mode 与 approval bridge、会话恢复和批量删除会话后的刷新收敛等主线。
+- 保持 CHANGELOG 现有模板、分隔线和中英双语结构不变。
+
+涉及模块：
+- CHANGELOG.md
+- .trellis/workspace/<developer>/ journal record（由脚本自动写入）
+
+验证结果：
+- 手工检查 CHANGELOG 顶部结构，确认 v0.4.3 仅保留一个版本块。
+- 对照 git log 重新归并内容，确认未混入 chore / docs / record journal 原文。
+- git commit 已完成：89ea0792 docs(changelog): 重构 v0.4.3 发布说明
+
+后续事项：
+- 如需继续优化文案，可再针对 App Store / GitHub Release / 官网更新公告生成不同风格版本。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `89ea07928e06e5c086e8eaadf1dccb309cd86b6a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

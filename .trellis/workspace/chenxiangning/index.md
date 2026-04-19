@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 32
+- **Total Sessions**: 33
 - **Last Active**: 2026-04-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1826 | Active |
+| `journal-1.md` | ~1878 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 33 | 2026-04-19 | 重构 v0.4.3 发布说明 | `89ea07928e06e5c086e8eaadf1dccb309cd86b6a` | `feature/vvvv0.4.3` |
 | 32 | 2026-04-19 | 修复批量删除后项目会话刷新卡死 | `1fe3531a` | `feature/vvvv0.4.3` |
 | 31 | 2026-04-19 | 修复消息区 runtime 重连重发边界并完成代码清理 | `864c0c9bb4bd03d444087b5455af5d90ccad7c71` | `feature/vvvv0.4.3` |
 | 30 | 2026-04-19 | 修复项目会话管理批量删除慢与查询缺失 | `7384c6a4` | `feature/vvvv0.4.3` |
