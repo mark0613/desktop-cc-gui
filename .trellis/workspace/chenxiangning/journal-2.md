@@ -1889,3 +1889,72 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 68: review: 修复消息实时展示与完成提示音边界问题
+
+**Date**: 2026-04-21
+**Task**: review: 修复消息实时展示与完成提示音边界问题
+**Branch**: `feature/f-v0.4.6`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+任务目标
+- 对当前工作区做一次以边界条件、超大文件拆分和跨平台兼容性为重点的 review。
+- 直接修复消息流式展示与通知播放链路里确认到的边界问题。
+- 按功能拆分为多次 Conventional Commits 中文提交。
+
+主要改动
+- 修复实时对话在 thinking 阶段把最新普通用户问题一起卷入折叠区的问题，保留稳定的 live user bubble。
+- 抽离用户消息展示归一化逻辑与消息 item predicate，收敛 injected memory、shared session wrapper、agent prompt block 等异常输入处理。
+- 修复 Explore 卡片在阶段推进离开 explore 后未自动折叠的问题。
+- 修复完成提示音在同一 turn 重复触发，以及 threadId/turnId 含分隔符时复合键碰撞的问题。
+
+涉及模块
+- src/features/messages/components/Messages.tsx
+- src/features/messages/components/messagesLiveWindow.ts
+- src/features/messages/components/messagesUserPresentation.ts
+- src/features/messages/components/messageItemPredicates.ts
+- src/features/notifications/hooks/useAgentSoundNotifications.ts
+- 对应 messages/notifications 测试文件
+- 对应 openspec changes 与 .trellis/tasks 记录
+
+提交记录
+- 3f6157fc fix(messages): 固化实时用户问题气泡并抽离消息展示归一化逻辑
+- f1b0f2e9 fix(messages): 修复 Explore 卡片在阶段推进后的自动折叠
+- 1b9a4554 fix(notifications): 按 turn 去重完成提示音并避免事件键碰撞
+
+验证结果
+- npx vitest run src/features/messages/components/messagesUserPresentation.test.ts src/features/messages/components/Messages.live-behavior.test.tsx
+- npx vitest run src/features/messages/components/Messages.explore.test.tsx src/features/messages/components/Messages.live-behavior.test.tsx
+- npx vitest run src/features/notifications/hooks/useAgentSoundNotifications.test.tsx
+- npx eslint src/features/messages/components/Messages.tsx src/features/messages/components/messagesLiveWindow.ts src/features/messages/components/messagesUserPresentation.ts src/features/messages/components/messageItemPredicates.ts src/features/notifications/hooks/useAgentSoundNotifications.ts src/features/messages/components/Messages.explore.test.tsx src/features/messages/components/Messages.live-behavior.test.tsx src/features/messages/components/messagesUserPresentation.test.ts src/features/notifications/hooks/useAgentSoundNotifications.test.tsx
+- npm run typecheck
+- npm run check:large-files:near-threshold
+
+后续事项
+- 当前工作树仍保留未纳入本次提交的无关草稿：openspec/changes/harden-codex-runtime-exit-recovery/
+- Messages.tsx 已降到 2780 行，但 messages.css 仍接近阈值，可继续按样式域拆分。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1b9a4554` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
