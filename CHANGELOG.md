@@ -8,27 +8,39 @@
 
 ✨ Features
 - 新增全局会话归档中心，支持跨项目聚合查看历史会话，并收紧 Codex 配置边界，降低多入口配置漂移风险
+- 新增会话恢复诊断与降级承接链路，在 runtime 断连、线程失效或恢复失败时提供更明确的状态解释与后续操作入口
 
 🔧 Improvements
 - 收敛设置页实验区入口，将续写、融合等能力命名与归属统一到更清晰的配置结构
 - 优化 Codex 实验配置展示与跨平台配置入口，减少不同系统环境下的入口差异与误导
+- 加固 Claude 手动压缩与会话恢复边界，减少 compact、恢复、重发等长链路操作中的状态漂移
+- 同步 OpenSpec 中的 runtime 稳定性与 Claude compact 实施进度，让发布说明、任务状态与实际实现保持一致
 
 🐛 Fixes
 - 修复会话管理边界处理问题，并补齐全量回归夹具，提升归档、聚合与路由场景的稳定性
 - 修复工作树中新建会话入口交互异常，避免用户从侧栏进入新会话时出现状态错位
+- 修复工作区文件树刷新不稳定问题，避免目录节点、独立文件窗口与工作区文件状态在刷新后不同步
+- 修复 Opencode 子进程终止与超时收敛边界，降低异常退出、超时清理和会话回收中的残留风险
+- 修复 Codex 会话自恢复、零活动超时兜底与 runtime 重连场景中的诊断缺口，提升断链后的可恢复性
 
 English:
 
 ✨ Features
 - Add a global session archive center for cross-project history aggregation, while tightening Codex configuration boundaries to reduce configuration drift across entry points
+- Add session recovery diagnostics and fallback handoff paths so runtime disconnects, stale threads, and failed recovery attempts provide clearer state and next-action guidance
 
 🔧 Improvements
 - Consolidate the Settings experimental area and align naming/ownership for continuation and fusion capabilities into a clearer configuration structure
 - Refine Codex experimental settings and cross-platform configuration entry points to reduce platform-specific ambiguity
+- Harden Claude manual compact and session-recovery boundaries to reduce state drift across compact, recovery, and resend flows
+- Sync OpenSpec progress for runtime stability and Claude compact implementation so release notes, task state, and delivered behavior stay aligned
 
 🐛 Fixes
 - Fix session-management boundary handling and add full regression fixtures to improve stability across archive, aggregation, and routing scenarios
 - Fix the worktree new-session entry interaction so sidebar-launched sessions no longer drift into an incorrect state
+- Fix unstable workspace file-tree refreshes so directory nodes, detached file windows, and workspace file state stay synchronized after refresh
+- Fix Opencode subprocess termination and timeout convergence to reduce leftover process risk during abnormal exits, timeout cleanup, and session recycling
+- Fix diagnostic gaps in Codex session self-recovery, zero-activity timeout fallback, and runtime reconnect scenarios to improve recoverability after disconnects
 
 ---
 
