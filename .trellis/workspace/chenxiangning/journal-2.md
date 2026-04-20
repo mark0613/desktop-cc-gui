@@ -994,3 +994,52 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 53: Claude /compact 提案定稿
+
+**Date**: 2026-04-20
+**Task**: Claude /compact 提案定稿
+**Branch**: `feature/vvvv0.4.5`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+任务目标：围绕 issue #363，将 Claude Code 的 /compact 提案打磨到可执行态，并在不改动 Codex 现有 compaction 语义的前提下提交 OpenSpec artifacts。
+
+主要改动：
+- 新建 openspec/changes/claude-code-compact-command-adaptation/，补齐 proposal、design、specs、tasks。
+- 明确提案边界：仅适配 Claude Code 的 /compact，Codex 保持不变。
+- 统一关键决策：无现有 Claude 线程时 /compact 返回 actionable failure，不为此新建线程。
+- 新增 docs/plans/2026-04-20-claude-compact-command-adaptation-implementation.md，细化实施顺序、文件落点与测试命令。
+
+涉及模块：OpenSpec change artifacts、docs/plans 实施计划文档。
+
+验证结果：
+- openspec status --change claude-code-compact-command-adaptation 显示 4/4 artifacts complete。
+- 已完成 git commit：e0386b2f docs(openspec): add claude compact command adaptation proposal。
+- 未运行代码测试；本次提交仅包含提案与计划文档。
+
+后续事项：按实施计划从 useQueuedSend.ts 和 useThreadMessaging.ts 开始落地 Claude /compact 命令路由与测试。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e0386b2f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
