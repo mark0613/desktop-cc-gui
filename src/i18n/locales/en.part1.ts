@@ -2644,6 +2644,8 @@ const enPart1 = {
     turnFailedWithMessage: "Turn failed: {{message}}",
     turnFailedToStart: "Turn failed to start.",
     turnFailedToStartWithMessage: "Turn failed to start: {{message}}",
+    turnNoActivityTimeout:
+      "No turn activity was received for {{seconds}}s. Waiting was stopped. Please retry or recover the session.",
     firstPacketTimeout:
       "No initial response within {{seconds}}s. Network, proxy, or upstream service load may be causing delay. Please retry.",
     networkProxyHint:

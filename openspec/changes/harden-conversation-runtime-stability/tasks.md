@@ -6,7 +6,9 @@
 ## 2. P0 Structured Diagnostics And Lifecycle Exit
 
 - [ ] 2.1 [P0][Input: current runtime/session error strings and pseudo-processing exit logic][Output: structured stability diagnostic categories for early runtime end, connectivity drift, partial history, and recovery quarantine][Verify: frontend/reducer tests assert threads leave processing deterministically and surface stable diagnostic category] 补齐结构化 stability diagnostics 并清理 pseudo-processing 残留。
+  - [x] 2026-04-20 implementation slice: `turn/started` 后新增 20s no-activity watchdog；若无 `delta` / `processing/heartbeat` / item lifecycle / `turn/error` / `turn/completed`，前端主动结束 processing、清空 active turn，并给出 recoverable timeout message，避免 UI 永久卡在 loading。
 - [ ] 2.2 [P0][Depends: 2.1][Input: current thread action / reopen / post-rewind follow-up error handling][Output: recoverable diagnostics visible to user-facing lifecycle surfaces][Verify: regression covers runtime end during turn, reconnect failure, and post-rewind follow-up failure] 让异常恢复链路都能落到统一的用户可见诊断承接。
+  - [x] 2026-04-20 implementation slice: Codex `sendUserMessage` 在 `thread not found` / `[SESSION_NOT_FOUND]` stale-thread 场景下先执行一次 `refreshThread -> resend` 自愈，失败后再回落既有 recovery card / error surface。
 
 ## 3. P0 Last-Good Continuity For List And History
 
@@ -21,4 +23,6 @@
 ## 5. P1 Verification And Stress Validation
 
 - [ ] 5.1 [P0][Input: updated runtime, loader, reducer, and diagnostics tests][Output: passing targeted regression suite for recovery guard, degraded continuity, and diagnostics mapping][Verify: `cargo test --manifest-path src-tauri/Cargo.toml`, targeted `vitest` for thread actions/loaders/debug hooks] 跑定向自动化回归。
+  - [x] 2026-04-20 implementation slice: targeted `vitest` 覆盖 `turn/started` 后零活动超时 watchdog（超时退出 processing、heartbeat 刷新倒计时、user-visible timeout message）。
+  - [x] 2026-04-20 implementation slice: targeted `vitest` 覆盖 Codex send path stale-thread auto recovery（`thread not found` / `[SESSION_NOT_FOUND]`）与 optimistic user bubble 去重。
 - [ ] 5.2 [P1][Depends: 5.1][Input: integrated local desktop build][Output: manual proof for “failure -> reopen/rewind/new thread” chain without CPU storm][Verify: 手工验证至少覆盖会话提前结束、reconnect 连续失败、history partial、失败后立即新建对话四类场景] 完成一次本地 stress 验证并记录结果。

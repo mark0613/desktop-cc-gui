@@ -31,6 +31,7 @@ vi.mock("../../../services/toasts", () => ({
 
 vi.mock("../../../services/tauri", () => ({
   sendUserMessage: vi.fn(),
+  projectMemoryCaptureAuto: vi.fn(async () => null),
   startReview: vi.fn(),
   interruptTurn: vi.fn(),
   listMcpServerStatus: vi.fn(),
@@ -1633,6 +1634,121 @@ describe("useThreadMessaging", () => {
       expect(pushThreadErrorMessage).toHaveBeenCalledWith(
         "legacy-thread-id",
         expect.any(String),
+      );
+    });
+  });
+
+  it("retries codex send once when stale thread reports thread not found", async () => {
+    vi.mocked(sendUserMessage)
+      .mockResolvedValueOnce({
+        error: {
+          message: "thread not found: legacy-thread-id",
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        result: { turn: { id: "turn-rebound-thread-not-found" } },
+      } as never);
+    const refreshThread = vi.fn(async () => "thread-rebound-2");
+    const dispatch = vi.fn();
+    const { result } = makeHook("codex", {
+      activeThreadId: "legacy-thread-id",
+      ensuredThreadId: "legacy-thread-id",
+      refreshThread,
+      dispatch,
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessage("hello codex");
+    });
+
+    await waitFor(() => {
+      expect(refreshThread).toHaveBeenCalledWith("ws-1", "legacy-thread-id");
+      expect(sendUserMessage).toHaveBeenCalledTimes(2);
+      expect(sendUserMessage).toHaveBeenNthCalledWith(
+        2,
+        "ws-1",
+        "thread-rebound-2",
+        "hello codex",
+        expect.any(Object),
+      );
+      const reboundUserBubbleActions = dispatch.mock.calls.filter(
+        ([action]) =>
+          action &&
+          typeof action === "object" &&
+          "type" in action &&
+          (action as { type?: string }).type === "upsertItem" &&
+          "threadId" in action &&
+          (action as { threadId?: string }).threadId === "thread-rebound-2" &&
+          "item" in action &&
+          (action as { item?: { kind?: string; role?: string; text?: string } }).item?.kind ===
+            "message" &&
+          (action as { item?: { kind?: string; role?: string; text?: string } }).item?.role ===
+            "user" &&
+          (action as { item?: { kind?: string; role?: string; text?: string } }).item?.text ===
+            "hello codex",
+      );
+      expect(reboundUserBubbleActions).toHaveLength(1);
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "setThreadItems",
+          threadId: "legacy-thread-id",
+        }),
+      );
+    });
+  });
+
+  it("retries codex send once when stale thread throws session not found", async () => {
+    vi.mocked(sendUserMessage)
+      .mockRejectedValueOnce(new Error("[SESSION_NOT_FOUND] session file not found"))
+      .mockResolvedValueOnce({
+        result: { turn: { id: "turn-rebound-session-not-found" } },
+      } as never);
+    const refreshThread = vi.fn(async () => "thread-rebound-3");
+    const dispatch = vi.fn();
+    const { result, pushThreadErrorMessage } = makeHook("codex", {
+      activeThreadId: "legacy-thread-id",
+      ensuredThreadId: "legacy-thread-id",
+      refreshThread,
+      dispatch,
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessage("hello codex");
+    });
+
+    await waitFor(() => {
+      expect(refreshThread).toHaveBeenCalledWith("ws-1", "legacy-thread-id");
+      expect(sendUserMessage).toHaveBeenCalledTimes(2);
+      expect(sendUserMessage).toHaveBeenNthCalledWith(
+        2,
+        "ws-1",
+        "thread-rebound-3",
+        "hello codex",
+        expect.any(Object),
+      );
+      expect(pushThreadErrorMessage).not.toHaveBeenCalled();
+      const reboundUserBubbleActions = dispatch.mock.calls.filter(
+        ([action]) =>
+          action &&
+          typeof action === "object" &&
+          "type" in action &&
+          (action as { type?: string }).type === "upsertItem" &&
+          "threadId" in action &&
+          (action as { threadId?: string }).threadId === "thread-rebound-3" &&
+          "item" in action &&
+          (action as { item?: { kind?: string; role?: string; text?: string } }).item?.kind ===
+            "message" &&
+          (action as { item?: { kind?: string; role?: string; text?: string } }).item?.role ===
+            "user" &&
+          (action as { item?: { kind?: string; role?: string; text?: string } }).item?.text ===
+            "hello codex",
+      );
+      expect(reboundUserBubbleActions).toHaveLength(1);
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "setThreadItems",
+          threadId: "legacy-thread-id",
+        }),
       );
     });
   });

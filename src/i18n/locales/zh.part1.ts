@@ -2571,6 +2571,8 @@ const zhPart1 = {
     turnFailedWithMessage: "会话失败：{{message}}",
     turnFailedToStart: "会话启动失败。",
     turnFailedToStartWithMessage: "会话启动失败：{{message}}",
+    turnNoActivityTimeout:
+      "{{seconds}} 秒内未收到新的会话活动，已结束当前等待。请重试或恢复会话。",
     firstPacketTimeout:
       "首次响应在 {{seconds}} 秒内未返回。可能是网络、代理或上游服务繁忙导致，请稍后重试。",
     networkProxyHint:

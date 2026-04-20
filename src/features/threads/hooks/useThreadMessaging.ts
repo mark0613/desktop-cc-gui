@@ -75,6 +75,7 @@ import {
   extractSessionIdFromEngineSendResponse,
   isInvalidReviewThreadIdError,
   isLikelyForeignModelForGemini,
+  isRecoverableCodexThreadBindingError,
   isUnknownEngineInterruptTurnMethodError,
   isValidClaudeModelForPassthrough,
   mapNetworkErrorToUserMessage,
@@ -726,9 +727,70 @@ export function useThreadMessaging({
           hasImages: images.length > 0,
         });
       }
+      const retryCodexSendAfterThreadRefresh = async (errorMessage: string) => {
+        if (
+          resolvedEngine !== "codex" ||
+          options?.codexInvalidThreadRetryAttempted ||
+          !isRecoverableCodexThreadBindingError(errorMessage)
+        ) {
+          return false;
+        }
+        const reboundThreadId = await refreshThread(workspace.id, threadId);
+        if (!reboundThreadId) {
+          return false;
+        }
+        onDebug?.({
+          id: `${Date.now()}-client-turn-start-thread-retry`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "turn/start thread rebind retry",
+          payload: {
+            workspaceId: workspace.id,
+            originalThreadId: threadId,
+            reboundThreadId,
+            reboundChanged: reboundThreadId !== threadId,
+            reason: errorMessage,
+          },
+        });
+        if (reboundThreadId !== threadId) {
+          dispatch({
+            type: "setActiveThreadId",
+            workspaceId: workspace.id,
+            threadId: reboundThreadId,
+          });
+          if (optimisticUserItem) {
+            dispatch({
+              type: "setThreadItems",
+              threadId,
+              items: (itemsByThread[threadId] ?? []).filter(
+                (item) => item.id !== optimisticUserItem?.id,
+              ),
+            });
+            dispatch({
+              type: "upsertItem",
+              workspaceId: workspace.id,
+              threadId: reboundThreadId,
+              item: optimisticUserItem,
+              hasCustomName: Boolean(getCustomName(workspace.id, reboundThreadId)),
+            });
+          }
+        }
+        markProcessing(threadId, false);
+        setActiveTurnId(threadId, null);
+        safeMessageActivity();
+        await sendMessageToThread(workspace, reboundThreadId, finalText, images, {
+          skipPromptExpansion: true,
+          skipOptimisticUserBubble: true,
+          model: modelForSend,
+          effort: resolvedEffort,
+          collaborationMode: sanitizedCollaborationMode,
+          accessMode: resolvedAccessMode,
+          codexInvalidThreadRetryAttempted: true,
+        });
+        return true;
+      };
       try {
         let response: Record<string, unknown>;
-
         if (threadKind === "shared") {
           const sharedResolvedEngine = normalizeSharedSessionEngine(resolvedEngine);
           dispatch({
@@ -1071,63 +1133,8 @@ export function useThreadMessaging({
         });
         const rpcError = extractRpcErrorMessage(response);
         if (rpcError) {
-          if (
-            resolvedEngine === "codex" &&
-            !options?.codexInvalidThreadRetryAttempted &&
-            isInvalidReviewThreadIdError(rpcError)
-          ) {
-            const reboundThreadId = await refreshThread(workspace.id, threadId);
-            if (reboundThreadId) {
-              onDebug?.({
-                id: `${Date.now()}-client-turn-start-thread-retry`,
-                timestamp: Date.now(),
-                source: "client",
-                label: "turn/start thread rebind retry",
-                payload: {
-                  workspaceId: workspace.id,
-                  originalThreadId: threadId,
-                  reboundThreadId,
-                  reboundChanged: reboundThreadId !== threadId,
-                  reason: rpcError,
-                },
-              });
-              if (reboundThreadId !== threadId) {
-                dispatch({
-                  type: "setActiveThreadId",
-                  workspaceId: workspace.id,
-                  threadId: reboundThreadId,
-                });
-                if (optimisticUserItem) {
-                  dispatch({
-                    type: "setThreadItems",
-                    threadId,
-                    items: (itemsByThread[threadId] ?? []).filter(
-                      (item) => item.id !== optimisticUserItem?.id,
-                    ),
-                  });
-                  dispatch({
-                    type: "upsertItem",
-                    workspaceId: workspace.id,
-                    threadId: reboundThreadId,
-                    item: optimisticUserItem,
-                    hasCustomName: Boolean(getCustomName(workspace.id, reboundThreadId)),
-                  });
-                }
-              }
-              markProcessing(threadId, false);
-              setActiveTurnId(threadId, null);
-              safeMessageActivity();
-              await sendMessageToThread(workspace, reboundThreadId, finalText, images, {
-                skipPromptExpansion: true,
-                skipOptimisticUserBubble: true,
-                model: modelForSend,
-                effort: resolvedEffort,
-                collaborationMode: sanitizedCollaborationMode,
-                accessMode: resolvedAccessMode,
-                codexInvalidThreadRetryAttempted: true,
-              });
-              return;
-            }
+          if (await retryCodexSendAfterThreadRefresh(rpcError)) {
+            return;
           }
           const firstPacketTimeoutSeconds =
             resolveRecoverableCodexFirstPacketTimeout(resolvedEngine, rpcError);
@@ -1220,6 +1227,9 @@ export function useThreadMessaging({
         }
       } catch (error) {
         const rawMessage = error instanceof Error ? error.message : String(error);
+        if (await retryCodexSendAfterThreadRefresh(rawMessage)) {
+          return;
+        }
         const firstPacketTimeoutSeconds =
           resolveRecoverableCodexFirstPacketTimeout(resolvedEngine, rawMessage);
         if (firstPacketTimeoutSeconds) {
@@ -1280,9 +1290,13 @@ export function useThreadMessaging({
       markProcessing,
       model,
       onDebug,
+      onInputMemoryCaptured,
       itemsByThread,
+      interruptedThreadsRef,
+      pendingInterruptsRef,
       pushThreadErrorMessage,
       recordThreadActivity,
+      resolveThreadKind,
       resolveThreadEngine,
       resolveOpenCodeAgent,
       resolveOpenCodeVariant,
@@ -1393,6 +1407,8 @@ export function useThreadMessaging({
       normalizeEngineSelection,
       onDebug,
       pushThreadErrorMessage,
+      getThreadEngine,
+      resolveThreadKind,
       resolveThreadEngine,
       safeMessageActivity,
       sendMessageToThread,

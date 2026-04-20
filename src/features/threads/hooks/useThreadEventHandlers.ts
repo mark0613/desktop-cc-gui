@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { Dispatch, MutableRefObject } from "react";
+import { useTranslation } from "react-i18next";
 import type {
   AppServerEvent,
   CollaborationModeBlockedRequest,
@@ -17,6 +18,7 @@ import type { ThreadAction } from "./useThreadsReducer";
 import { isDebugLightPathEnabled } from "../utils/realtimePerfFlags";
 
 const TURN_STALL_WARNING_MS = 6_000;
+const TURN_NO_ACTIVITY_TIMEOUT_MS = 20_000;
 const TURN_DIAGNOSTIC_VERBOSE_FLAG_KEY = "ccgui.debug.turnDiagnosticsVerbose";
 const EXECUTION_ITEM_TYPES = new Set([
   "commandExecution",
@@ -239,9 +241,11 @@ export function useThreadEventHandlers({
   onCollaborationModeResolved,
   onExitPlanModeToolCompleted,
 }: ThreadEventHandlersOptions) {
+  const { t } = useTranslation();
   const threadLifecycleSnapshotRef = useRef<Map<string, ThreadLifecycleSnapshot>>(new Map());
   const turnDiagnosticsRef = useRef<Map<string, TurnDiagnosticState>>(new Map());
   const turnStallTimerRef = useRef<Map<string, number>>(new Map());
+  const turnNoActivityTimerRef = useRef<Map<string, number>>(new Map());
 
   const getThreadLifecycleSnapshot = useCallback((threadId: string) => {
     return (
@@ -276,6 +280,15 @@ export function useThreadEventHandlers({
     }
     window.clearTimeout(timerId);
     turnStallTimerRef.current.delete(threadId);
+  }, []);
+
+  const clearTurnNoActivityTimer = useCallback((threadId: string) => {
+    const timerId = turnNoActivityTimerRef.current.get(threadId);
+    if (timerId === undefined) {
+      return;
+    }
+    window.clearTimeout(timerId);
+    turnNoActivityTimerRef.current.delete(threadId);
   }, []);
 
   const scheduleTurnStallTimer = useCallback(
@@ -338,6 +351,106 @@ export function useThreadEventHandlers({
     [setActiveTurnId],
   );
 
+  const resolveTurnNoActivityMessage = useCallback(() => {
+    return t("threads.turnNoActivityTimeout", {
+      seconds: TURN_NO_ACTIVITY_TIMEOUT_MS / 1000,
+    });
+  }, [t]);
+
+  const forceTerminateNoActivityTurn = useCallback(
+    (threadId: string) => {
+      const diagnostic = turnDiagnosticsRef.current.get(threadId);
+      if (!diagnostic) {
+        return;
+      }
+      const lifecycle = getThreadLifecycleSnapshot(threadId);
+      const matchesActiveTurn =
+        !diagnostic.turnId ||
+        lifecycle.activeTurnId === null ||
+        lifecycle.activeTurnId === diagnostic.turnId;
+      if (
+        !matchesActiveTurn ||
+        !lifecycle.isProcessing ||
+        diagnostic.completedAt !== null ||
+        diagnostic.errorAt !== null
+      ) {
+        return;
+      }
+      const message = resolveTurnNoActivityMessage();
+      const now = Date.now();
+      emitTurnDiagnostic("stalled-no-activity", {
+        workspaceId: diagnostic.workspaceId,
+        threadId: diagnostic.threadId,
+        turnId: diagnostic.turnId,
+        elapsedMs: Math.max(0, now - diagnostic.startedAt),
+        firstDeltaAtMs:
+          diagnostic.firstDeltaAt === null
+            ? null
+            : Math.max(0, diagnostic.firstDeltaAt - diagnostic.startedAt),
+        firstItemAtMs:
+          diagnostic.firstItemEventAt === null
+            ? null
+            : Math.max(0, diagnostic.firstItemEventAt - diagnostic.startedAt),
+        deltaCount: diagnostic.deltaCount,
+        itemEventCount: diagnostic.itemEventCount,
+        isProcessing: lifecycle.isProcessing,
+        activeTurnId: lifecycle.activeTurnId,
+        timeoutSeconds: TURN_NO_ACTIVITY_TIMEOUT_MS / 1000,
+      }, { force: true });
+      dispatch({
+        type: "finalizePendingToolStatuses",
+        threadId,
+        status: "failed",
+      });
+      dispatch({
+        type: "settleThreadPlanInProgress",
+        threadId,
+        targetStatus: "pending",
+      });
+      dispatch({ type: "markContextCompacting", threadId, isCompacting: false });
+      markProcessingTracked(threadId, false);
+      markReviewing(threadId, false);
+      setActiveTurnIdTracked(threadId, null);
+      pendingInterruptsRef.current.delete(threadId);
+      interruptedThreadsRef.current.delete(threadId);
+      pushThreadErrorMessage(threadId, message);
+      safeMessageActivity();
+      diagnostic.errorAt = now;
+      clearTurnStallTimer(threadId);
+      clearTurnNoActivityTimer(threadId);
+      turnDiagnosticsRef.current.delete(threadId);
+    },
+    [
+      clearTurnNoActivityTimer,
+      clearTurnStallTimer,
+      dispatch,
+      emitTurnDiagnostic,
+      getThreadLifecycleSnapshot,
+      interruptedThreadsRef,
+      markProcessingTracked,
+      markReviewing,
+      pendingInterruptsRef,
+      pushThreadErrorMessage,
+      resolveTurnNoActivityMessage,
+      safeMessageActivity,
+      setActiveTurnIdTracked,
+    ],
+  );
+
+  const scheduleTurnNoActivityTimer = useCallback(
+    (threadId: string) => {
+      if (typeof window === "undefined") {
+        return;
+      }
+      clearTurnNoActivityTimer(threadId);
+      const timerId = window.setTimeout(() => {
+        forceTerminateNoActivityTurn(threadId);
+      }, TURN_NO_ACTIVITY_TIMEOUT_MS);
+      turnNoActivityTimerRef.current.set(threadId, timerId);
+    },
+    [clearTurnNoActivityTimer, forceTerminateNoActivityTurn],
+  );
+
   const captureTurnItemDiagnostic = useCallback(
     (
       threadId: string,
@@ -397,11 +510,16 @@ export function useThreadEventHandlers({
 
   useEffect(() => {
     const timers = turnStallTimerRef.current;
+    const noActivityTimers = turnNoActivityTimerRef.current;
     return () => {
       timers.forEach((timerId) => {
         window.clearTimeout(timerId);
       });
       timers.clear();
+      noActivityTimers.forEach((timerId) => {
+        window.clearTimeout(timerId);
+      });
+      noActivityTimers.clear();
     };
   }, []);
 
@@ -590,10 +708,11 @@ export function useThreadEventHandlers({
       if (!threadId || pulse <= 0) {
         return;
       }
+      scheduleTurnNoActivityTimer(threadId);
       dispatch({ type: "markHeartbeat", threadId, pulse });
       safeMessageActivity();
     },
-    [dispatch, safeMessageActivity],
+    [dispatch, safeMessageActivity, scheduleTurnNoActivityTimer],
   );
 
   const onTurnStartedTracked = useCallback(
@@ -605,6 +724,7 @@ export function useThreadEventHandlers({
         createTurnDiagnosticState(workspaceId, threadId, turnId, startedAt),
       );
       onTurnStarted(workspaceId, threadId, turnId);
+      scheduleTurnNoActivityTimer(threadId);
       const lifecycle = getThreadLifecycleSnapshot(threadId);
       emitTurnDiagnostic("started", {
         workspaceId,
@@ -614,7 +734,13 @@ export function useThreadEventHandlers({
         activeTurnId: lifecycle.activeTurnId,
       });
     },
-    [clearTurnStallTimer, emitTurnDiagnostic, getThreadLifecycleSnapshot, onTurnStarted],
+    [
+      clearTurnStallTimer,
+      emitTurnDiagnostic,
+      getThreadLifecycleSnapshot,
+      onTurnStarted,
+      scheduleTurnNoActivityTimer,
+    ],
   );
 
   const onAgentMessageDeltaTracked = useCallback(
@@ -628,6 +754,7 @@ export function useThreadEventHandlers({
       if (interruptedThreadsRef.current.has(payload.threadId)) {
         return;
       }
+      scheduleTurnNoActivityTimer(payload.threadId);
       const diagnostic = turnDiagnosticsRef.current.get(payload.threadId);
       if (!diagnostic) {
         return;
@@ -655,6 +782,7 @@ export function useThreadEventHandlers({
       getThreadLifecycleSnapshot,
       interruptedThreadsRef,
       onAgentMessageDelta,
+      scheduleTurnNoActivityTimer,
       scheduleTurnStallTimer,
     ],
   );
@@ -662,25 +790,28 @@ export function useThreadEventHandlers({
   const onItemStartedTracked = useCallback(
     (workspaceId: string, threadId: string, item: Record<string, unknown>) => {
       onItemStarted(workspaceId, threadId, item);
+      scheduleTurnNoActivityTimer(threadId);
       captureTurnItemDiagnostic(threadId, "started", item);
     },
-    [captureTurnItemDiagnostic, onItemStarted],
+    [captureTurnItemDiagnostic, onItemStarted, scheduleTurnNoActivityTimer],
   );
 
   const onItemUpdatedTracked = useCallback(
     (workspaceId: string, threadId: string, item: Record<string, unknown>) => {
       onItemUpdated(workspaceId, threadId, item);
+      scheduleTurnNoActivityTimer(threadId);
       captureTurnItemDiagnostic(threadId, "updated", item);
     },
-    [captureTurnItemDiagnostic, onItemUpdated],
+    [captureTurnItemDiagnostic, onItemUpdated, scheduleTurnNoActivityTimer],
   );
 
   const onItemCompletedTracked = useCallback(
     (workspaceId: string, threadId: string, item: Record<string, unknown>) => {
       onItemCompleted(workspaceId, threadId, item);
+      scheduleTurnNoActivityTimer(threadId);
       captureTurnItemDiagnostic(threadId, "completed", item);
     },
-    [captureTurnItemDiagnostic, onItemCompleted],
+    [captureTurnItemDiagnostic, onItemCompleted, scheduleTurnNoActivityTimer],
   );
 
   const finalizeTurnDiagnostic = useCallback(
@@ -691,6 +822,7 @@ export function useThreadEventHandlers({
     ) => {
       const diagnostic = turnDiagnosticsRef.current.get(threadId);
       clearTurnStallTimer(threadId);
+      clearTurnNoActivityTimer(threadId);
       if (!diagnostic) {
         return;
       }
@@ -732,7 +864,12 @@ export function useThreadEventHandlers({
       }, { force: finalState === "error" || diagnostic.stallReported });
       turnDiagnosticsRef.current.delete(threadId);
     },
-    [clearTurnStallTimer, emitTurnDiagnostic, getThreadLifecycleSnapshot],
+    [
+      clearTurnNoActivityTimer,
+      clearTurnStallTimer,
+      emitTurnDiagnostic,
+      getThreadLifecycleSnapshot,
+    ],
   );
 
   const onTurnCompletedTracked = useCallback(
