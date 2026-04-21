@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../types";
 import type { ConversationState } from "../../threads/contracts/conversationCurtainContracts";
@@ -28,11 +28,18 @@ describe("Messages live behavior", () => {
     return scroller as HTMLDivElement;
   };
 
-  const setScrollerMetrics = (scroller: HTMLDivElement, scrollTop: number) => {
+  const setScrollerMetrics = (
+    scroller: HTMLDivElement,
+    scrollTop: number,
+    scrollHeight: number | (() => number) = 2400,
+  ) => {
+    let currentScrollTop = scrollTop;
     Object.defineProperty(scroller, "scrollTop", {
       configurable: true,
-      writable: true,
-      value: scrollTop,
+      get: () => currentScrollTop,
+      set: (value: number) => {
+        currentScrollTop = value;
+      },
     });
     Object.defineProperty(scroller, "clientHeight", {
       configurable: true,
@@ -40,7 +47,7 @@ describe("Messages live behavior", () => {
     });
     Object.defineProperty(scroller, "scrollHeight", {
       configurable: true,
-      value: 2400,
+      get: () => (typeof scrollHeight === "function" ? scrollHeight() : scrollHeight),
     });
   };
 
@@ -964,6 +971,84 @@ describe("Messages live behavior", () => {
 
     expect(container.querySelector(".messages-history-sticky-header")).toBeNull();
     expect(container.querySelector(".messages-collapsed-indicator")).toBeTruthy();
+  });
+
+  it("preserves the current viewport position when revealing collapsed history", async () => {
+    const items: ConversationItem[] = Array.from({ length: 32 }, (_, index) => ({
+      id: `history-reveal-${index + 1}`,
+      kind: "message",
+      role: index % 2 === 0 ? "user" : "assistant",
+      text: `history reveal message ${index + 1}`,
+    }));
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-history-reveal"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const scroller = getMessagesScroller(container);
+    setScrollerMetrics(
+      scroller,
+      420,
+      () => (container.querySelector(".messages-collapsed-indicator") ? 2400 : 2560),
+    );
+
+    const indicator = container.querySelector(".messages-collapsed-indicator");
+    expect(indicator).toBeTruthy();
+    if (!indicator) {
+      return;
+    }
+
+    fireEvent.click(indicator);
+
+    await waitFor(() => {
+      expect(container.querySelector(".messages-collapsed-indicator")).toBeNull();
+      expect(screen.getByText("history reveal message 1")).toBeTruthy();
+      expect(scroller.scrollTop).toBe(580);
+    });
+  });
+
+  it("skips scroll restoration when scroller metrics are non-finite", async () => {
+    const items: ConversationItem[] = Array.from({ length: 32 }, (_, index) => ({
+      id: `history-reveal-invalid-${index + 1}`,
+      kind: "message",
+      role: index % 2 === 0 ? "user" : "assistant",
+      text: `history reveal invalid message ${index + 1}`,
+    }));
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-history-reveal-invalid"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const scroller = getMessagesScroller(container);
+    setScrollerMetrics(scroller, 420, Number.NaN);
+
+    const indicator = container.querySelector(".messages-collapsed-indicator");
+    expect(indicator).toBeTruthy();
+    if (!indicator) {
+      return;
+    }
+
+    fireEvent.click(indicator);
+
+    await waitFor(() => {
+      expect(container.querySelector(".messages-collapsed-indicator")).toBeNull();
+      expect(screen.getByText("history reveal invalid message 1")).toBeTruthy();
+      expect(scroller.scrollTop).toBe(420);
+    });
   });
 
   it("collapses live middle steps when enabled", () => {

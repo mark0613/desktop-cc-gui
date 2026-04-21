@@ -1,4 +1,13 @@
-import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import type {
   AccessMode,
@@ -129,6 +138,41 @@ type MessagesProps = {
   ) => Promise<string | null | void> | string | null | void;
 };
 
+type HistoryExpansionScrollSnapshot = {
+  scrollHeight: number;
+  scrollTop: number;
+};
+
+function readHistoryExpansionScrollSnapshot(
+  container: HTMLDivElement | null,
+): HistoryExpansionScrollSnapshot | null {
+  if (!container) {
+    return null;
+  }
+  const { scrollHeight, scrollTop } = container;
+  if (!Number.isFinite(scrollHeight) || !Number.isFinite(scrollTop)) {
+    return null;
+  }
+  return { scrollHeight, scrollTop };
+}
+
+function restoreHistoryExpansionScrollPosition(
+  container: HTMLDivElement,
+  snapshot: HistoryExpansionScrollSnapshot,
+) {
+  const currentScrollHeight = container.scrollHeight;
+  if (!Number.isFinite(currentScrollHeight)) {
+    return false;
+  }
+  const scrollHeightDelta = currentScrollHeight - snapshot.scrollHeight;
+  const nextScrollTop = snapshot.scrollTop + scrollHeightDelta;
+  if (!Number.isFinite(nextScrollTop)) {
+    return false;
+  }
+  container.scrollTop = Math.max(0, nextScrollTop);
+  return true;
+}
+
 export const Messages = memo(function Messages({
   items: legacyItems,
   threadId: legacyThreadId,
@@ -241,6 +285,8 @@ export const Messages = memo(function Messages({
     typeof performance === "undefined" ? 0 : performance.now();
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const pendingHistoryExpansionScrollSnapshotRef =
+    useRef<HistoryExpansionScrollSnapshot | null>(null);
   const messageNodeByIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const agentTaskNodeByTaskIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const agentTaskNodeByToolUseIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -398,6 +444,7 @@ export const Messages = memo(function Messages({
     setExpandedItems(new Set());
     setIsSelectionFrozen(false);
     frozenItemsRef.current = null;
+    pendingHistoryExpansionScrollSnapshotRef.current = null;
   }, [threadId]);
   useEffect(() => {
     scrollToAgentTaskCard(agentTaskScrollRequest);
@@ -493,6 +540,7 @@ export const Messages = memo(function Messages({
     const currentFirstId = effectiveItems[0]?.id ?? null;
     if (currentFirstId !== firstItemIdRef.current) {
       setShowAllHistoryItems(false);
+      pendingHistoryExpansionScrollSnapshotRef.current = null;
     }
     firstItemIdRef.current = currentFirstId;
   }, [effectiveItems]);
@@ -1119,6 +1167,35 @@ export const Messages = memo(function Messages({
       threadId,
     ],
   );
+  const handleShowAllHistoryItems = useCallback(() => {
+    pendingHistoryExpansionScrollSnapshotRef.current =
+      collapsedHistoryItemCount > 0
+        ? readHistoryExpansionScrollSnapshot(containerRef.current)
+        : null;
+    setShowAllHistoryItems(true);
+  }, [collapsedHistoryItemCount]);
+  useLayoutEffect(() => {
+    if (!showAllHistoryItems) {
+      pendingHistoryExpansionScrollSnapshotRef.current = null;
+      return;
+    }
+    const pendingSnapshot = pendingHistoryExpansionScrollSnapshotRef.current;
+    const container = containerRef.current;
+    if (!pendingSnapshot || !container) {
+      return;
+    }
+    pendingHistoryExpansionScrollSnapshotRef.current = null;
+    if (!restoreHistoryExpansionScrollPosition(container, pendingSnapshot)) {
+      return;
+    }
+    scheduleAnchorUpdate("sync");
+    scheduleHistoryStickyUpdate("sync");
+  }, [
+    renderedItems,
+    scheduleAnchorUpdate,
+    scheduleHistoryStickyUpdate,
+    showAllHistoryItems,
+  ]);
   const updateAutoScroll = useCallback(() => {
     const container = containerRef.current;
     if (!container) {
@@ -1539,7 +1616,7 @@ export const Messages = memo(function Messages({
           onOpenDiffPath={onOpenDiffPath}
           onRecoverThreadRuntime={onRecoverThreadRuntime}
           onRecoverThreadRuntimeAndResend={onRecoverThreadRuntimeAndResend}
-          onShowAllHistoryItems={() => setShowAllHistoryItems(true)}
+          onShowAllHistoryItems={handleShowAllHistoryItems}
           openFileLink={openFileLink}
           presentationProfile={presentationProfile}
           primaryWorkingLabel={primaryWorkingLabel}
