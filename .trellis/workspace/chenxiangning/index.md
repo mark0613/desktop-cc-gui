@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 82
+- **Total Sessions**: 83
 - **Last Active**: 2026-04-21
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~848 | Active |
+| `journal-3.md` | ~898 | Active |
 | `journal-2.md` | ~1960 | Archived |
 | `journal-1.md` | ~1990 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 83 | 2026-04-21 | 修复 Claude Windows 条件编译 import 漂移 | `61738bfd` | `feature/f-v0.4.6` |
 | 82 | 2026-04-21 | 补齐首条消息隐式建会话 loading | `d1bb1639` | `feature/f-v0.4.6` |
 | 81 | 2026-04-21 | 实现 Windows runtime churn 缓解方案 | `82c13965` | `feature/f-v0.4.6` |
 | 80 | 2026-04-21 | 简化 unified_exec 官方配置入口 | `1b7162fb` | `feature/f-v0.4.6` |

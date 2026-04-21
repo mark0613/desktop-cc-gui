@@ -846,3 +846,53 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 83: 修复 Claude Windows 条件编译 import 漂移
+
+**Date**: 2026-04-21
+**Task**: 修复 Claude Windows 条件编译 import 漂移
+**Branch**: `feature/f-v0.4.6`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+任务目标：修复 Windows 打包时 Claude engine 因条件编译误绑导致的 tokio::io import 缺失问题，解除 win 构建阻塞。
+
+主要改动：
+- 将 src-tauri/src/engine/claude.rs 中 tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader} 恢复为无条件 import。
+- 保持 #[cfg(unix)] 仅作用于真正 Unix 专属逻辑，不再误伤 Windows 也会用到的 BufReader / write_all / next_line 相关能力。
+- 本次只修正条件编译边界，不调整 Claude engine 运行时行为。
+
+涉及模块：
+- src-tauri/src/engine/claude.rs
+
+验证结果：
+- 通过：cargo check --manifest-path src-tauri/Cargo.toml
+- 未能本地完成：cargo check --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc，因为当前环境未安装该 Rust target，需要在 CI 或安装 target 后复验。
+
+后续事项：
+- 重跑 GitHub Windows 打包 workflow，确认 win 构建恢复。
+- 如需本地复验，可先执行 rustup target add x86_64-pc-windows-msvc 后再跑 Windows target cargo check。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `61738bfd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
