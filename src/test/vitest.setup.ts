@@ -1,4 +1,9 @@
-import { vi } from "vitest";
+import { cleanup } from "@testing-library/react";
+import { afterEach, vi } from "vitest";
+
+afterEach(() => {
+  cleanup();
+});
 
 if (typeof Element !== "undefined" && !Element.prototype.getAnimations) {
   Object.defineProperty(Element.prototype, "getAnimations", {
@@ -42,6 +47,15 @@ vi.mock("react-i18next", () => ({
         "errors.failedToCreateSession": "Failed to create session.",
         "errors.failedToCreateSessionNoThreadId":
           "The runtime did not return a new session id.",
+        "errors.failedToCreateSessionRuntimeRecovering":
+          "The runtime was restarting while creating this session. The app already retried once. Reconnect the workspace and try again.",
+        "errors.reconnectAndRetryCreateSession":
+          "Reconnect and retry creation",
+        "errors.reconnectingAndRetryingCreateSession":
+          "Reconnecting and retrying creation...",
+        "errors.runtimeRecovered": "Runtime recovered.",
+        "errors.retryingCreateSessionAfterRecovery":
+          "Retrying session creation...",
         "sidebar.searchProjects": "Search projects",
         "sidebar.clearSearch": "Clear search",
         "sidebar.pinned": "Pinned",
