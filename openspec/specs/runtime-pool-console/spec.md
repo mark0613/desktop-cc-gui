@@ -15,31 +15,28 @@ The system MUST provide a settings surface that exposes the current runtime pool
 - **THEN** each row MUST display workspace identity, engine, lifecycle state, and lease source information
 
 ### Requirement: Runtime pool console MUST surface process diagnostics for managed runtimes
-The runtime pool console MUST expose the key process diagnostics needed to understand why a runtime exists, whether it is protected by active work or only retained while idle, how it was launched, and why it ended or remains retained.
+
+The runtime pool console MUST expose the key process diagnostics needed to understand why a runtime exists, how guarded recovery is behaving, and whether observed Windows process overlap is bounded replacement or unhealthy churn.
 
 #### Scenario: runtime row includes process identity
+
 - **WHEN** the runtime pool console renders a managed runtime row
 - **THEN** the row MUST include pid, wrapper kind, started time, and last-used time
 
-#### Scenario: runtime row distinguishes active lease from idle retention
+#### Scenario: runtime row includes guarded startup and replacement context
 
-- **WHEN** the runtime pool console renders a managed runtime row
-- **THEN** the row MUST expose active turn or stream lease source information separately from idle retention state such as pinned or warm
-- **AND** the user MUST be able to tell whether the runtime is protected by active work or only by retention policy
+- **WHEN** the runtime pool console renders a managed runtime row for a workspace currently starting or recently replaced
+- **THEN** the row MUST expose startup state, last recovery source, and last replacement reason
+- **AND** the row MUST indicate whether a stopping predecessor still exists for that `(engine, workspace)`
 
-#### Scenario: runtime row shows active-work protection as the primary survival reason
+#### Scenario: recent churn counters remain visible
 
-- **WHEN** a managed runtime has both active work and warm or pinned retention flags
-- **THEN** the console MUST present active-work protection as the primary reason the runtime cannot be evicted
-- **AND** warm or pinned state MUST appear as secondary idle-retention metadata
-
-#### Scenario: runtime row shows abnormal exit context
-
-- **WHEN** the most recent managed runtime for a workspace ended unexpectedly
-- **THEN** the runtime pool console MUST expose the normalized exit reason and any available terminal metadata
-- **AND** that diagnostic MUST remain visible long enough for issue triage after the row is refreshed
+- **WHEN** the system has recorded recent spawn, replace, or force-kill activity for a managed runtime pair
+- **THEN** the runtime pool console MUST expose bounded recent churn counters for those events
+- **AND** the summary MUST remain visible long enough for issue triage after the row refreshes
 
 #### Scenario: recent cleanup diagnostics remain visible
+
 - **WHEN** the system has recorded orphan sweep, force-kill, or shutdown cleanup results
 - **THEN** the runtime pool console MUST expose those recent cleanup outcomes in a diagnosable summary
 
@@ -89,3 +86,4 @@ The settings surface MUST expose the key lifecycle policy toggles that affect ru
 #### Scenario: user enables orphan sweep on launch
 - **WHEN** the user enables orphan sweep on launch
 - **THEN** the system MUST attempt launch-time cleanup of recorded stale managed runtimes before the next pool snapshot is marked complete
+
