@@ -63,3 +63,55 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 103: docs(openspec): 回写并归档实时 markdown streaming 兼容性提案
+
+**Date**: 2026-04-22
+**Task**: docs(openspec): 回写并归档实时 markdown streaming 兼容性提案
+**Branch**: `feature/v-0.4.7`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+任务目标：将 fix-live-inline-code-markdown-rendering 的 delta spec 回写到主 specs，并将该 change 归档，完成 OpenSpec 层面的最终收口。
+
+主要改动：
+- 新增主 spec `openspec/specs/message-markdown-streaming-compatibility/spec.md`
+- 将 `fix-live-inline-code-markdown-rendering` 从活跃 change 目录归档到 `openspec/changes/archive/2026-04-22-fix-live-inline-code-markdown-rendering/`
+- 保留 proposal、design、tasks 和 delta spec，形成可追溯 archive
+
+涉及模块：
+- OpenSpec 主 specs
+- OpenSpec archive changes
+
+验证结果：
+- `openspec list --changes` 中已不再显示 `fix-live-inline-code-markdown-rendering`
+- 主 spec 文件已存在并包含 4 条正式 requirement
+- 归档目录已存在并包含 proposal/design/tasks/specs
+
+后续事项：
+- 本次仅提交 OpenSpec 回写与归档，不包含其他未提交工作区改动
+- 如需继续推进，可后续单独整理 qwen latency 等其他变更边界
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cd332b84` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
